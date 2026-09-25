@@ -10,9 +10,6 @@
 #include "world.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
-#include "deferred/deferred_shared_common.h"
-#include "deferred/cdeferred_manager_server.h"
-
 #include "tier0/memdbgon.h"
 
 LINK_ENTITY_TO_CLASS( light, CLight );
@@ -25,7 +22,6 @@ BEGIN_DATADESC( CLight )
 	DEFINE_KEYFIELD( m_iStyle, FIELD_INTEGER, "style" ),
 	DEFINE_KEYFIELD( m_iDefaultStyle, FIELD_INTEGER, "defaultstyle" ),
 	DEFINE_KEYFIELD( m_iszPattern, FIELD_STRING, "pattern" ),
-	DEFINE_KEYFIELD( m_iszColor, FIELD_STRING, "_light" ),
 
 	// Fuctions
 	DEFINE_FUNCTION( FadeThink ),
@@ -237,19 +233,13 @@ LINK_ENTITY_TO_CLASS( light_spot, CLight );
 LINK_ENTITY_TO_CLASS( light_glspot, CLight );
 
 
-class CEnvLight : public CServerOnlyPointEntity
+class CEnvLight : public CLight
 {
 public:
-	DECLARE_CLASS( CEnvLight, CServerOnlyPointEntity );
+	DECLARE_CLASS( CEnvLight, CLight );
 
 	bool	KeyValue( const char *szKeyName, const char *szValue ); 
-
-	void	Activate( void );
-
-private:
-	float m_vecLight[4];
-	float m_vecAmbientLight[4];
-	float m_fLightPitch;
+	void	Spawn( void );
 };
 
 LINK_ENTITY_TO_CLASS( light_environment, CEnvLight );
@@ -259,49 +249,17 @@ bool CEnvLight::KeyValue( const char *szKeyName, const char *szValue )
 	if (FStrEq(szKeyName, "_light"))
 	{
 		// nothing
-		UTIL_StringToFloatArray( m_vecLight, 4,  szValue );
 	}
 	else
 	{
-		if( FStrEq(szKeyName, "pitch") )
-		{
-			m_fLightPitch = atof( szValue );
-		}
-		else if( FStrEq(szKeyName, "_ambient") )
-		{
-			UTIL_StringToFloatArray( m_vecAmbientLight, 4,  szValue );
-		}
 		return BaseClass::KeyValue( szKeyName, szValue );
 	}
 
 	return true;
 }
 
-void CEnvLight::Activate( void )
+
+void CEnvLight::Spawn( void )
 {
-	BaseClass::Activate( );
-
-	if ( GetGlobalLight() == NULL )
-	{
-		CBaseEntity *pGlobalLight = CreateEntityByName( "light_deferred_global" );
-		if( pGlobalLight )
-		{
-			float ds = r_deferred_autoenvlight_diffuse_intensity.GetFloat();
-			float asl = r_deferred_autoenvlight_ambient_intensity_low.GetFloat();
-			float ash = r_deferred_autoenvlight_ambient_intensity_high.GetFloat();
-
-			const QAngle &vecAngles = GetAbsAngles();
-			pGlobalLight->KeyValue( "origin", UTIL_VarArgs("%f %f %f", GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z ) );
-			pGlobalLight->KeyValue( "diffuse", UTIL_VarArgs("%f %f %f %f", m_vecLight[0], m_vecLight[1], m_vecLight[2], m_vecLight[3] * ds ) );
-			pGlobalLight->KeyValue( "ambient_high", UTIL_VarArgs("%f %f %f %f", m_vecAmbientLight[0], m_vecAmbientLight[1], m_vecAmbientLight[2], m_vecAmbientLight[3] * ash ) );
-			pGlobalLight->KeyValue( "ambient_low", UTIL_VarArgs("%f %f %f %f", m_vecAmbientLight[0], m_vecAmbientLight[1], m_vecAmbientLight[2], m_vecAmbientLight[3] * asl ) );
-			pGlobalLight->KeyValue( "spawnflags", "3" );
-			pGlobalLight->KeyValue( "angles", UTIL_VarArgs("%f %f %f", -m_fLightPitch, vecAngles.y, vecAngles.z ) );
-			static_cast<CDeferredLightGlobal*>( pGlobalLight )->bGenerated = true;
-			DispatchSpawn( pGlobalLight );
-			//pGlobalLight->Activate(); // Should not be activated here: the global light is created before the level activates all entities.
-		}
-	}
-
-	UTIL_Remove( this );
+	BaseClass::Spawn( );
 }

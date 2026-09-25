@@ -39,18 +39,16 @@
 
 #include "tier0/memdbgon.h"
 
-extern ConVar r_drawopaquerenderables;
-extern ConVar r_entityclips;
-extern ConVar r_eyewaterepsilon;
-extern ConVar mat_clipz;
-extern ConVar r_visocclusion;
-extern ConVar fog_enableskybox;
-extern ConVar r_3dsky;
-extern ConVar r_skybox;
-extern ConVar r_ForceWaterLeaf;
 extern ConVar mat_viewportupscale;
 extern ConVar mat_viewportscale;
 static ConVarRef mat_motion_blur_enabled( "mat_motion_blur_enabled" );
+static ConVarRef r_eyewaterepsilon( "r_eyewaterepsilon" );
+static ConVarRef mat_clipz( "mat_clipz" );
+static ConVarRef r_visocclusion( "r_visocclusion" );
+static ConVarRef fog_enableskybox( "fog_enableskybox" );
+static ConVarRef r_3dsky( "r_3dsky" );
+static ConVarRef r_skybox( "r_skybox" );
+static ConVarRef r_ForceWaterLeaf( "r_ForceWaterLeaf" );
 
 extern view_id_t g_CurrentViewID;
 
@@ -828,7 +826,6 @@ void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox )
 	m_bDrewSkybox = bDrewSkybox;
 
 	BaseClass::Setup( view );
-	m_bDrawWorldNormal = true;
 
 	m_ClearFlags = 0;
 	m_DrawFlags = DF_DRAW_ENTITITES;
@@ -1277,8 +1274,6 @@ void CBaseShadowView::Setup( const CViewSetup &view, ITexture *pDepthTexture, IT
 	m_pDummyTexture = pDummyTexture;
 
 	BaseClass::Setup( view );
-
-	m_bDrawWorldNormal = true;
 
 	m_DrawFlags = DF_DRAW_ENTITITES | DF_RENDER_UNDERWATER | DF_RENDER_ABOVEWATER;
 	m_ClearFlags = 0;

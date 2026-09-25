@@ -41,10 +41,10 @@ enum StereoEye_t
 //-----------------------------------------------------------------------------
 // Purpose: Renderer setup data.  
 //-----------------------------------------------------------------------------
-class CViewSetupEngine
+class CViewSetup
 {
 public:
-	CViewSetupEngine()
+	CViewSetup()
 	{
 		m_flAspectRatio = 0.0f;
 		m_bRenderToSubrectOfLargerScreen = false;
@@ -129,24 +129,6 @@ public:
 	// This does NOT override the Z range - that will be set up as normal (i.e. the values in this matrix will be ignored).
     bool        m_bViewToProjectionOverride;
     VMatrix     m_ViewToProjection;
-};
-
-class CViewSetup : public CViewSetupEngine
-{
-public:
-	CViewSetup()
-	{
-		m_bDrawWorldNormal = false;
-	}
-
-	explicit CViewSetup(const CViewSetupEngine& other)
-	{
-		memcpy(static_cast<CViewSetupEngine*>(this), &other, sizeof(CViewSetupEngine));
-		
-		m_bDrawWorldNormal = false;
-	}
-
-	bool m_bDrawWorldNormal;
 };
 
 
