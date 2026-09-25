@@ -3,10 +3,7 @@ setlocal
 
 set BUILD_SHADER=call buildshaders.bat
 
-set SOURCE_DIR="..\..\"
+if "%SOURCEDIR%"=="" set SOURCEDIR=..\..\
+if "%GAMEDIR%"=="" set GAMEDIR=..\..\..\game\mod_hl2
 
-rem Change me to your mod's name!
-set GAME_DIR="..\..\..\game\mod_tf"
-
-%BUILD_SHADER% sdkshaders_dx9_20b -game %GAME_DIR% -source %SOURCE_DIR%
-%BUILD_SHADER% sdkshaders_dx9_30  -game %GAME_DIR% -source %SOURCE_DIR% -force30
+%BUILD_SHADER% deferred_shaders -game %GAMEDIR% -source %SOURCEDIR% -dx9_30 -force30

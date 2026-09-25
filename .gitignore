@@ -1,6 +1,6 @@
 # Files to ignore when considering what GIT should commit.
 
-# Visual Studio 
+# Visual Studio
 *.suo
 *.user
 *.sln.docstates
@@ -53,6 +53,13 @@ config.cfg
 
 # shader files
 *.tmp
+*.vcs
+*.inc
+fxctmp9/
+vshtmp9/
+fxctmp9_360/
+vshtmp9_360/
+/src/materialsystem/stdshaders/shaders/
 
 # GCH
 *.h.gch
@@ -502,3 +509,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Deferred
+/game/

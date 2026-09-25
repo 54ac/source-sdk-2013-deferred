@@ -149,6 +149,8 @@ CSteamGameServerAPIContext *steamgameserverapicontext = &s_SteamGameServerAPICon
 IUploadGameStats *gamestatsuploader = NULL;
 
 // memdbgon must be the last include file in a .cpp file!!!
+#include "deferred/deferred_shared_common.h"
+
 #include "tier0/memdbgon.h"
 
 CTimedEventMgr g_NetworkPropertyEventMgr;
@@ -189,6 +191,8 @@ IServerReplayContext *g_pReplayServerContext = NULL;
 #endif
 
 IGameSystem *SoundEmitterSystem();
+
+IGameSystem *DeferredManagerSystem();
 
 bool ModelSoundsCacheInit();
 void ModelSoundsCacheShutdown();
@@ -705,6 +709,8 @@ bool CServerGameDLL::DLLInit( CreateInterfaceFn appSystemFactory,
 #endif
 	// Add sound emitter
 	IGameSystem::Add( SoundEmitterSystem() );
+
+	if (CommandLine() && CommandLine()->FindParm( "-nodeferred" ) == 0) IGameSystem::Add( DeferredManagerSystem() );
 
 	// load Mod specific game events ( MUST be before InitAllSystems() so it can pickup the mod specific events)
 	gameeventmanager->LoadEventsFromFile("resource/ModEvents.res");
@@ -1448,6 +1454,8 @@ void CServerGameDLL::CreateNetworkStringTables( void )
 	g_pStringTableClientSideChoreoScenes = networkstringtable->CreateStringTable( "Scenes", MAX_CHOREO_SCENES_STRINGS );
 	g_pStringTableServerMapCycle = networkstringtable->CreateStringTable( "ServerMapCycle", 128 );
 
+	g_pStringTable_LightCookies = networkstringtable->CreateStringTable( COOKIE_STRINGTBL_NAME, MAX_COOKIE_TEXTURES );
+
 #ifdef TF_DLL
 	g_pStringTableServerPopFiles = networkstringtable->CreateStringTable( "ServerPopFiles", 128 );
 	g_pStringTableServerMapCycleMvM = networkstringtable->CreateStringTable( "ServerMapCycleMvM", 128 );
@@ -1467,8 +1475,8 @@ void CServerGameDLL::CreateNetworkStringTables( void )
 			g_pStringTableInfoPanel &&
 			g_pStringTableClientSideChoreoScenes &&
 			g_pStringTableServerMapCycle && 
-			bPopFilesValid
-			);
+			bPopFilesValid &&
+			g_pStringTable_LightCookies	);
 
 	// Need this so we have the error material always handy
 	PrecacheMaterial( "debug/debugempty" );

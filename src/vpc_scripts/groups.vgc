@@ -28,6 +28,7 @@ $Group "game"
 
 $Group "shaders"
 {
+	"game_shader_dx9"
 	"game_shader_generic_example"
 	//"game_shader_generic_std"
 }
@@ -35,6 +36,7 @@ $Group "shaders"
 $Group "everything"
 {
 	"captioncompiler"
+	"game_shader_dx9"
 	"client"
 	"fgdlib"
 	"glview"
