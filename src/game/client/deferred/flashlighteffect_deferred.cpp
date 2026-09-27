@@ -70,6 +70,8 @@ void CFlashlightEffectDeferred::UpdateLightProjection( FlashlightState_t &state 
 
 void CFlashlightEffectDeferred::LightOff()
 {
+	CFlashlightEffect::LightOff();
+
 	if ( m_pDefLight != NULL )
 	{
 		GetLightingManager()->RemoveLight( m_pDefLight );

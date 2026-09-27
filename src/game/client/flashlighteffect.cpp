@@ -342,26 +342,29 @@ void CFlashlightEffect::UpdateLightNew(const Vector &vecPos, const Vector &vecFo
 	state.m_flShadowSlopeScaleDepthBias = mat_slopescaledepthbias_shadowmap.GetFloat();
 	state.m_flShadowDepthBias = mat_depthbias_shadowmap.GetFloat();
 
-if (GetDeferredManager()->IsDeferredRenderingEnabled()) {
-	UpdateLightProjection( state );
-} else {
-	if( m_FlashlightHandle == CLIENTSHADOW_INVALID_HANDLE )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() )
 	{
-		m_FlashlightHandle = g_pClientShadowMgr->CreateFlashlight( state );
+		UpdateLightProjection( state );
 	}
 	else
 	{
-		if( !r_flashlightlockposition.GetBool() )
+		if( m_FlashlightHandle == CLIENTSHADOW_INVALID_HANDLE )
 		{
-			g_pClientShadowMgr->UpdateFlashlightState( m_FlashlightHandle, state );
+			m_FlashlightHandle = g_pClientShadowMgr->CreateFlashlight( state );
 		}
+		else
+		{
+			if( !r_flashlightlockposition.GetBool() )
+			{
+				g_pClientShadowMgr->UpdateFlashlightState( m_FlashlightHandle, state );
+			}
+		}
+		
+		g_pClientShadowMgr->UpdateProjectedTexture( m_FlashlightHandle, true );
+		
+		// Kill the old flashlight method if we have one.
+		LightOffOld();
 	}
-	
-	g_pClientShadowMgr->UpdateProjectedTexture( m_FlashlightHandle, true );
-	
-	// Kill the old flashlight method if we have one.
-	LightOffOld();
-}
 
 #ifndef NO_TOOLFRAMEWORK
 	if ( clienttools->IsInRecordingMode() )
@@ -552,19 +555,22 @@ void CHeadlightEffect::UpdateLight( const Vector &vecPos, const Vector &vecDir, 
 	state.m_pSpotlightTexture = m_FlashlightTexture;
 	state.m_nSpotlightTextureFrame = 0;
 	
-	if (GetDeferredManager()->IsDeferredRenderingEnabled()) {
-		UpdateLightProjection( state );
-	} else {
-	if( GetFlashlightHandle() == CLIENTSHADOW_INVALID_HANDLE )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() )
 	{
-		SetFlashlightHandle( g_pClientShadowMgr->CreateFlashlight( state ) );
+		UpdateLightProjection( state );
 	}
 	else
 	{
-		g_pClientShadowMgr->UpdateFlashlightState( GetFlashlightHandle(), state );
-	}
-	
-	g_pClientShadowMgr->UpdateProjectedTexture( GetFlashlightHandle(), true );
+		if( GetFlashlightHandle() == CLIENTSHADOW_INVALID_HANDLE )
+		{
+			SetFlashlightHandle( g_pClientShadowMgr->CreateFlashlight( state ) );
+		}
+		else
+		{
+			g_pClientShadowMgr->UpdateFlashlightState( GetFlashlightHandle(), state );
+		}
+		
+		g_pClientShadowMgr->UpdateProjectedTexture( GetFlashlightHandle(), true );
 	}
 }
 

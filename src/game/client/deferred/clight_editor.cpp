@@ -1199,7 +1199,9 @@ bool CLightingEditor::SelectLights( int *pi2_BoundsMin, int *pi2_BoundsMax,
 		if ( !bToggle && bSelected )
 			continue;
 
-		if ( !render->AreAnyLeavesVisible( pLight->GetLeaves(), pLight->GetNumLeaves() ) )
+		Vector lightMins, lightMaxs;
+		pLight->GetBoundsNaive( lightMins, lightMaxs );
+		if ( !engine->IsBoxInViewCluster( lightMins, lightMaxs ) )
 			continue;
 
 		Vector pos = pLight->pos;

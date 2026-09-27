@@ -4947,9 +4947,7 @@ CON_COMMAND_F( dlight_debug, "Creates a dlight in front of the player", FCVAR_CH
 	l->iShadow_Dist = l->flRadius;
 	l->iShadow_Range = l->flRadius;
 
-	l->iFlags >>= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
-	l->iFlags <<= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
-	l->iFlags |= DEFLIGHT_SHADOW_ENABLED;
+	l->iFlags = ( l->iFlags & ~( ( 1 << DEFLIGHT_FLAGS_MAX_SHARED_BITS ) - 1 ) ) | DEFLIGHT_SHADOW_ENABLED;
 
 	GetLightingManager()->AddTempLight( l );
 }

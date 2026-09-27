@@ -9,17 +9,6 @@
 
 #include "tier0/memdbgon.h"
 
-class CLightLeafEnum : public ISpatialLeafEnumerator
-{
-public:
-	bool EnumerateLeaf( int leaf, intp context )
-	{
-		m_LeafList.AddToTail( leaf );
-		return true;
-	}
-
-	CUtlVectorFixedGrowable< int, 512 > m_LeafList;
-};
 
 BEGIN_DATADESC_NO_BASE( def_light_t )
 
@@ -98,7 +87,6 @@ def_light_t::def_light_t( bool bWorld )
 	flLastRandomTime = 0;
 	flLastRandomValue = 0;
 
-	iNumLeaves = 0;
 
 #if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
 	flVolumeLOD0Dist = 128;
@@ -160,7 +148,10 @@ void def_light_t::ShutdownSharedMeshes()
 	CMatRenderContextPtr pRenderContext( materials );
 
 	if ( pMeshUnitSphere )
+	{
 		pRenderContext->DestroyStaticMesh( pMeshUnitSphere );
+		pMeshUnitSphere = NULL;
+	}
 }
 
 def_light_t *def_light_t::AllocateFromKeyValues( KeyValues *pKV )
@@ -594,14 +585,6 @@ void def_light_t::UpdateXForms()
 	else
 		worldTransform.SetupMatrixOrgAngles( pos, worldAng );
 
-	CLightLeafEnum leaves;
-	ISpatialQuery* pQuery = engine->GetBSPTreeQuery();
-	pQuery->EnumerateLeavesInBox( bounds_min, bounds_max, &leaves, 0 );
-
-	AssertMsgOnce( leaves.m_LeafList.Count() <= DEFLIGHT_MAX_LEAVES, "You sure have got a huge light there, or crappy leaves." );
-
-	iNumLeaves = Min( DEFLIGHT_MAX_LEAVES, leaves.m_LeafList.Count() );
-	Q_memcpy( iLeaveIDs, leaves.m_LeafList.Base(), sizeof(int) * iNumLeaves );
 }
 
 void def_light_t::UpdateRenderMesh()

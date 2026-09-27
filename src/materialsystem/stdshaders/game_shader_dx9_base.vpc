@@ -55,6 +55,7 @@ $Project
 		$File	"debug_radiosity_grid.cpp"
 		$File	"debug_shadow.cpp"
 		$File	"deferred_brush.cpp"
+		$File	"deferred_decalModulate.cpp"
 		$File	"deferred_model.cpp"
 		$File	"deferred_utility.cpp"
 		$File	"defpass_composite.cpp"

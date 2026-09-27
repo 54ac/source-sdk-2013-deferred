@@ -170,14 +170,15 @@ void CDeferredLight::Activate()
 
 	if ( !m_bShouldTransmit )
 	{
-		if ( m_iDefFlags & DEFLIGHT_ENABLED &&
+		const bool bIsSpot = ( m_iLightType == DEFLIGHTTYPE_SPOT );
+		if ( bIsSpot &&
+			( m_iDefFlags & DEFLIGHT_ENABLED ) &&
 			( m_vecColor_Diff.Get().LengthSqr() > 0 || m_vecColor_Ambient.Get().LengthSqr() > 0 ) &&
-			m_flSpotConeOuter > 0.01f && m_flRadius > 0 )
+			m_flSpotConeOuter > 0.01f &&
+			m_flRadius > 0 )
 		{
 			GetDeferredManager()->AddWorldLight( this );
 		}
-		else
-			AssertMsg( 0, "I'm turned off and nobody can turn me on :(" );
 
 		UTIL_Remove( this );
 	}
@@ -234,8 +235,8 @@ void CDeferredLight::ApplyDataToLight()
 	m_pLight->flStyle_Speed = GetStyle_Speed();
 
 	m_pLight->iLighttype = GetLight_Type();
-	m_pLight->iFlags >>= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
-	m_pLight->iFlags <<= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
+	m_pLight->iFlags >>= DEFLIGHT_FLAGS_MAX_SHARED_BITS;
+	m_pLight->iFlags <<= DEFLIGHT_FLAGS_MAX_SHARED_BITS;
 	m_pLight->iFlags |= GetLight_Flags();
 	m_pLight->iCookieIndex = GetCookieIndex();
 

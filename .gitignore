@@ -511,4 +511,4 @@ FodyWeavers.xsd
 *.sln.iml
 
 # Deferred
-/game/
+/game/*.exe

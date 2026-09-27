@@ -155,14 +155,12 @@ struct def_light_t
 		return flFOV;
 	};
 
-	FORCEINLINE int *GetLeaves()
+	FORCEINLINE void GetBoundsNaive( Vector &mins, Vector &maxs ) const
 	{
-		return iLeaveIDs;
+		mins = bounds_min_naive;
+		maxs = bounds_max_naive;
 	};
-	FORCEINLINE int GetNumLeaves()
-	{
-		return iNumLeaves;
-	};
+
 
 private:
 
@@ -174,8 +172,6 @@ private:
 	// * volatile data, not guaranteed to be valid *
 	// *********************************************
 
-	int iNumLeaves;
-	int iLeaveIDs[DEFLIGHT_MAX_LEAVES];
 
 	float flMaxDistSqr;
 

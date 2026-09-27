@@ -748,11 +748,7 @@ void C_BaseExplosionEffect::CreateDynamicLight( void )
 	l->iShadow_Dist = 512.0f;
 	l->iShadow_Range = 512.0f;
 
-	l->iFlags >>= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
-	l->iFlags <<= DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS;
-	l->iFlags |= DEFLIGHT_SHADOW_ENABLED;
-
-	DevMsg(1, "Temp deferred light for explosion at: %f %f %f\n", l->pos.x, l->pos.y, l->pos.z );
+	l->iFlags = ( l->iFlags & ~( ( 1 << DEFLIGHT_FLAGS_MAX_SHARED_BITS ) - 1 ) ) | DEFLIGHT_SHADOW_ENABLED;
 
 	GetLightingManager()->AddTempLight( l );
 }

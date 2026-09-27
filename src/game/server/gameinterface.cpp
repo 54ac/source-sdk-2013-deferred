@@ -710,7 +710,7 @@ bool CServerGameDLL::DLLInit( CreateInterfaceFn appSystemFactory,
 	// Add sound emitter
 	IGameSystem::Add( SoundEmitterSystem() );
 
-	if (CommandLine() && CommandLine()->FindParm( "-nodeferred" ) == 0) IGameSystem::Add( DeferredManagerSystem() );
+	IGameSystem::Add( DeferredManagerSystem() );
 
 	// load Mod specific game events ( MUST be before InitAllSystems() so it can pickup the mod specific events)
 	gameeventmanager->LoadEventsFromFile("resource/ModEvents.res");

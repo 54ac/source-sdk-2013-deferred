@@ -11,7 +11,6 @@
 
 #include "tier0/memdbgon.h"
 
-ConVar r_deferred_light_visleaf_cull( "r_deferred_light_visleaf_cull", "1", 0, "Culling based on map visleaves - buggy, improves performance" );
 
 static CLightingManager __g_lightingMan;
 
@@ -435,10 +434,6 @@ void CLightingManager::CullLights()
 	FOR_EACH_VEC_FAST( def_light_t*, m_hDeferredLights, l )
 	{
 		if ( !m_bDrawWorldLights && l->bWorldLight )
-			continue;
-
-		// FIXME: inaccurate with e.g. angled lights, causes popping - performance impact when disabled
-		if ( !render->AreAnyLeavesVisible( l->iLeaveIDs, l->iNumLeaves ) && r_deferred_light_visleaf_cull.GetBool() )
 			continue;
 
 		// if the optimized bounds cause popping for you, use the naive ones or

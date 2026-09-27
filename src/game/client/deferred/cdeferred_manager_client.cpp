@@ -45,14 +45,7 @@ CDeferredManagerClient::~CDeferredManagerClient()
 bool CDeferredManagerClient::Init()
 {
 
-	m_bDefRenderingEnabled = CommandLine() && CommandLine()->FindParm( "-nodeferred" ) == 0;
-
-	if (!m_bDefRenderingEnabled) {
-		Msg( "Skipping deferred lighting because of -nodeferred param\n" );
-		g_pCurrentViewRender = new CViewRender();
-
-		return true;
-	}
+	m_bDefRenderingEnabled = true;
 
 	AssertMsg( g_pCurrentViewRender == NULL, "viewrender already allocated?!" );
 
@@ -121,7 +114,7 @@ bool CDeferredManagerClient::Init()
 
 	view = g_pCurrentViewRender;
 
-	Msg("Deferred lighting enabled (use -nodeferred in the command line to disable if necessary)\n");
+	Msg("Deferred lighting enabled\n");
 	return true;
 }
 

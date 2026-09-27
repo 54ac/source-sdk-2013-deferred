@@ -131,8 +131,6 @@ void CDeferredManagerServer::LevelInitPreEntity()
 	if ( gpGlobals->eLoadType == MapLoad_LoadGame )
 		return;
 
-	if (CommandLine() && CommandLine()->FindParm( "-nodeferred" ) != 0)
-		return;
 
 	const char* entStr = engine->GetMapEntitiesString();
 
@@ -150,7 +148,6 @@ void CDeferredManagerServer::LevelInitPreEntity()
 	dworldlight_t* lights;
 	size_t lightCount;
 
-	/*
 	if ( lightLump.uncompressedSize )
 	{
 		byte* compressed = new byte[lightLump.filelen];
@@ -160,22 +157,33 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		if ( CLZMA::IsCompressed( compressed ) )
 		{
 			if ( lightLump.uncompressedSize % sizeof( dworldlight_t ) )
+			{
+				delete[] compressed;
+				g_pFullFileSystem->Close( hFile );
 				return;
+			}
 
 			lightCount = lightLump.uncompressedSize / sizeof( dworldlight_t );
 			lights = new dworldlight_t[lightCount];
 			CLZMA::Uncompress( compressed, reinterpret_cast<byte*>( lights ) );
 		}
 		else
+		{
+			delete[] compressed;
+			g_pFullFileSystem->Close( hFile );
 			Error( "Compressed lump that isn't compressed?" );
+			return;
+		}
 
 		delete[] compressed;
 	}
 	else
 	{
-	*/
 		if ( lightLump.filelen % sizeof( dworldlight_t ) )
+		{
+			g_pFullFileSystem->Close( hFile );
 			return;
+		}
 
 		g_pFullFileSystem->Seek( hFile, lightLump.fileofs, FILESYSTEM_SEEK_HEAD );
 
@@ -183,7 +191,7 @@ void CDeferredManagerServer::LevelInitPreEntity()
 
 		lights = new dworldlight_t[lightCount];
 		g_pFullFileSystem->Read( lights, lightLump.filelen, hFile );
-	//}
+	}
 
 	g_pFullFileSystem->Close( hFile );
 
@@ -299,7 +307,7 @@ void CDeferredManagerServer::LevelInitPreEntity()
 			UTIL_StringToVector( pos2.Base(), entity2->GetString( "origin" ) );
 			UTIL_StringToVector( rot2.Base(), entity2->GetString( "angles" ) );
 
-			if ( CloseEnough( pos1.x, pos2.x, 2.f ) && CloseEnough( pos1.y, pos2.y, 2.f ) && CloseEnough( pos1.z, pos1.z, 2.f ) && CloseEnough( rot1.y, rot2.y, 2.f ) && CloseEnough( rot1.z, rot2.z, 2.f ) )
+			if ( CloseEnough( pos1.x, pos2.x, 8.f ) && CloseEnough( pos1.y, pos2.y, 8.f ) && CloseEnough( pos1.z, pos2.z, 32.f ) && CloseEnough( rot1.y, rot2.y, 10.f ) )
 			{
 				DevMsg(1, "Found matching lights at positions %f %f %f and %f %f %f of types %d and %d\n", pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z, type1, type2 );
 				SpotLightPair_t& pair = spotLightPairs[spotLightPairs.AddToTail()];
@@ -392,8 +400,8 @@ void CDeferredManagerServer::LevelInitPreEntity()
 			if ( light.type != emit_spotlight && light.type != emit_point )
 				continue;
 
-			// if ( CloseEnough( light.origin, pos, 1.f ) )
-			// {
+			if ( CloseEnough( light.origin, pos, 4.f ) )
+			{
 				if ( light.type == emit_point )
 				{
 					entity->SetFloat( "_distance", ComputeLightRadius( light ) );
@@ -405,22 +413,12 @@ void CDeferredManagerServer::LevelInitPreEntity()
 				if ( CloseEnough( -rot.x, ang.x, 2.f ) && CloseEnough( rot.y, ang.y, 2.f ) )
 				{
 					rot = ang;
-					entity->SetFloat( "_inner_cone", acos( light.stopdot ) * 180.f / M_PI_F );
-					entity->SetFloat( "_cone", acos( light.stopdot2 ) * 180.f / M_PI_F );
+					entity->SetFloat( "_inner_cone", acos( clamp( light.stopdot, -1.f, 1.f ) ) * 180.f / M_PI_F );
+					entity->SetFloat( "_cone", acos( clamp( light.stopdot2, -1.f, 1.f ) ) * 180.f / M_PI_F );
 					entity->SetFloat( "_distance", ComputeLightRadius( light ) );
 					break;
 				}
-			// }
-			// else
-			// {
-			// 	const int numUnspawnedLights = unspawnedLights.Count();
-			// 	for ( int i = 0; i < numUnspawnedLights; ++i )
-			// 	{
-			// 		if (unspawnedLights[i] == &light)
-			// 			goto out;
-			// 	}
-			// 	unspawnedLights.AddToTail( &light );
-			// }
+			}
 		}
 
 		//out:
@@ -545,7 +543,10 @@ void CDeferredManagerServer::AddWorldLight( CDeferredLight *l )
 	CDeferredLightContainer *pC = FindAvailableContainer();
 
 	if ( !pC )
+	{
 		pC = assert_cast< CDeferredLightContainer* >( CreateEntityByName( "deferred_light_container" ) );
+		DispatchSpawn( pC );
+	}
 
 	pC->AddWorldLight( l );
 }

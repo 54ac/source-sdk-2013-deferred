@@ -79,6 +79,12 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 			pShaderShadow->EnableCulling( false );
 		}
 
+		if ( bIsDecal )
+		{
+			pShaderShadow->EnableDepthWrites( false );
+			pShaderShadow->EnablePolyOffset( SHADER_POLYOFFSET_DECAL );
+		}
+
 		int iVFmtFlags = VERTEX_POSITION | VERTEX_NORMAL;
 		int iUserDataSize = 0;
 

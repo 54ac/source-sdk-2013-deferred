@@ -41,14 +41,6 @@
 
 extern ConVar mat_viewportupscale;
 extern ConVar mat_viewportscale;
-static ConVarRef mat_motion_blur_enabled( "mat_motion_blur_enabled" );
-static ConVarRef r_eyewaterepsilon( "r_eyewaterepsilon" );
-static ConVarRef mat_clipz( "mat_clipz" );
-static ConVarRef r_visocclusion( "r_visocclusion" );
-static ConVarRef fog_enableskybox( "fog_enableskybox" );
-static ConVarRef r_3dsky( "r_3dsky" );
-static ConVarRef r_skybox( "r_skybox" );
-static ConVarRef r_ForceWaterLeaf( "r_ForceWaterLeaf" );
 
 extern view_id_t g_CurrentViewID;
 
@@ -581,10 +573,12 @@ void CBaseWorldViewDeferred::DrawExecute( float waterHeight, view_id_t viewID, f
 
 	DrawWorldDeferred( waterZAdjust );
 
-	//if ( m_DrawFlags & DF_DRAW_ENTITITES )
-	DrawOpaqueRenderablesDeferred( false );
+	const bool bIsGBufferOrShadow = bShadowDepth || ( viewID == VIEW_DEFERRED_GBUFFER );
 
-	//if (!m_bDrawWorldNormal)
+	//if ( m_DrawFlags & DF_DRAW_ENTITITES )
+	DrawOpaqueRenderablesDeferred( bShadowDepth );
+
+	if ( !bIsGBufferOrShadow )
 	{
 		if ( m_DrawFlags & DF_DRAW_ENTITITES )
 		{
@@ -954,7 +948,6 @@ bool CSkyboxViewDeferred::GetSkyboxFogEnable()
 	}
 	CPlayerLocalData	*local		= &pbp->m_Local;
 
-	static ConVarRef fog_override( "fog_override" );
 	if( fog_override.GetInt() )
 	{
 		return fog_enableskybox.GetBool();
@@ -2572,6 +2565,7 @@ void CDeferredViewRender::RenderView( const CViewSetup &view, int nClearFlags, i
 	// Image-space motion blur
 	if ( !building_cubemaps.GetBool() && worldView.m_bDoBloomAndToneMapping ) // We probably should use a different view. variable here
 	{
+		static ConVarRef mat_motion_blur_enabled( "mat_motion_blur_enabled" );
 		if ( ( mat_motion_blur_enabled.GetInt() ) && ( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 90 ) )
 		{
 			pRenderContext.GetFrom( materials );

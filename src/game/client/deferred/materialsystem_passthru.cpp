@@ -33,7 +33,7 @@ static const char * const pszShaderReplaceDict[][2] = {
 	{ "vertexlitgeneric",				"DEFERRED_MODEL" },
 	{ "lightmappedgeneric",			"DEFERRED_BRUSH" },
 	{ "worldvertextransition",	"DEFERRED_BRUSH" },
-	//{ "decalmodulate",					"DEFERRED_DECALMODULATE" }, //doesn't work
+	{ "decalmodulate",				"DEFERRED_DECALMODULATE" },
 };
 
 // Copied from cdeferred_manager_client.cpp
@@ -200,9 +200,6 @@ IMaterial* CDeferredMaterialSystem::ReplaceMaterialInternal( IMaterial* pMat ) c
 	if ( !pMat || pMat->IsErrorMaterial() )
 		return pMat;
 
-	if (CommandLine() && CommandLine()->FindParm("-nodeferred") != 0) {
-		return pMat;
-	}
 
 	//FIXME: subrect decals don't work at all
 	if (V_stristr(pMat->GetName(), "_subrect")) {

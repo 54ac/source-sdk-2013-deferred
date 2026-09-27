@@ -532,4 +532,13 @@ protected:
 #endif
 };
 
+extern ConVar r_visocclusion;
+extern ConVar r_3dsky;
+extern ConVar r_skybox;
+extern ConVar fog_override;
+extern ConVar fog_enableskybox;
+extern ConVar r_ForceWaterLeaf;
+extern ConVar mat_clipz;
+extern ConVar r_eyewaterepsilon;
+
 #endif // VIEWRENDER_H
