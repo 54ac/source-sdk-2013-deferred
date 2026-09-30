@@ -221,12 +221,16 @@ struct def_light_temp_t : public def_light_t
 {
 	def_light_temp_t( float fLifeTime = 1.0f )
 	{
+		fLifeDuration = fLifeTime;
 		fEndLifeTime = gpGlobals->curtime + fLifeTime;
-		fDecay = 1.f / fLifeTime;
+		flStartRadius = 0.0f;
+		vecStartColor.Init();
 	}
 
+	float fLifeDuration;
 	float fEndLifeTime;
-	float fDecay;
+	float flStartRadius;
+	Vector vecStartColor;
 };
 
 #endif

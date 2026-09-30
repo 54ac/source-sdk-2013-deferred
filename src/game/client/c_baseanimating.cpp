@@ -3535,7 +3535,7 @@ void C_BaseAnimating::ProcessMuzzleFlashEvent()
 			AngleVectors(angles, &vAng);
 			vAttachment += vAng * 2;
 
-			def_light_temp_t *l = new def_light_temp_t( 0.05f );
+			def_light_temp_t *l = new def_light_temp_t( 0.03f );
 
 			l->ang = vec3_angle;
 			l->pos = vAttachment;

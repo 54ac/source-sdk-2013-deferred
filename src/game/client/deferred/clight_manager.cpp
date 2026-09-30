@@ -54,6 +54,14 @@ bool CLightingManager::Init()
 
 void CLightingManager::Shutdown()
 {
+	for ( int i = m_hDeferredTempLights.Count() - 1; i >= 0; i-- )
+	{
+		def_light_temp_t* light = m_hDeferredTempLights[i];
+		RemoveLight( light );
+		delete light;
+	}
+	m_hDeferredTempLights.Purge();
+
 	Assert( m_hDeferredLights.Count() == 0 );
 	materials->RemoveReleaseFunc( LightingResourceRelease );
 
@@ -70,6 +78,14 @@ void CLightingManager::LevelInitPostEntity() {}
 
 void CLightingManager::LevelShutdownPostEntity()
 {
+	for ( int i = m_hDeferredTempLights.Count() - 1; i >= 0; i-- )
+	{
+		def_light_temp_t* light = m_hDeferredTempLights[i];
+		RemoveLight( light );
+		delete light;
+	}
+	m_hDeferredTempLights.Purge();
+
 	m_hRenderLights.Purge();
 
 	for ( int i = 0; i < LSORT_COUNT; i++ )
@@ -198,6 +214,8 @@ int CLightingManager::CountTempLights() const
 
 void CLightingManager::AddTempLight( def_light_temp_t* l )
 {
+	l->flStartRadius = l->flRadius;
+	l->vecStartColor = l->col_diffuse;
 	m_hDeferredTempLights.AddToTail( l );
 	AddLight( l );
 }
@@ -207,14 +225,17 @@ void CLightingManager::UpdateTemplights( float deltaTime )
 	for ( int i = m_hDeferredTempLights.Count() - 1; i >= 0; i-- )
 	{
 		def_light_temp_t* light = m_hDeferredTempLights[i];
-		if ( light->fEndLifeTime < gpGlobals->curtime )
+		if ( light->fEndLifeTime <= gpGlobals->curtime || light->fLifeDuration <= 0.0f )
 		{
 			RemoveLight( light );
 			m_hDeferredTempLights.Remove( i );
+			delete light;
 		}
 		else
 		{
-			light->flRadius -= deltaTime * light->fDecay;
+			const float flFrac = clamp( ( light->fEndLifeTime - gpGlobals->curtime ) / light->fLifeDuration, 0.0f, 1.0f );
+			light->flRadius = light->flStartRadius * flFrac;
+			light->col_diffuse = light->vecStartColor * flFrac;
 		}
 	}
 }
