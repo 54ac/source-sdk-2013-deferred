@@ -3,7 +3,9 @@
 // STATIC:		"TRANSLUCENT"		"0..1"
 // STATIC:		"READNORMAL"		"0..1"
 // STATIC:		"NOCULL"			"0..1"
+// STATIC:		"PHONG"				"0..1"
 // STATIC:		"PHONGFRESNEL"		"0..1"
+// STATIC:		"BUMPMASK"			"0..1"
 // STATIC:		"ENVMAP"			"0..1"
 // STATIC:		"ENVMAPMASK"		"0..1"
 // STATIC:		"ENVMAPFRESNEL"		"0..1"
@@ -25,6 +27,8 @@
 // SKIP:		$ALPHATEST && $TRANSLUCENT
 // SKIP:		!$ENVMAP && $ENVMAPFRESNEL
 // SKIP:		!$ENVMAP && $ENVMAPMASK
+// SKIP:		!$PHONG && $PHONGFRESNEL
+// SKIP:		!$PHONG && !$ENVMAP && $BUMPMASK
 
 // SKIP:		$ENVMAP && !$READNORMAL
 // SKIP:		$ENVMAPFRESNEL && !$READNORMAL
@@ -62,16 +66,26 @@ sampler sNormals						: register( s1 );
 
 sampler sLightAccum						: register( s2 );
 
+#if BUMPMASK
+sampler sBumpmap						: register( s8 );
+#endif
+
 const float2 g_vecFullScreenTexel		: register( c1 );
 const float4 g_vecFogParams				: register( c2 );
 const float3 g_vecOrigin				: register( c3 );
 
-const float g_flPhongScale				: register( c4 );
+const float4 g_vecPhongControl			: register( c4 );
+#define g_flPhongBoost g_vecPhongControl.x
+#define g_bBaseMapAlphaPhongMask (g_vecPhongControl.y > 0.5f)
+#define g_bInvertPhongMask (g_vecPhongControl.z > 0.5f)
+#define g_bPhongAlbedoTint (g_vecPhongControl.w > 0.5f)
 
 #if ENVMAP
 sampler sEnvmap								: register( s3 );
 const float3 g_flEnvmapTint					: register( c5 );
-const float2 g_flEnvmapSaturationContrast	: register( c6 );
+const float4 g_flEnvmapSaturationContrast	: register( c6 );
+#define g_bBaseAlphaEnvmapMask (g_flEnvmapSaturationContrast.z > 0.5f)
+#define g_bNormalMapAlphaEnvmapMask (g_flEnvmapSaturationContrast.w > 0.5f)
 
 #	if ENVMAPMASK
 sampler sEnvmapMask							: register( s4 );
@@ -189,8 +203,29 @@ PS_OUTPUT main( const PS_INPUT In )
 	float flFresnel = saturate( Fresnel( worldNormal, worldToEye, g_flFresnelRanges ) );
 #endif
 
+#if PHONG
+	float flSpecularMask;
+	if ( g_bBaseMapAlphaPhongMask )
+		flSpecularMask = flAlbedoSample.a;
+#if BUMPMASK
+	else
+		flSpecularMask = tex2D( sBumpmap, In.vTexCoord.xy ).a;
+#else
+	else
+		flSpecularMask = 1.0f;
+#endif
+
+	if ( g_bInvertPhongMask )
+		flSpecularMask = 1.0f - flSpecularMask;
+
+	float3 flSpecularTint = lerp( float3( 1.0f, 1.0f, 1.0f ), flAlbedoSample.rgb, g_bPhongAlbedoTint ? 1.0f : 0.0f );
+	float3 flSpecularHighlight = flLighting.w * flSpecularMask * g_flPhongBoost * flSpecularTint;
+
 #if PHONGFRESNEL
-	flLighting.w *= flFresnel;
+	flSpecularHighlight *= flFresnel;
+#endif
+#else
+	float3 flSpecularHighlight = (float3)0;
 #endif
 
 	float3 flSpecularLighting = (float3)0;
@@ -210,7 +245,7 @@ PS_OUTPUT main( const PS_INPUT In )
 
 
 #if ENVMAP
-	float flSpecularFactor;
+	float flSpecularFactor = 1.0f;
 #if ENVMAPMASK
 	float4 vecEnvmapmaskColor = tex2D( sEnvmapMask, In.vTexCoord.xy );
 #if BASETEXTURE2
@@ -220,7 +255,16 @@ PS_OUTPUT main( const PS_INPUT In )
 #endif
 	flSpecularFactor = vecEnvmapmaskColor.r;
 #else
-	flSpecularFactor = flAlbedoSample.a;
+	if ( g_bBaseAlphaEnvmapMask )
+	{
+		flSpecularFactor = 1.0f - flAlbedoSample.a;
+	}
+#if BUMPMASK
+	else if ( g_bNormalMapAlphaEnvmapMask )
+	{
+		flSpecularFactor = tex2D( sBumpmap, In.vTexCoord.xy ).a;
+	}
+#endif
 #endif
 
 #if RIMLIGHT
@@ -279,7 +323,10 @@ PS_OUTPUT main( const PS_INPUT In )
 		GAMMA_LIGHT_SCALE;
 #endif
 
-	Out.vColor_0.xyz = ( ( flAlbedoSample + flLighting.w * g_flPhongScale ) * flLighting.xyz
+	float3 flDiffuseLighting = flAlbedoSample.rgb * flLighting.rgb;
+
+	Out.vColor_0.xyz = ( flDiffuseLighting
+		+ flSpecularHighlight
 		+ flSpecularLighting ) * flLightScale;
 
 #if PIXELFOGTYPE == 0

@@ -40,6 +40,8 @@ void InitPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 
 	if ( PARM_DEFINED( info.iPhongmap ) )
 		pShader->LoadTexture( info.iPhongmap );
+	else if ( PARM_DEFINED( info.iPhongmapFallback ) )
+		pShader->LoadTexture( info.iPhongmapFallback );
 }
 
 void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMaterialVar **params,
@@ -55,9 +57,10 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 
 	const bool bAlbedo = PARM_TEX( info.iAlbedo );
 	const bool bAlbedo2 = bDeferredShading && PARM_TEX( info.iAlbedo2 );
-	const bool bBumpmap = PARM_TEX( info.iBumpmap );
+	const bool bBumpmap = g_pConfig->UseBumpmapping() && PARM_TEX( info.iBumpmap );
 	const bool bBumpmap2 = bBumpmap && PARM_TEX( info.iBumpmap2 );
-	const bool bPhongmap = PARM_TEX( info.iPhongmap );
+	const int iActualPhongMap = PARM_TEX( info.iPhongmap ) ? info.iPhongmap : info.iPhongmapFallback;
+	const bool bPhongmap = PARM_TEX( iActualPhongMap );
 
 	const bool bBlendmodulate = ( bAlbedo2 || bBumpmap2 ) && PARM_TEX( info.iBlendmodulate );
 
@@ -201,17 +204,35 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 				tmpBuf.BindTexture( pShader, SHADER_SAMPLER1, info.iBumpmap );
 
 			if ( bPhongmap )
-				tmpBuf.BindTexture( pShader, SHADER_SAMPLER2, info.iPhongmap );
+				tmpBuf.BindTexture( pShader, SHADER_SAMPLER2, iActualPhongMap );
 			else
 			{
 				float flPhongExp[2] = { 0 };
-				flPhongExp[0] = clamp( PARM_FLOAT( info.iPhongExp ), 0, 1 ) * 63.0f;
+				const bool bPhongEnabled = PARM_SET( info.iPhong );
+
+				if ( bPhongEnabled )
+				{
+					float fRawExp = PARM_DEFINED( info.iPhongExp ) ? PARM_FLOAT( info.iPhongExp ) :
+						( PARM_DEFINED( info.iPhongExpFallback ) ? PARM_FLOAT( info.iPhongExpFallback ) : 20.0f );
+					if ( fRawExp > 1.0f )
+					{
+						flPhongExp[0] = clamp( ( log( fRawExp ) / log( 6.0f ) - 1.0f ) * 50.0f, 0.0f, 63.0f );
+					}
+					else if ( fRawExp > 0.0f )
+					{
+						flPhongExp[0] = fRawExp * 63.0f;
+					}
+				}
 
 				if ( bBumpmap2 || bAlbedo2 )
 				{
 					PARM_VALIDATE( info.iPhongExp2 );
+					float fRawExp2 = PARM_FLOAT( info.iPhongExp2 );
+					if ( fRawExp2 > 1.0f )
+						flPhongExp[1] = clamp( ( log( fRawExp2 ) / log( 6.0f ) - 1.0f ) * 50.0f, 0.0f, 63.0f );
+					else
+						flPhongExp[1] = clamp( fRawExp2, 0.0f, 1.0f ) * 63.0f;
 
-					flPhongExp[1] = clamp( PARM_FLOAT( info.iPhongExp2 ), 0, 1 ) * 63.0f;
 					tmpBuf.SetPixelShaderConstant2( 2, flPhongExp[0], flPhongExp[1] );
 				}
 				else

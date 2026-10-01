@@ -130,6 +130,8 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 	const bool bAlphaBlending = pMat->IsTranslucent() || pMat->GetMaterialVarFlag( MATERIAL_VAR_TRANSLUCENT );
 	const bool bAlphaTesting = pMat->IsAlphaTested() || pMat->GetMaterialVarFlag( MATERIAL_VAR_ALPHATEST );
 	const bool bSelfillum = pMat->GetMaterialVarFlag( MATERIAL_VAR_SELFILLUM );
+	const bool bBaseAlphaEnvmapMask = pMat->GetMaterialVarFlag( MATERIAL_VAR_BASEALPHAENVMAPMASK );
+	const bool bNormalMapAlphaEnvmapMask = pMat->GetMaterialVarFlag( MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK );
 	const bool bDecal = pszOldShadername != NULL && Q_stristr( pszOldShadername,"decal" ) != NULL ||
 		pszMatname != NULL && Q_stristr( pszMatname, "decal" ) != NULL ||
 		pMat->GetMaterialVarFlag( MATERIAL_VAR_DECAL );
@@ -158,7 +160,26 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 		msg->SetInt( "$selfillum", 1 );
 	}
 
+	if ( bBaseAlphaEnvmapMask )
+	{
+		msg->SetInt( "$basealphaenvmapmask", 1 );
+	}
+
+	if ( bNormalMapAlphaEnvmapMask )
+	{
+		msg->SetInt( "$normalmapalphaenvmapmask", 1 );
+	}
+
 	pMat->SetShaderAndParams( msg );
+
+	if ( bBaseAlphaEnvmapMask )
+	{
+		pMat->SetMaterialVarFlag( MATERIAL_VAR_BASEALPHAENVMAPMASK, true );
+	}
+	if ( bNormalMapAlphaEnvmapMask )
+	{
+		pMat->SetMaterialVarFlag( MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK, true );
+	}
 
 	pMat->RefreshPreservingMaterialVars();
 

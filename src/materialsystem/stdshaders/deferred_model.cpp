@@ -13,6 +13,15 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 
 		SHADER_PARAM( LITFACE, SHADER_PARAM_TYPE_BOOL, "0", "" )
 
+		SHADER_PARAM( PHONG, SHADER_PARAM_TYPE_BOOL, "0", "enables phong specular" )
+		SHADER_PARAM( PHONGBOOST, SHADER_PARAM_TYPE_FLOAT, "1.0", "phong specular boost" )
+		SHADER_PARAM( PHONGEXPONENT, SHADER_PARAM_TYPE_FLOAT, "20.0", "phong exponent" )
+		SHADER_PARAM( PHONGEXPONENTTEXTURE, SHADER_PARAM_TYPE_TEXTURE, "", "phong exponent texture" )
+		SHADER_PARAM( PHONGFRESNELRANGES, SHADER_PARAM_TYPE_VEC3, "[0.05 0.5 1]", "phong fresnel ranges" )
+		SHADER_PARAM( BASEMAPALPHAPHONGMASK, SHADER_PARAM_TYPE_BOOL, "0", "use basemap alpha for phong mask" )
+		SHADER_PARAM( INVERTPHONGMASK, SHADER_PARAM_TYPE_BOOL, "0", "invert phong mask" )
+		SHADER_PARAM( PHONGALBEDOTINT, SHADER_PARAM_TYPE_BOOL, "0", "tint phong with albedo" )
+
 		SHADER_PARAM( PHONG_SCALE, SHADER_PARAM_TYPE_FLOAT, "", "" )
 		SHADER_PARAM( PHONG_EXP, SHADER_PARAM_TYPE_FLOAT, "", "" )
 		SHADER_PARAM( PHONG_MAP, SHADER_PARAM_TYPE_TEXTURE, "", "" )
@@ -27,6 +36,8 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 		SHADER_PARAM( ENVMAPSATURATION, SHADER_PARAM_TYPE_FLOAT, "1.0", "saturation 0 == greyscale 1 == normal" )
 		SHADER_PARAM( ENVMAPFRESNEL, SHADER_PARAM_TYPE_BOOL, "", "" )
 		SHADER_PARAM( ENVMAPMASK, SHADER_PARAM_TYPE_TEXTURE, "shadertest/shadertest_envmask", "envmap mask" )
+		SHADER_PARAM( BASEALPHAENVMAPMASK, SHADER_PARAM_TYPE_BOOL, "0", "indicates that the alpha channel of the base texture is an env map mask" )
+		SHADER_PARAM( NORMALMAPALPHAENVMAPMASK, SHADER_PARAM_TYPE_BOOL, "0", "indicates that the alpha channel of the normal map is an env map mask" )
 
 		SHADER_PARAM( RIMLIGHT, SHADER_PARAM_TYPE_BOOL, "0", "enables rim lighting" )
 		SHADER_PARAM( RIMLIGHTEXPONENT, SHADER_PARAM_TYPE_FLOAT, "4.0", "Exponent for rim lights" )
@@ -47,11 +58,14 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 
 		p.iAlbedo = BASETEXTURE;
 		p.iBumpmap = BUMPMAP;
-		p.iPhongmap = PHONG_MAP;
+		p.iPhong = PHONG;
+		p.iPhongmap = PHONGEXPONENTTEXTURE;
+		p.iPhongmapFallback = PHONG_MAP;
 
 		p.iAlphatestRef = ALPHATESTREFERENCE;
 		p.iLitface = LITFACE;
-		p.iPhongExp = PHONG_EXP;
+		p.iPhongExp = PHONGEXPONENT;
+		p.iPhongExpFallback = PHONG_EXP;
 	}
 
 	void SetupParmsShadow( defParms_shadow &p )
@@ -65,6 +79,7 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 	{
 		p.bModel = true;
 		p.iAlbedo = BASETEXTURE;
+		p.iBumpmap = BUMPMAP;
 
 		p.iEnvmap = ENVMAP;
 		p.iEnvmapMask = ENVMAPMASK;
@@ -72,6 +87,8 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 		p.iEnvmapContrast = ENVMAPCONTRAST;
 		p.iEnvmapSaturation = ENVMAPSATURATION;
 		p.iEnvmapFresnel = ENVMAPFRESNEL;
+		p.iBaseAlphaEnvmapMask = BASEALPHAENVMAPMASK;
+		p.iNormalMapAlphaEnvmapMask = NORMALMAPALPHAENVMAPMASK;
 
 		p.iRimlightEnable = RIMLIGHT;
 		p.iRimlightExponent = RIMLIGHTEXPONENT;
@@ -81,15 +98,20 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 
 		p.iAlphatestRef = ALPHATESTREFERENCE;
 
+		p.iPhong = PHONG;
+		p.iPhongBoost = PHONGBOOST;
 		p.iPhongScale = PHONG_SCALE;
 		p.iPhongFresnel = PHONG_FRESNEL;
+		p.iPhongFresnelRanges = PHONGFRESNELRANGES;
+		p.iFresnelRanges = FRESNELRANGES;
+		p.iBaseMapAlphaPhongMask = BASEMAPALPHAPHONGMASK;
+		p.iInvertPhongMask = INVERTPHONGMASK;
+		p.iPhongAlbedoTint = PHONGALBEDOTINT;
 
 		p.iSelfIllumTint = SELFILLUMTINT;
 		p.iSelfIllumMaskInEnvmapAlpha = SELFILLUM_ENVMAPMASK_ALPHA;
 		p.iSelfIllumFresnelModulate = SELFILLUMFRESNEL;
 		p.iSelfIllumMask = SELFILLUMMASK;
-
-		p.iFresnelRanges = FRESNELRANGES;
 	}
 
 	bool DrawToGBuffer( IMaterialVar **params )
@@ -110,6 +132,12 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 
 		if ( g_pHardwareConfig->HasFastVertexTextures() )
 			SET_FLAGS2( MATERIAL_VAR2_USES_VERTEXID );
+
+		if ( PARM_SET( BASEALPHAENVMAPMASK ) )
+			SET_FLAGS( MATERIAL_VAR_BASEALPHAENVMAPMASK );
+
+		if ( PARM_SET( NORMALMAPALPHAENVMAPMASK ) )
+			SET_FLAGS( MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK );
 
 		const bool bDrawToGBuffer = DrawToGBuffer( params );
 

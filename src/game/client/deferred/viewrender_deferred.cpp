@@ -1893,6 +1893,17 @@ void CDeferredViewRender::DrawWorldComposite( const CViewSetup &view, int nClear
 
 void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 {
+	static ConVarRef mat_fullbright( "mat_fullbright" );
+	if ( mat_fullbright.GetInt() == 1 )
+	{
+		CMatRenderContextPtr pRenderContext( materials );
+		pRenderContext->PushRenderTargetAndViewport( GetDefRT_Lightaccum() );
+		pRenderContext->ClearColor4ub( 255, 255, 255, 0 );
+		pRenderContext->ClearBuffers( true, false );
+		pRenderContext->PopRenderTargetAndViewport();
+		return;
+	}
+
 	bool bResetLightAccum = false;
 	const bool bRadiosityEnabled = DEFCFG_ENABLE_RADIOSITY != 0 && r_deferred_radiosity.GetBool();
 
@@ -2526,6 +2537,9 @@ void CDeferredViewRender::RenderView( const CViewSetup &view, int nClearFlags, i
 
 	// clear happens here probably
 	SetupMain3DView( worldView, nClearFlags );
+
+	unsigned int visFlags;
+	SetupVis( worldView, visFlags, NULL );
 
 	ProcessDeferredGlobals( worldView );
 	GetLightingManager()->LightSetup( worldView );

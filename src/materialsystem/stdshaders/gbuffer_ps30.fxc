@@ -133,7 +133,7 @@ PS_OUTPUT main( const PS_INPUT In )
 
 #if ( TRANSLUCENT == 0 )
 #	if PHONGMAP
-	float phong_exp = tex2D( sPhongmap, In.vTexCoord.xy ).x * 63.0f;
+	float phong_exp = tex2D( sPhongmap, In.vTexCoord.xy ).g * 63.0f;
 #	else
 #		if BUMPMAP2
 	float phong_exp = lerp( g_flPhong_exp.x, g_flPhong_exp.y, flBlendfactor );

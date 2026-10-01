@@ -15,6 +15,7 @@ struct defParms_composite
 	// textures
 	int iAlbedo;
 	int iAlbedo2;
+	int iBumpmap;
 	int iEnvmap;
 	int iEnvmapMask;
 	int iEnvmapMask2;
@@ -25,6 +26,8 @@ struct defParms_composite
 	int iEnvmapSaturation;
 	int iEnvmapContrast;
 	int iEnvmapFresnel;
+	int iBaseAlphaEnvmapMask;
+	int iNormalMapAlphaEnvmapMask;
 
 	// rimlight
 	int iRimlightEnable;
@@ -37,8 +40,14 @@ struct defParms_composite
 	int iAlphatestRef;
 
 	// phong
+	int iPhong;
+	int iPhongBoost;
 	int iPhongScale;
 	int iPhongFresnel;
+	int iPhongFresnelRanges;
+	int iBaseMapAlphaPhongMask;
+	int iInvertPhongMask;
+	int iPhongAlbedoTint;
 
 	// self illum
 	int iSelfIllumTint;

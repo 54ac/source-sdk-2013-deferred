@@ -19,12 +19,15 @@ struct defParms_gBuffer
 	int iBumpmap;
 	int iBumpmap2;
 	int iPhongmap;
+	int iPhongmapFallback;
 	int iBlendmodulate;
 
 	// control
 	int iAlphatestRef;
 	int iLitface;
+	int iPhong;
 	int iPhongExp;
+	int iPhongExpFallback;
 	int iPhongExp2;
 	int iSSBump;
 
