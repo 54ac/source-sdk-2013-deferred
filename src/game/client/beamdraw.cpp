@@ -15,6 +15,7 @@
 #include "engine/ivmodelinfo.h"
 #include "fx_line.h"
 #include "materialsystem/imaterialvar.h"
+#include "deferred/cdeferred_manager_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -66,6 +67,9 @@ CEngineSprite *Draw_SetSpriteTexture( const model_t *pSpriteModel, int frame, in
 //-----------------------------------------------------------------------------
 void DrawHalo(IMaterial* pMaterial, const Vector& source, float scale, float const* color, float flHDRColorScale )
 {
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetDeferredManager()->IsGBufferActive() )
+		return;
+
 	static unsigned int nHDRColorScaleCache = 0;
 	Vector		point, screen;
 	
@@ -124,6 +128,8 @@ void DrawHalo(IMaterial* pMaterial, const Vector& source, float scale, float con
 //-----------------------------------------------------------------------------
 void DrawSprite( const Vector &vecOrigin, float flWidth, float flHeight, color32 color )
 {
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetDeferredManager()->IsGBufferActive() )
+		return;
 	unsigned char pColor[4] = { color.r, color.g, color.b, color.a };
 
 	// Generate half-widths

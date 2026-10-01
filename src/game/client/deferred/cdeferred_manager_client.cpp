@@ -28,6 +28,7 @@ static IMaterialSystem *g_pOldMatSystem;
 CDeferredManagerClient::CDeferredManagerClient() : BaseClass( "DeferredManagerClient" )
 {
 	m_bDefRenderingEnabled = false;
+	m_bGBufferActive = false;
 
 	Q_memset( m_pMat_Def, 0, sizeof(IMaterial*) * DEF_MAT_COUNT );
 	Q_memset( m_pKV_Def, 0, sizeof(KeyValues*) * DEF_MAT_COUNT );

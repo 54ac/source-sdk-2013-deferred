@@ -40,6 +40,8 @@ enum DEF_MATERIALS
 	DEF_MAT_COUNT
 };
 
+struct def_light_t;
+
 class CDeferredManagerClient : public CAutoGameSystem
 {
 	typedef CAutoGameSystem BaseClass;
@@ -52,6 +54,8 @@ public:
 	virtual void Shutdown();
 
 	inline bool IsDeferredRenderingEnabled() const;
+	inline bool IsGBufferActive() const { return m_bGBufferActive; }
+	inline void SetGBufferActive( bool bActive ) { m_bGBufferActive = bActive; }
 
 	ImageFormat GetShadowDepthFormat();
 	ImageFormat GetNullFormat();
@@ -64,6 +68,7 @@ public:
 private:
 
 	bool m_bDefRenderingEnabled;
+	bool m_bGBufferActive;
 
 	void InitializeDeferredMaterials();
 	void ShutdownDeferredMaterials();

@@ -136,8 +136,12 @@ public:
 		if ( !pEntity )
 			return true;
 
+		C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+
 		if ( ( dynamic_cast<C_BaseViewModel *>( pEntity ) != NULL ) ||
 			 ( dynamic_cast<C_BasePlayer *>( pEntity ) != NULL ) ||
+			 ( dynamic_cast<C_BaseCombatWeapon *>( pEntity ) != NULL ) ||
+			 ( pPlayer && pEntity->GetMoveParent() == pPlayer ) ||
 			 pEntity->GetCollisionGroup() == COLLISION_GROUP_DEBRIS ||
 			 pEntity->GetCollisionGroup() == COLLISION_GROUP_INTERACTIVE_DEBRIS )
 		{
@@ -246,11 +250,14 @@ void CFlashlightEffect::UpdateLightNew(const Vector &vecPos, const Vector &vecFo
 		if ( !bPlayerOnLadder )
 		{
 			trace_t pmBackTrace;
-			UTIL_TraceHull( vOrigin, vOrigin - vDir*(flPullBackDist-flEpsilon), Vector( -4, -4, -4 ), Vector( 4, 4, 4 ), iMask, &traceFilter, &pmBackTrace );
+			int iBackMask = iMask | CONTENTS_GRATE;
+			UTIL_TraceHull( vOrigin, vOrigin - vDir*(flPullBackDist-flEpsilon), Vector( -4, -4, -4 ), Vector( 4, 4, 4 ), iBackMask, &traceFilter, &pmBackTrace );
 			if( pmBackTrace.DidHit() )
 			{
 				// We have an intersection behind us as well, so limit our m_flDistMod
 				float flMaxDist = (pmBackTrace.endpos - vOrigin).Length() - flEpsilon;
+				if ( flMaxDist < 0.0f )
+					flMaxDist = 0.0f;
 				if( m_flDistMod > flMaxDist )
 					m_flDistMod = flMaxDist;
 			}
@@ -260,6 +267,7 @@ void CFlashlightEffect::UpdateLightNew(const Vector &vecPos, const Vector &vecFo
 	{
 		m_flDistMod = Lerp( flDistDrag, m_flDistMod, 0.0f );
 	}
+	m_flDistMod = clamp( m_flDistMod, 0.0f, flDistCutoff );
 	vOrigin = vOrigin - vDir * m_flDistMod;
 
 	state.m_vecLightOrigin = vOrigin;

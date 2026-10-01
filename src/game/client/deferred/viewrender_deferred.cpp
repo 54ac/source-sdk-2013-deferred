@@ -920,10 +920,14 @@ void CGBufferView::PushGBuffer( bool bInitial, float zScale, bool bClearDepth )
 	data.zScale = zScale;
 	#pragma warning(suppress: 4456)
 	QUEUE_FIRE( CommitZScale, zScale );
+
+	GetDeferredManager()->SetGBufferActive( true );
 }
 
 void CGBufferView::PopGBuffer()
 {
+	GetDeferredManager()->SetGBufferActive( false );
+
 	CMatRenderContextPtr pRenderContext( materials );
 	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_RENDER_STAGE,
 		DEFERRED_RENDER_STAGE_INVALID );
