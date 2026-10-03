@@ -743,12 +743,13 @@ void C_BaseExplosionEffect::CreateDynamicLight( void )
 	l->flRadius = m_flScale * 512.f;
 	l->flFalloffPower = 1.0f;
 
-	l->iVisible_Dist = 1024.0f;
-	l->iVisible_Range = 1024.0f;
-	l->iShadow_Dist = 512.0f;
-	l->iShadow_Range = 512.0f;
+	l->iVisible_Dist = 4096;
+	l->iVisible_Range = 1024;
+	l->iShadow_Dist = 2048;
+	l->iShadow_Range = 512;
 
 	l->iFlags = ( l->iFlags & ~( ( 1 << DEFLIGHT_FLAGS_MAX_SHARED_BITS ) - 1 ) ) | DEFLIGHT_SHADOW_ENABLED;
+	l->MakeDirtyAll();
 
 	GetLightingManager()->AddTempLight( l );
 }

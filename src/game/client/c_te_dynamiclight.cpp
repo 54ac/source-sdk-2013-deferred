@@ -1,6 +1,6 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
-// Purpose: 
+// Purpose:
 //
 // $Workfile:     $
 // $Date:         $
@@ -13,6 +13,7 @@
 #include "tier1/KeyValues.h"
 #include "toolframework_client.h"
 #include "tier0/vprof.h"
+#include "deferred/deferred_shared_common.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -44,7 +45,7 @@ public:
 
 
 //-----------------------------------------------------------------------------
-// Networking 
+// Networking
 //-----------------------------------------------------------------------------
 IMPLEMENT_CLIENTCLASS_EVENT_DT(C_TEDynamicLight, DT_TEDynamicLight, CTEDynamicLight)
 	RecvPropVector( RECVINFO(m_vecOrigin)),
@@ -59,7 +60,7 @@ END_RECV_TABLE()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 C_TEDynamicLight::C_TEDynamicLight( void )
 {
@@ -74,7 +75,7 @@ C_TEDynamicLight::C_TEDynamicLight( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 C_TEDynamicLight::~C_TEDynamicLight( void )
 {
@@ -83,18 +84,52 @@ C_TEDynamicLight::~C_TEDynamicLight( void )
 void TE_DynamicLight( IRecipientFilter& filter, float delay,
 	const Vector* org, int r, int g, int b, int exponent, float radius, float time, float decay, int nLightIndex )
 {
-	dlight_t *dl = effects->CL_AllocDlight( nLightIndex );
-	if ( !dl )
-		return;
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		if ( radius > 0.0f )
+		{
+			float flDuration = time;
+			if ( decay > 0.0f )
+			{
+				const float flDecayDuration = radius / decay;
+				flDuration = ( flDuration > 0.0f ) ? min( flDuration, flDecayDuration ) : flDecayDuration;
+			}
+			flDuration = clamp( flDuration, 0.03f, 5.0f );
 
-	dl->origin	= *org;
-	dl->radius	= radius;
-	dl->color.r	= r;
-	dl->color.g	= g;
-	dl->color.b	= b;
-	dl->color.exponent	= exponent;
-	dl->die		= gpGlobals->curtime + time;
-	dl->decay	= decay;
+			float flExp = ( exponent != 0 ) ? exp2f( (float)exponent ) : 1.0f;
+			float flR = clamp( ( r / 255.0f ) * flExp, 0.0f, 32.0f );
+			float flG = clamp( ( g / 255.0f ) * flExp, 0.0f, 32.0f );
+			float flB = clamp( ( b / 255.0f ) * flExp, 0.0f, 32.0f );
+
+			def_light_temp_t *l = new def_light_temp_t( flDuration );
+			l->ang = vec3_angle;
+			l->pos = *org;
+			l->col_diffuse.Init( flR, flG, flB );
+			l->flRadius = radius;
+			l->flFalloffPower = ( nLightIndex == LIGHT_INDEX_MUZZLEFLASH ) ? 2.0f : 1.0f;
+			l->iVisible_Dist = (uint16)clamp( max( 4096.0f, radius * 3.0f ), 4096.0f, 32768.0f );
+			l->iVisible_Range = (uint16)clamp( radius, 512.0f, 2048.0f );
+			l->iShadow_Dist = l->iVisible_Dist / 2;
+			l->iShadow_Range = l->iVisible_Range / 2;
+			l->MakeDirtyAll();
+			GetLightingManager()->AddTempLight( l );
+		}
+	}
+	else
+	{
+		dlight_t *dl = effects->CL_AllocDlight( nLightIndex );
+		if ( !dl )
+			return;
+
+		dl->origin	= *org;
+		dl->radius	= radius;
+		dl->color.r	= r;
+		dl->color.g	= g;
+		dl->color.b	= b;
+		dl->color.exponent	= exponent;
+		dl->die		= gpGlobals->curtime + time;
+		dl->decay	= decay;
+	}
 
 	if ( ToolsEnabled() && clienttools->IsInRecordingMode() )
 	{
@@ -122,8 +157,8 @@ void TE_DynamicLight( IRecipientFilter& filter, float delay,
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : bool - 
+// Purpose:
+// Input  : bool -
 //-----------------------------------------------------------------------------
 void C_TEDynamicLight::PostDataUpdate( DataUpdateType_t updateType )
 {
@@ -146,7 +181,7 @@ void TE_DynamicLight( IRecipientFilter& filter, float delay, KeyValues *pKeyValu
 	float flDecay = pKeyValues->GetFloat( "decay" );
  	int nLightIndex = pKeyValues->GetInt( "lightindex", LIGHT_INDEX_TE_DYNAMIC );
 
-	TE_DynamicLight( filter, 0.0f, &vecOrigin, c.r(), c.g(), c.b(), nExponent, 
+	TE_DynamicLight( filter, 0.0f, &vecOrigin, c.r(), c.g(), c.b(), nExponent,
 		flRadius, flDuration, flDecay, nLightIndex );
 }
 

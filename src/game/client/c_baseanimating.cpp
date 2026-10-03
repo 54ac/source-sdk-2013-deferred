@@ -3535,22 +3535,21 @@ void C_BaseAnimating::ProcessMuzzleFlashEvent()
 			AngleVectors(angles, &vAng);
 			vAttachment += vAng * 2;
 
-			def_light_temp_t *l = new def_light_temp_t( 0.03f );
+			def_light_temp_t *l = new def_light_temp_t( 0.04f );
 
 			l->ang = vec3_angle;
 			l->pos = vAttachment;
 
-			l->col_diffuse = Vector( 0.964705882f, 0.82745098f, 0.403921569f );
+			l->col_diffuse = Vector( 0.650f, 0.489f, 0.163f );
 
-			l->flRadius = random->RandomFloat( 64, 128 );
-			l->flFalloffPower = 1.0f;
+			l->flRadius = random->RandomFloat( 200.0f, 300.0f );
+			l->flFalloffPower = 2.0f;
 
-			l->iVisible_Dist = l->flRadius * 2;
-			l->iVisible_Range = l->flRadius * 2;
-			l->iShadow_Dist = l->flRadius;
-			l->iShadow_Range = l->flRadius;
-
-			l->iFlags = ( l->iFlags & ~( ( 1 << DEFLIGHT_FLAGS_MAX_SHARED_BITS ) - 1 ) ) | DEFLIGHT_SHADOW_ENABLED;
+			l->iVisible_Dist = 4096;
+			l->iVisible_Range = 1024;
+			l->iShadow_Dist = 1536;
+			l->iShadow_Range = 512;
+			l->MakeDirtyAll();
 
 			GetLightingManager()->AddTempLight( l );
 		}
