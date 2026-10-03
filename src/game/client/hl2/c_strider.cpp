@@ -32,9 +32,12 @@
 #include "clienteffectprecachesystem.h"
 #include <bitbuf.h>
 #include "fx_water.h"
+#include "deferred/deferred_shared_common.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
+
+extern ConVar muzzleflash_light;
 
 #define STRIDER_MSG_BIG_SHOT			1
 #define STRIDER_MSG_STREAKS				2
@@ -77,6 +80,13 @@ public:
 	}
 	virtual void EffectShutdown( void )
 	{
+		if ( m_pDefLight )
+		{
+			if ( GetLightingManager() )
+				GetLightingManager()->RemoveLight( m_pDefLight );
+			delete m_pDefLight;
+			m_pDefLight = NULL;
+		}
 		m_limitHitTime = 0;
 		BaseClass::EffectShutdown();
 	}
@@ -99,6 +109,7 @@ public:
 	pixelvis_handle_t		m_queryHandleGun;
 	pixelvis_handle_t		m_queryHandleBeamEnd;
 	float					m_limitHitTime;
+	def_light_t				*m_pDefLight;
 };
 
 //-----------------------------------------------------------------------------
@@ -171,6 +182,7 @@ C_StriderFX::C_StriderFX()
 {
 	m_pOwner = NULL;
 	m_active = false;
+	m_pDefLight = NULL;
 }
 
 void C_StriderFX::Update( C_BaseEntity *pOwner, const Vector &targetPos )
@@ -599,14 +611,51 @@ int	C_StriderFX::DrawModel( int )
 		pRenderContext->Bind( pMat, (IClientRenderable*)this );
 		Strider_DrawSprite( m_worldPosition, size, color );
 
-		dlight_t *dl = effects->CL_AllocDlight( m_entityIndex );
-		dl->origin = m_worldPosition;
-		dl->color.r = 40;
-		dl->color.g = 60;
-		dl->color.b = 255;
-		dl->color.exponent = 5;
-		dl->radius = bright * 128;
-		dl->die = gpGlobals->curtime + 0.001;
+		if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+		{
+			if ( bright > 0.01f )
+			{
+				if ( !m_pDefLight )
+				{
+					m_pDefLight = new def_light_t();
+					GetLightingManager()->AddLight( m_pDefLight );
+				}
+				m_pDefLight->pos = m_worldPosition;
+				m_pDefLight->ang = vec3_angle;
+				m_pDefLight->col_diffuse = Vector( 0.157f, 0.235f, 1.0f ) * bright;
+				m_pDefLight->flRadius = bright * 250.0f;
+				m_pDefLight->flFalloffPower = 2.0f;
+				m_pDefLight->iVisible_Dist = 4096;
+				m_pDefLight->iVisible_Range = 1024;
+				m_pDefLight->iShadow_Dist = 1536;
+				m_pDefLight->iShadow_Range = 512;
+				m_pDefLight->MakeDirtyAll();
+			}
+			else if ( m_pDefLight )
+			{
+				GetLightingManager()->RemoveLight( m_pDefLight );
+				delete m_pDefLight;
+				m_pDefLight = NULL;
+			}
+		}
+		else
+		{
+			dlight_t *dl = effects->CL_AllocDlight( m_entityIndex );
+			dl->origin = m_worldPosition;
+			dl->color.r = 40;
+			dl->color.g = 60;
+			dl->color.b = 255;
+			dl->color.exponent = 5;
+			dl->radius = bright * 128;
+			dl->die = gpGlobals->curtime + 0.001;
+		}
+	}
+	else if ( m_pDefLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDefLight );
+		delete m_pDefLight;
+		m_pDefLight = NULL;
 	}
 
 	if ( m_t >= STRIDERFX_END_ALL_TIME && !hasAny )
@@ -927,18 +976,39 @@ void MuzzleFlash_Strider( ClientEntityHandle_t hEntity, int attachmentIndex )
 	int entityIndex = ClientEntityList().HandleToEntIndex( hEntity );
 	if ( entityIndex >= 0 )
 	{
-		dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
+		if ( muzzleflash_light.GetBool() )
+		{
+			if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+			{
+				def_light_temp_t *l = new def_light_temp_t( 0.05f );
+				l->ang = vec3_angle;
+				l->pos = origin;
+				l->col_diffuse = Vector( 0.201f, 0.402f, 0.800f );
+				l->flRadius = random->RandomFloat( 250.0f, 350.0f );
+				l->flFalloffPower = 2.0f;
+				l->iVisible_Dist = 4096;
+				l->iVisible_Range = 1024;
+				l->iShadow_Dist = 1536;
+				l->iShadow_Range = 512;
+				l->MakeDirtyAll();
+				GetLightingManager()->AddTempLight( l );
+			}
+			else
+			{
+				dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
 
-		el->origin	= origin;
+				el->origin	= origin;
 
-		el->color.r = 64;
-		el->color.g = 128;
-		el->color.b = 255;
-		el->color.exponent = 5;
+				el->color.r = 64;
+				el->color.g = 128;
+				el->color.b = 255;
+				el->color.exponent = 5;
 
-		el->radius	= random->RandomInt( 100, 150 );
-		el->decay	= el->radius / 0.05f;
-		el->die		= gpGlobals->curtime + 0.1f;
+				el->radius	= random->RandomInt( 100, 150 );
+				el->decay	= el->radius / 0.05f;
+				el->die		= gpGlobals->curtime + 0.1f;
+			}
+		}
 	}
 }
 

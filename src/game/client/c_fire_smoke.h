@@ -275,6 +275,8 @@ public:
 
 #define	NUM_FLAMELETS	5
 
+struct def_light_t;
+
 class C_EntityFlame : public C_BaseEntity
 {
 public:
@@ -297,6 +299,9 @@ protected:
 
 	void	CreateEffect( void );
 	void	StopEffect( void );
+
+	def_light_t *m_pDeferredLight;
+	float		m_flSpawnTime;
 };
 
 #endif //C_FIRE_SMOKE_H

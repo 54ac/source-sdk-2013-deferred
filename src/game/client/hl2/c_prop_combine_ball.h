@@ -11,6 +11,8 @@
 #pragma once
 #endif
 
+struct def_light_t;
+
 class C_PropCombineBall : public C_BaseAnimating
 {
 	DECLARE_CLASS( C_PropCombineBall, C_BaseAnimating );
@@ -18,10 +20,13 @@ class C_PropCombineBall : public C_BaseAnimating
 public:
 
 	C_PropCombineBall( void );
+	virtual ~C_PropCombineBall( void );
 
 	virtual RenderGroup_t GetRenderGroup( void );
 
 	virtual void	OnDataChanged( DataUpdateType_t updateType );
+	virtual void	ClientThink( void );
+	virtual void	UpdateOnRemove( void );
 	virtual int		DrawModel( int flags );
 
 protected:
@@ -39,6 +44,8 @@ protected:
 	IMaterial	*m_pFlickerMaterial;
 	IMaterial	*m_pBodyMaterial;
 	IMaterial	*m_pBlurMaterial;
+
+	def_light_t	*m_pDefLight;
 };
 
 

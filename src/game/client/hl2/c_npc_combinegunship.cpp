@@ -16,6 +16,7 @@
 #include "c_sprite.h"
 #include "clienteffectprecachesystem.h"
 #include <bitbuf.h>
+#include "deferred/deferred_shared_common.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -40,6 +41,11 @@ public:
 	typedef C_EnvelopeFX	BaseClass;
 
 	C_GunshipFX();
+	~C_GunshipFX()
+	{
+		EffectShutdown();
+	}
+
 	void			Update( C_BaseEntity *pOwner, const Vector &targetPos );
 
 	// Returns the bounds relative to the origin (render bounds)
@@ -52,11 +58,24 @@ public:
 		maxs -= GetRenderOrigin();
 	}
 
+	virtual void EffectShutdown( void )
+	{
+		if ( m_pDefLight )
+		{
+			if ( GetLightingManager() )
+				GetLightingManager()->RemoveLight( m_pDefLight );
+			delete m_pDefLight;
+			m_pDefLight = NULL;
+		}
+		BaseClass::EffectShutdown();
+	}
+
 	virtual int	DrawModel( int flags );
 
 	C_BaseEntity			*m_pOwner;
 	Vector					m_targetPosition;
 	Vector					m_beamEndPosition;
+	def_light_t				*m_pDefLight;
 };
 
 //-----------------------------------------------------------------------------
@@ -65,6 +84,7 @@ public:
 C_GunshipFX::C_GunshipFX( void )
 {
 	m_pOwner = NULL;
+	m_pDefLight = NULL;
 }
 
 enum 
@@ -321,14 +341,52 @@ int	C_GunshipFX::DrawModel( int )
 	if ( hasParam[GUNSHIPFX_AFTERGLOW_COLOR] )
 	{
 		// Muzzle effect
-		dlight_t *dl = effects->CL_AllocDlight( m_entityIndex );
-		dl->origin = m_worldPosition;
-		dl->color.r = 40*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
-		dl->color.g = 60*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
-		dl->color.b = 255*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
-		dl->color.exponent = 5;
-		dl->radius = 128.0f;
-		dl->die = gpGlobals->curtime + 0.001;
+		if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+		{
+			float flScale = params[GUNSHIPFX_AFTERGLOW_COLOR].x;
+			if ( flScale > 0.01f )
+			{
+				if ( !m_pDefLight )
+				{
+					m_pDefLight = new def_light_t();
+					GetLightingManager()->AddLight( m_pDefLight );
+				}
+				m_pDefLight->pos = m_worldPosition;
+				m_pDefLight->ang = vec3_angle;
+				m_pDefLight->col_diffuse = Vector( 0.157f, 0.235f, 1.0f ) * flScale;
+				m_pDefLight->flRadius = 250.0f * flScale;
+				m_pDefLight->flFalloffPower = 2.0f;
+				m_pDefLight->iVisible_Dist = 4096;
+				m_pDefLight->iVisible_Range = 1024;
+				m_pDefLight->iShadow_Dist = 1536;
+				m_pDefLight->iShadow_Range = 512;
+				m_pDefLight->MakeDirtyAll();
+			}
+			else if ( m_pDefLight )
+			{
+				GetLightingManager()->RemoveLight( m_pDefLight );
+				delete m_pDefLight;
+				m_pDefLight = NULL;
+			}
+		}
+		else
+		{
+			dlight_t *dl = effects->CL_AllocDlight( m_entityIndex );
+			dl->origin = m_worldPosition;
+			dl->color.r = 40*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
+			dl->color.g = 60*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
+			dl->color.b = 255*params[GUNSHIPFX_AFTERGLOW_COLOR].x;
+			dl->color.exponent = 5;
+			dl->radius = 128.0f;
+			dl->die = gpGlobals->curtime + 0.001;
+		}
+	}
+	else if ( m_pDefLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDefLight );
+		delete m_pDefLight;
+		m_pDefLight = NULL;
 	}
 
 	if ( m_t >= 4.0 && !hasAny )

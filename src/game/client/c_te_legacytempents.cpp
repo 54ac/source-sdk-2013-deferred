@@ -35,6 +35,7 @@
 #include "c_te_effect_dispatch.h"
 #include "c_props.h"
 #include "c_basedoor.h"
+#include "deferred/deferred_shared_common.h"
 
 // NOTE: Always include this last!
 #include "tier0/memdbgon.h"
@@ -2812,18 +2813,36 @@ void CTempEnts::MuzzleFlash_Combine_NPC( ClientEntityHandle_t hEntity, int attac
 		C_BaseEntity *pEnt = ClientEntityList().GetBaseEntityFromHandle( hEntity );
 		if ( pEnt )
 		{
-			dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + pEnt->entindex() );
+			if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+			{
+				def_light_temp_t *l = new def_light_temp_t( 0.04f );
+				l->ang = vec3_angle;
+				l->pos = origin;
+				l->col_diffuse = Vector( 0.201f, 0.402f, 0.800f );
+				l->flRadius = random->RandomFloat( 220.0f, 300.0f );
+				l->flFalloffPower = 2.0f;
+				l->iVisible_Dist = 4096;
+				l->iVisible_Range = 1024;
+				l->iShadow_Dist = 1536;
+				l->iShadow_Range = 512;
+				l->MakeDirtyAll();
+				GetLightingManager()->AddTempLight( l );
+			}
+			else
+			{
+				dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + pEnt->entindex() );
 
-			el->origin	= origin;
+				el->origin	= origin;
 
-			el->color.r = 64;
-			el->color.g = 128;
-			el->color.b = 255;
-			el->color.exponent = 5;
+				el->color.r = 64;
+				el->color.g = 128;
+				el->color.b = 255;
+				el->color.exponent = 5;
 
-			el->radius	= random->RandomInt( 32, 128 );
-			el->decay	= el->radius / 0.05f;
-			el->die		= gpGlobals->curtime + 0.05f;
+				el->radius	= random->RandomInt( 32, 128 );
+				el->decay	= el->radius / 0.05f;
+				el->die		= gpGlobals->curtime + 0.05f;
+			}
 		}
 	}
 }

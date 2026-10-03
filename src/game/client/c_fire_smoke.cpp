@@ -1,6 +1,6 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
-// Purpose: 
+// Purpose:
 //
 // $NoKeywords: $
 //=============================================================================//
@@ -15,6 +15,7 @@
 #include "iefx.h"
 #include "dlight.h"
 #include "tier0/icommandline.h"
+#include "deferred/deferred_shared_common.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -26,12 +27,12 @@ CLIENTEFFECT_REGISTER_END()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : *pRecvProp - 
-//			*pStruct - 
-//			*pVarData - 
-//			*pIn - 
-//			objectID - 
+// Purpose:
+// Input  : *pRecvProp -
+//			*pStruct -
+//			*pVarData -
+//			*pIn -
+//			objectID -
 //-----------------------------------------------------------------------------
 void RecvProxy_Scale( const CRecvProxyData *pData, void *pStruct, void *pOut )
 {
@@ -42,19 +43,19 @@ void RecvProxy_Scale( const CRecvProxyData *pData, void *pStruct, void *pOut )
 	if ( ( pFireSmoke->m_flScale != scale ) && ( pFireSmoke->m_flScaleEnd != scale ) )
 	{
 		pFireSmoke->m_flScaleStart		= pFireSmoke->m_flScaleRegister;
-		pFireSmoke->m_flScaleEnd		= scale;			
+		pFireSmoke->m_flScaleEnd		= scale;
 	}
 
 	pFireSmoke->m_flScale = scale;
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : *pRecvProp - 
-//			*pStruct - 
-//			*pVarData - 
-//			*pIn - 
-//			objectID - 
+// Purpose:
+// Input  : *pRecvProp -
+//			*pStruct -
+//			*pVarData -
+//			*pIn -
+//			objectID -
 //-----------------------------------------------------------------------------
 void RecvProxy_ScaleTime( const CRecvProxyData *pData, void *pStruct, void *pOut )
 {
@@ -110,7 +111,7 @@ C_FireSmoke::~C_FireSmoke()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::Simulate( void )
 {
@@ -122,15 +123,15 @@ void C_FireSmoke::Simulate( void )
 #define	FLAME_TRANS_START	0.75f
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::AddFlames( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : bnewentity - 
+// Purpose:
+// Input  : bnewentity -
 //-----------------------------------------------------------------------------
 void C_FireSmoke::OnDataChanged( DataUpdateType_t updateType )
 {
@@ -144,14 +145,14 @@ void C_FireSmoke::OnDataChanged( DataUpdateType_t updateType )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::UpdateEffects( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 // Output : Returns true on success, false on failure.
 //-----------------------------------------------------------------------------
 bool C_FireSmoke::ShouldDraw()
@@ -161,7 +162,7 @@ bool C_FireSmoke::ShouldDraw()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::Start( void )
 {
@@ -208,7 +209,7 @@ void C_FireSmoke::StartClientOnly( void )
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::RemoveClientOnly(void)
 {
@@ -224,35 +225,35 @@ void C_FireSmoke::RemoveClientOnly(void)
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::UpdateAnimation( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::UpdateFlames( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::UpdateScale( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::Update( void )
 {
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_FireSmoke::FindClipPlane( void )
 {
@@ -272,27 +273,44 @@ IMPLEMENT_CLIENTCLASS_DT( C_EntityFlame, DT_EntityFlame, CEntityFlame )
 END_RECV_TABLE()
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 C_EntityFlame::C_EntityFlame( void ) :
-m_hEffect( NULL )
+m_hEffect( NULL ),
+m_pDeferredLight( NULL ),
+m_flSpawnTime( -1.0f )
 {
 	m_hOldAttached = NULL;
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 C_EntityFlame::~C_EntityFlame( void )
 {
 	StopEffect();
+	if ( m_pDeferredLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDeferredLight );
+		delete m_pDeferredLight;
+		m_pDeferredLight = NULL;
+	}
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_EntityFlame::StopEffect( void )
 {
+	if ( m_pDeferredLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDeferredLight );
+		delete m_pDeferredLight;
+		m_pDeferredLight = NULL;
+	}
+
 	if ( m_hEffect )
 	{
 		ParticleProp()->StopEmission( m_hEffect, true );
@@ -307,14 +325,14 @@ void C_EntityFlame::StopEffect( void )
 		m_hEntAttached->SetEffectEntity( NULL );
 		m_hEntAttached->StopSound( "General.BurningFlesh" );
 		m_hEntAttached->StopSound( "General.BurningObject" );
-		
-		
+
+
 		m_hEntAttached = NULL;
 	}
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_EntityFlame::UpdateOnRemove( void )
 {
@@ -352,12 +370,13 @@ void C_EntityFlame::CreateEffect( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_EntityFlame::OnDataChanged( DataUpdateType_t updateType )
 {
 	if ( updateType == DATA_UPDATE_CREATED )
 	{
+		m_flSpawnTime = gpGlobals->curtime;
 		CreateEffect();
 	}
 
@@ -375,32 +394,93 @@ void C_EntityFlame::OnDataChanged( DataUpdateType_t updateType )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_EntityFlame::Simulate( void )
 {
 	if ( gpGlobals->frametime <= 0.0f )
 		return;
 
-#ifdef HL2_EPISODIC 
-
-	if ( IsEffectActive(EF_BRIGHTLIGHT) || IsEffectActive(EF_DIMLIGHT) )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
 	{
-		dlight_t *dl = effects->CL_AllocDlight ( index );
-		dl->origin = GetAbsOrigin();
- 		dl->origin[2] += 16;
-		dl->color.r = 254;
-		dl->color.g = 174;
-		dl->color.b = 10;
-		dl->radius = random->RandomFloat(400,431);
-		dl->die = gpGlobals->curtime + 0.001;
-	}
+		C_BaseEntity *pEnt = m_hEntAttached.Get();
+		bool bIsNPC = ( pEnt && pEnt->IsNPC() );
 
-#endif // HL2_EPISODIC 
+		Vector vecTargetPos = GetAbsOrigin() + Vector( 0, 0, 24.0f );
+		if ( pEnt )
+		{
+			vecTargetPos = pEnt->WorldSpaceCenter();
+			if ( !bIsNPC )
+			{
+				vecTargetPos.z += 16.0f;
+			}
+		}
+
+		if ( m_flSpawnTime < 0.0f )
+			m_flSpawnTime = gpGlobals->curtime;
+
+		float flAge = gpGlobals->curtime - m_flSpawnTime;
+		float flGrowth = RemapValClamped( flAge, 0.20f, 1.50f, 0.0f, 1.0f );
+		flGrowth = flGrowth * flGrowth * ( 3.0f - 2.0f * flGrowth ); // smoothstep
+
+		float flFullRadius = bIsNPC ? 300.0f : 240.0f;
+		Vector vecFlameColor = Vector( 0.96f, 0.38f, 0.04f ) * ( 0.90f * flGrowth );
+
+		if ( !m_pDeferredLight )
+		{
+			m_pDeferredLight = new def_light_t();
+			m_pDeferredLight->pos = vecTargetPos;
+			m_pDeferredLight->ang = vec3_angle;
+			m_pDeferredLight->flFalloffPower = 1.5f;
+			m_pDeferredLight->iVisible_Dist = 2048;
+			m_pDeferredLight->iVisible_Range = 512;
+			m_pDeferredLight->flRadius = flFullRadius;
+			m_pDeferredLight->col_diffuse = vecFlameColor;
+			m_pDeferredLight->MakeDirtyAll();
+
+			GetLightingManager()->AddLight( m_pDeferredLight );
+		}
+		else
+		{
+			if ( ( m_pDeferredLight->pos - vecTargetPos ).LengthSqr() > 1.0f )
+			{
+				m_pDeferredLight->pos = vecTargetPos;
+				m_pDeferredLight->MakeDirtyXForms();
+			}
+
+			m_pDeferredLight->col_diffuse = vecFlameColor;
+		}
+	}
+	else
+	{
+		if ( m_pDeferredLight )
+		{
+			if ( GetLightingManager() )
+				GetLightingManager()->RemoveLight( m_pDeferredLight );
+			delete m_pDeferredLight;
+			m_pDeferredLight = NULL;
+		}
+
+#ifdef HL2_EPISODIC
+
+		if ( IsEffectActive(EF_BRIGHTLIGHT) || IsEffectActive(EF_DIMLIGHT) )
+		{
+			dlight_t *dl = effects->CL_AllocDlight ( index );
+			dl->origin = GetAbsOrigin();
+ 			dl->origin[2] += 16;
+			dl->color.r = 254;
+			dl->color.g = 174;
+			dl->color.b = 10;
+			dl->radius = random->RandomFloat(400,431);
+			dl->die = gpGlobals->curtime + 0.001;
+		}
+
+#endif // HL2_EPISODIC
+	}
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_EntityFlame::ClientThink( void )
 {

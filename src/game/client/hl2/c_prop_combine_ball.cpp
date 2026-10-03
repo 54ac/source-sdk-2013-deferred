@@ -1,6 +1,6 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
-// Purpose: 
+// Purpose:
 //
 //=============================================================================//
 
@@ -16,6 +16,7 @@
 #include "view.h"
 #include "view_scene.h"
 #include "beamdraw.h"
+#include "deferred/deferred_shared_common.h"
 
 // Precache our effects
 CLIENTEFFECT_REGISTER_BEGIN( PrecacheEffectCombineBall )
@@ -36,18 +37,42 @@ IMPLEMENT_CLIENTCLASS_DT( C_PropCombineBall, DT_PropCombineBall, CPropCombineBal
 END_RECV_TABLE()
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 C_PropCombineBall::C_PropCombineBall( void )
 {
 	m_pFlickerMaterial = NULL;
 	m_pBodyMaterial = NULL;
 	m_pBlurMaterial = NULL;
+	m_pDefLight = NULL;
+}
+
+C_PropCombineBall::~C_PropCombineBall( void )
+{
+	if ( m_pDefLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDefLight );
+		delete m_pDefLight;
+		m_pDefLight = NULL;
+	}
+}
+
+void C_PropCombineBall::UpdateOnRemove( void )
+{
+	if ( m_pDefLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDefLight );
+		delete m_pDefLight;
+		m_pDefLight = NULL;
+	}
+	BaseClass::UpdateOnRemove();
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : updateType - 
+// Purpose:
+// Input  : updateType -
 //-----------------------------------------------------------------------------
 void C_PropCombineBall::OnDataChanged( DataUpdateType_t updateType )
 {
@@ -57,11 +82,45 @@ void C_PropCombineBall::OnDataChanged( DataUpdateType_t updateType )
 	{
 		m_vecLastOrigin = GetAbsOrigin();
 		InitMaterials();
+		SetNextClientThink( CLIENT_THINK_ALWAYS );
+	}
+}
+
+void C_PropCombineBall::ClientThink( void )
+{
+	if ( m_bEmit && GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		if ( !m_pDefLight )
+		{
+			m_pDefLight = new def_light_t();
+			m_pDefLight->flFalloffPower = 2.0f;
+			m_pDefLight->iVisible_Dist = 3072;
+			m_pDefLight->iVisible_Range = 512;
+			GetLightingManager()->AddLight( m_pDefLight );
+		}
+
+		m_pDefLight->pos = GetAbsOrigin();
+		m_pDefLight->ang = vec3_angle;
+
+		float flPulse = 0.85f + 0.15f * sin( gpGlobals->curtime * 25.0f );
+		float flRadiusScale = ( m_flRadius > 0.0f ) ? ( m_flRadius * 15.0f ) : 300.0f;
+		flRadiusScale = clamp( flRadiusScale, 200.0f, 350.0f );
+
+		m_pDefLight->flRadius = flRadiusScale * flPulse;
+		m_pDefLight->col_diffuse = Vector( 0.25f, 0.588f, 1.0f ) * flPulse;
+		m_pDefLight->MakeDirtyAll();
+	}
+	else if ( m_pDefLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->RemoveLight( m_pDefLight );
+		delete m_pDefLight;
+		m_pDefLight = NULL;
 	}
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 // Output : RenderGroup_t
 //-----------------------------------------------------------------------------
 RenderGroup_t C_PropCombineBall::GetRenderGroup( void )
@@ -106,7 +165,7 @@ bool C_PropCombineBall::InitMaterials( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_PropCombineBall::DrawMotionBlur( void )
 {
@@ -114,9 +173,9 @@ void C_PropCombineBall::DrawMotionBlur( void )
 
 	Vector	vecDir = GetAbsOrigin() - m_vecLastOrigin;
 	float	speed = VectorNormalize( vecDir );
-	
+
 	speed = clamp( speed, 0, 32 );
-	
+
 	float	stepSize = MIN( ( speed * 0.5f ), 4.0f );
 
 	Vector	spawnPos = GetAbsOrigin();
@@ -139,7 +198,7 @@ void C_PropCombineBall::DrawMotionBlur( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_PropCombineBall::DrawFlicker( void )
 {
@@ -162,15 +221,15 @@ void C_PropCombineBall::DrawFlicker( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : pMaterial - 
-//			source - 
-//			color - 
+// Purpose:
+// Input  : pMaterial -
+//			source -
+//			color -
 //-----------------------------------------------------------------------------
 void DrawHaloOriented( const Vector& source, float scale, float const *color, float roll )
 {
 	Vector point, screen;
-	
+
 	CMatRenderContextPtr pRenderContext( materials );
 	IMesh* pMesh = pRenderContext->GetDynamicMesh();
 
@@ -218,21 +277,21 @@ void DrawHaloOriented( const Vector& source, float scale, float const *color, fl
 	VectorMA (point, scale, right, point);
 	meshBuilder.Position3fv (point.Base());
 	meshBuilder.AdvanceVertex();
-	
+
 	meshBuilder.End();
 	pMesh->Draw();
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : flags - 
+// Purpose:
+// Input  : flags -
 // Output : int
 //-----------------------------------------------------------------------------
 int C_PropCombineBall::DrawModel( int flags )
 {
 	if ( !m_bEmit )
 		return 0;
-	
+
 	// Make sure our materials are cached
 	if ( !InitMaterials() )
 	{
@@ -243,7 +302,7 @@ int C_PropCombineBall::DrawModel( int flags )
 
 	// Draw the flickering overlay
 	DrawFlicker();
-	
+
 	// Draw the motion blur from movement
 	if ( m_bHeld || m_bLaunched )
 	{
@@ -275,15 +334,15 @@ int C_PropCombineBall::DrawModel( int flags )
 		pRenderContext->Bind( m_pBodyMaterial, (C_BaseEntity*) this );
 		DrawHaloOriented( GetAbsOrigin(), m_flRadius + sinOffs, color, roll );
 	}
-	
+
 	m_vecLastOrigin = GetAbsOrigin();
 
 	return 1;
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : &data - 
+// Purpose:
+// Input  : &data -
 //-----------------------------------------------------------------------------
 void CombineBallImpactCallback( const CEffectData &data )
 {
@@ -292,42 +351,54 @@ void CombineBallImpactCallback( const CEffectData &data )
 				data.m_vNormal,
 				data.m_flRadius * 10.0f,
 				0,
-				0.75f, 
+				0.75f,
 				1.0f,
 				0.0f,
 				0.4f,
-				random->RandomInt( 0, 360 ), 
+				random->RandomInt( 0, 360 ),
 				0,
-				Vector( 1.0f, 1.0f, 1.0f ), 
-				0.25f, 
+				Vector( 1.0f, 1.0f, 1.0f ),
+				0.25f,
 				"effects/combinemuzzle1_nocull",
 				(FXQUAD_BIAS_SCALE|FXQUAD_BIAS_ALPHA) );
 
 	// Lingering burn
 	FX_AddQuad( data.m_vOrigin,
-				data.m_vNormal, 
+				data.m_vNormal,
 				data.m_flRadius * 2.0f,
 				data.m_flRadius * 4.0f,
-				0.75f, 
+				0.75f,
 				1.0f,
 				0.0f,
 				0.4f,
-				random->RandomInt( 0, 360 ), 
+				random->RandomInt( 0, 360 ),
 				0,
-				Vector( 1.0f, 1.0f, 1.0f ), 
-				0.5f, 
+				Vector( 1.0f, 1.0f, 1.0f ),
+				0.5f,
 				"effects/combinemuzzle2_nocull",
 				(FXQUAD_BIAS_SCALE|FXQUAD_BIAS_ALPHA) );
 
 	// Throw sparks
 	FX_ElectricSpark( data.m_vOrigin, 2, 1, &data.m_vNormal );
+
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		def_light_temp_t *dl = new def_light_temp_t( 0.08f );
+		dl->pos = data.m_vOrigin + data.m_vNormal * 4.0f;
+		dl->ang = vec3_angle;
+		dl->col_diffuse = Vector( 0.35f, 0.65f, 1.0f );
+		dl->flRadius = 260.0f;
+		dl->flFalloffPower = 2.0f;
+		dl->MakeDirtyAll();
+		GetLightingManager()->AddTempLight( dl );
+	}
 }
 
 DECLARE_CLIENT_EFFECT( "cball_bounce", CombineBallImpactCallback );
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : &data - 
+// Purpose:
+// Input  : &data -
 //-----------------------------------------------------------------------------
 void CombineBallExplosionCallback( const CEffectData &data )
 {
@@ -335,6 +406,18 @@ void CombineBallExplosionCallback( const CEffectData &data )
 
 	// Throw sparks
 	FX_ElectricSpark( data.m_vOrigin, 4, 1, &normal );
+
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		def_light_temp_t *dl = new def_light_temp_t( 0.25f );
+		dl->pos = data.m_vOrigin;
+		dl->ang = vec3_angle;
+		dl->col_diffuse = Vector( 0.40f, 0.70f, 1.0f );
+		dl->flRadius = 500.0f;
+		dl->flFalloffPower = 2.0f;
+		dl->MakeDirtyAll();
+		GetLightingManager()->AddTempLight( dl );
+	}
 }
 
 DECLARE_CLIENT_EFFECT( "cball_explode", CombineBallExplosionCallback );

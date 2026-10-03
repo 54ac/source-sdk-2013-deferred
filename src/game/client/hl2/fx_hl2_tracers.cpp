@@ -14,6 +14,7 @@
 #include "dlight.h"
 #include "iefx.h"
 #include "clienteffectprecachesystem.h"
+#include "deferred/deferred_shared_common.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -412,18 +413,36 @@ void CreateMuzzleflashELight( const Vector &origin, int exponent, int nMinRadius
 		int entityIndex = ClientEntityList().HandleToEntIndex( hEntity );
 		if ( entityIndex >= 0 )
 		{
-			dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
+			if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+			{
+				def_light_temp_t *l = new def_light_temp_t( 0.04f );
+				l->ang = vec3_angle;
+				l->pos = origin;
+				l->col_diffuse = Vector( 0.650f, 0.489f, 0.163f );
+				l->flRadius = random->RandomFloat( Max( 220.0f, (float)nMinRadius * 1.5f ), Max( 300.0f, (float)nMaxRadius * 1.5f ) );
+				l->flFalloffPower = 2.0f;
+				l->iVisible_Dist = 4096;
+				l->iVisible_Range = 1024;
+				l->iShadow_Dist = 1536;
+				l->iShadow_Range = 512;
+				l->MakeDirtyAll();
+				GetLightingManager()->AddTempLight( l );
+			}
+			else
+			{
+				dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
 
-			el->origin	= origin;
+				el->origin	= origin;
 
-			el->color.r = 255;
-			el->color.g = 192;
-			el->color.b = 64;
-			el->color.exponent = exponent;
+				el->color.r = 255;
+				el->color.g = 192;
+				el->color.b = 64;
+				el->color.exponent = exponent;
 
-			el->radius	= random->RandomInt( nMinRadius, nMaxRadius );
-			el->decay	= el->radius / 0.05f;
-			el->die		= gpGlobals->curtime + 0.1f;
+				el->radius	= random->RandomInt( nMinRadius, nMaxRadius );
+				el->decay	= el->radius / 0.05f;
+				el->die		= gpGlobals->curtime + 0.1f;
+			}
 		}
 	}
 }
@@ -670,17 +689,38 @@ void MuzzleFlash_Hunter( ClientEntityHandle_t hEntity, int attachmentIndex )
 	Vector		origin;
 	MatrixGetColumn( matAttachment, 3, &origin );	
 	
-	dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH );
-	el->origin = origin;// + Vector( 12.0f, 0, 0 );
+	if ( muzzleflash_light.GetBool() )
+	{
+		if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+		{
+			def_light_temp_t *l = new def_light_temp_t( 0.04f );
+			l->ang = vec3_angle;
+			l->pos = origin;
+			l->col_diffuse = Vector( 0.196f, 0.871f, 0.835f );
+			l->flRadius = random->RandomFloat( 220.0f, 300.0f );
+			l->flFalloffPower = 2.0f;
+			l->iVisible_Dist = 4096;
+			l->iVisible_Range = 1024;
+			l->iShadow_Dist = 1536;
+			l->iShadow_Range = 512;
+			l->MakeDirtyAll();
+			GetLightingManager()->AddTempLight( l );
+		}
+		else
+		{
+			dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH );
+			el->origin = origin;// + Vector( 12.0f, 0, 0 );
 
-	el->color.r = 50;
-	el->color.g = 222;
-	el->color.b = 213;
-	el->color.exponent = 5;
+			el->color.r = 50;
+			el->color.g = 222;
+			el->color.b = 213;
+			el->color.exponent = 5;
 
-	el->radius = random->RandomInt( 120, 200 );
-	el->decay = el->radius / 0.05f;
-	el->die = gpGlobals->curtime + 0.05f;
+			el->radius = random->RandomInt( 120, 200 );
+			el->decay = el->radius / 0.05f;
+			el->die = gpGlobals->curtime + 0.05f;
+		}
+	}
 }
 
 
