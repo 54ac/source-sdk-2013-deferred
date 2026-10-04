@@ -536,15 +536,23 @@ ITexture *GetDefRT_VolumetricsBuffer( int index )
 ITexture *GetDefRT_RadiosityBuffer( int index )
 {
 	Assert( index >= 0 && index < 2 );
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( g_tex_RadiosityBuffer[ index ].IsValid() );
 	return g_tex_RadiosityBuffer[ index ];
+#else
+	return NULL;
+#endif
 }
 
 ITexture *GetDefRT_RadiosityNormal( int index )
 {
 	Assert( index >= 0 && index < 2 );
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( g_tex_RadiosityNormal[ index ].IsValid() );
 	return g_tex_RadiosityNormal[ index ];
+#else
+	return NULL;
+#endif
 }
 
 ITexture *GetShadowColorRT_Ortho( int index )
@@ -594,13 +602,21 @@ ITexture *GetProjectableVguiRT( int index )
 
 ITexture *GetRadiosityAlbedoRT_Ortho( int index )
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( index >= 0 && index < MAX_SHADOW_DP );
 	Assert( g_tex_ShadowRad_Albedo_Ortho[ index ].IsValid() );
 	return g_tex_ShadowRad_Albedo_Ortho[ index ];
+#else
+	return NULL;
+#endif
 }
 ITexture *GetRadiosityNormalRT_Ortho( int index )
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( index >= 0 && index < MAX_SHADOW_DP );
 	Assert( g_tex_ShadowRad_Normal_Ortho[ index ].IsValid() );
 	return g_tex_ShadowRad_Normal_Ortho[ index ];
+#else
+	return NULL;
+#endif
 }

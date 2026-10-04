@@ -61,7 +61,7 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 			iVFmtFlags |= VERTEX_FORMAT_COMPRESSED;
 		}
 
-#ifndef DEFCFG_ENABLE_RADIOSITY
+#if !DEFCFG_ENABLE_RADIOSITY
 		if ( bAlphatest )
 #endif
 		{
@@ -92,8 +92,7 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 	{
 		Assert( pDeferredContext != NULL );
 		const int shadowMode = pShaderAPI->GetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_MODE );
-		const int radiosityOutput = DEFCFG_ENABLE_RADIOSITY != 0
-			&& pShaderAPI->GetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_RADIOSITY );
+		const int radiosityOutput = ( DEFCFG_ENABLE_RADIOSITY && pShaderAPI->GetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_RADIOSITY ) );
 
 		if ( pDeferredContext->m_bMaterialVarsChanged || !pDeferredContext->HasCommands( CDeferredPerMaterialContextData::DEFSTAGE_SHADOW ) )
 		{
@@ -104,7 +103,7 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 				PARM_VALIDATE( info.iAlphatestRef );
 
 				tmpBuf.SetPixelShaderConstant1( 0, PARM_FLOAT( info.iAlphatestRef ) );
-#ifndef DEFCFG_ENABLE_RADIOSITY
+#if !DEFCFG_ENABLE_RADIOSITY
 				tmpBuf.BindTexture( pShader, SHADER_SAMPLER0, info.iAlbedo );
 #endif
 			}

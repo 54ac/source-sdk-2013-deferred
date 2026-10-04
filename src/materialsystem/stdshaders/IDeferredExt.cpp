@@ -57,11 +57,15 @@ bool CDeferredExtension::IsDeferredLightingEnabled() const
 
 bool CDeferredExtension::IsRadiosityEnabled() const
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	static ConVarRef refRadiosity( "r_deferred_radiosity" );
 
 	Assert( refRadiosity.IsValid() );
 
 	return refRadiosity.GetBool();
+#else
+	return false;
+#endif
 }
 
 void CDeferredExtension::CommitCommonData( const Vector& origin,

@@ -270,7 +270,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	m_pMat_Def[ DEF_MAT_LIGHT_VOLUME_PREPASS ] = materials->FindMaterial( "deferred/volume_prepass", NULL );
 	m_pMat_Def[ DEF_MAT_LIGHT_VOLUME_BLEND ] = materials->FindMaterial( "deferred/volume_blend", NULL );
 
-#if DEFCFG_ENABLE_RADIOSITY == 1
+#if DEFCFG_ENABLE_RADIOSITY
 	/*
 
 	radiosity
@@ -460,6 +460,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 		m_pMat_Def[ DEF_MAT_LIGHT_VOLUME_BLEND ] = materials->CreateMaterial( "__volume_blend", m_pKV_Def[ DEF_MAT_LIGHT_VOLUME_BLEND ] );
 	}
 
+#if DEFCFG_ENABLE_RADIOSITY
 	/*
 
 	radiosity
@@ -511,6 +512,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = new KeyValues( "RADIOSITY_BLEND" );
 	if ( m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] != NULL )
 		m_pMat_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = materials->CreateMaterial( "__radpass_blend", m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] );
+#endif
 
 #if DEFCFG_DEFERRED_SHADING == 1
 	/*

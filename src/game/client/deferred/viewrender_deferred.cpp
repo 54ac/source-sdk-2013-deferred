@@ -1909,7 +1909,11 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 	}
 
 	bool bResetLightAccum = false;
-	const bool bRadiosityEnabled = DEFCFG_ENABLE_RADIOSITY != 0 && r_deferred_radiosity.GetBool();
+#if DEFCFG_ENABLE_RADIOSITY
+	const bool bRadiosityEnabled = r_deferred_radiosity.GetBool();
+#else
+	const bool bRadiosityEnabled = false;
+#endif
 
 	if ( bRadiosityEnabled )
 		BeginRadiosity( view );

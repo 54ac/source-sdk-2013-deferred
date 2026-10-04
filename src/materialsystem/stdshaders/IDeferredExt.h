@@ -458,21 +458,37 @@ ITexture *CDeferredExtension::GetTexture_VolumePrePass()
 }
 ITexture *CDeferredExtension::GetTexture_ShadowRad_Ortho_Albedo()
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	return m_pTexShadowRad_Ortho[0];
+#else
+	return NULL;
+#endif
 }
 ITexture *CDeferredExtension::GetTexture_ShadowRad_Ortho_Normal()
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	return m_pTexShadowRad_Ortho[1];
+#else
+	return NULL;
+#endif
 }
 ITexture *CDeferredExtension::GetTexture_RadBuffer( const int &index )
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( index >= 0 && index < 2 );
 	return m_pTexRadBuffer[index];
+#else
+	return NULL;
+#endif
 }
 ITexture *CDeferredExtension::GetTexture_RadNormal( const int &index )
 {
+#if DEFCFG_ENABLE_RADIOSITY
 	Assert( index >= 0 && index < 2 );
 	return m_pTexRadNormal[index];
+#else
+	return NULL;
+#endif
 }
 #endif
 

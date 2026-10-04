@@ -38,7 +38,9 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 			pShaderShadow->EnableTexture( SHADER_SAMPLER0, true );
 			pShaderShadow->EnableTexture( SHADER_SAMPLER1, true );
 			pShaderShadow->EnableTexture( SHADER_SAMPLER2, true );
+#if DEFCFG_ENABLE_RADIOSITY
 			pShaderShadow->EnableTexture( SHADER_SAMPLER3, true );
+#endif
 
 			pShaderShadow->EnableSRGBRead( SHADER_SAMPLER1, bUseSRGB );
 			pShaderShadow->EnableSRGBWrite( bUseSRGB );
@@ -61,7 +63,11 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 			SET_DYNAMIC_VERTEX_SHADER( defconstruct_vs30 );
 
 			DECLARE_DYNAMIC_PIXEL_SHADER( screenspace_shading_ps30 );
+#if DEFCFG_ENABLE_RADIOSITY
 			SET_DYNAMIC_PIXEL_SHADER_COMBO( RADIOSITY, GetDeferredExt()->IsRadiosityEnabled() ? 1 : 0 );
+#else
+			SET_DYNAMIC_PIXEL_SHADER_COMBO( RADIOSITY, 0 );
+#endif
 			SET_DYNAMIC_PIXEL_SHADER_COMBO( PIXELFOGTYPE, pShaderAPI->GetPixelFogCombo() );
 			SET_DYNAMIC_PIXEL_SHADER( screenspace_shading_ps30 );
 
@@ -72,11 +78,14 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 			Assert( 0 );
 #endif
 			BindTexture( SHADER_SAMPLER2, GetDeferredExt()->GetTexture_LightAccum() );
+#if DEFCFG_ENABLE_RADIOSITY
 			BindTexture( SHADER_SAMPLER3, GetDeferredExt()->GetTexture_RadBuffer( 0 ) );
+#endif
 
 			CommitBaseDeferredConstants_Frustum( pShaderAPI, VERTEX_SHADER_SHADER_SPECIFIC_CONST_0 );
 			CommitBaseDeferredConstants_Origin( pShaderAPI, 0 );
 
+#if DEFCFG_ENABLE_RADIOSITY
 			const radiosityData_t &data = GetDeferredExt()->GetRadiosityData();
 
 			const Vector &vecOrigin = data.vecOrigin[0];
@@ -88,6 +97,7 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 
 			float fl3[4] = { r_deferred_radiosity_multiplier.GetFloat() };
 			pShaderAPI->SetPixelShaderConstant( 3, fl3 );
+#endif
 
 			pShaderAPI->SetPixelShaderFogParams( 4 );
 		}
