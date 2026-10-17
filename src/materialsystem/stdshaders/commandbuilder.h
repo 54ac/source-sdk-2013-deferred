@@ -98,9 +98,9 @@ public:
 
 	FORCEINLINE uint8 *Copy()
 	{
-		int size = Size();
+		size_t size = Size();
 		uint8 *tmp = new uint8[ size ];
-		Q_memcpy( tmp, m_Data, size );
+		memcpy( tmp, m_Data, size );
 		return  tmp;
 	}
 };

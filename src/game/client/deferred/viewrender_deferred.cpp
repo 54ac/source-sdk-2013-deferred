@@ -152,18 +152,19 @@ public:
 	{
 	}
 
-	void			Setup( const CViewSetup &view, bool bDrewSkybox );
+	void			Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight = 0.0f, bool bClipWater = false );
 	void			Draw();
 
 	virtual void	PushView( float waterHeight );
 	virtual void	PopView();
 
-	static void PushGBuffer( bool bInitial, float zScale = 1.0f, bool bClearDepth = true );
+	static void PushGBuffer( bool bInitial, float zScale = 1.0f, bool bClearDepth = true, int vx = 0, int vy = 0, int vw = 0, int vh = 0 );
 	static void PopGBuffer();
 
 private:
 	VisibleFogVolumeInfo_t m_fogInfo;
 	bool m_bDrewSkybox;
+	float m_waterHeight;
 };
 
 class CSkyboxViewDeferred : public CGBufferView
@@ -336,31 +337,11 @@ class CBaseWaterViewDeferred : public CBaseWorldViewDeferred
 	DECLARE_CLASS( CBaseWaterViewDeferred, CBaseWorldViewDeferred );
 public:
 	CBaseWaterViewDeferred(CViewRender *pMainView) :
-		CBaseWorldViewDeferred( pMainView ),
-		m_SoftwareIntersectionView( pMainView )
+		CBaseWorldViewDeferred( pMainView )
 	{}
-
-	//	void Setup( const CViewSetup &, const WaterRenderInfo_t& info );
 
 protected:
 	void			CalcWaterEyeAdjustments( const VisibleFogVolumeInfo_t &fogInfo, float &newWaterHeight, float &waterZAdjust, bool bSoftwareUserClipPlane );
-
-	class CSoftwareIntersectionView : public CBaseWorldViewDeferred
-	{
-		DECLARE_CLASS( CSoftwareIntersectionView, CBaseWorldViewDeferred );
-	public:
-		CSoftwareIntersectionView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView ) {}
-
-		void Setup( bool bAboveWater );
-		void Draw();
-
-	private:
-		CBaseWaterViewDeferred *GetOuter() { return GET_OUTER( CBaseWaterViewDeferred, m_SoftwareIntersectionView ); }
-	};
-
-	friend class CSoftwareIntersectionView;
-
-	CSoftwareIntersectionView m_SoftwareIntersectionView;
 
 	WaterRenderInfo_t m_waterInfo;
 	float m_waterHeight;
@@ -380,8 +361,7 @@ public:
 	CAboveWaterViewDeferred(CViewRender *pMainView) :
 		CBaseWaterViewDeferred( pMainView ),
 		m_ReflectionView( pMainView ),
-		m_RefractionView( pMainView ),
-		m_IntersectionView( pMainView )
+		m_RefractionView( pMainView )
 	{}
 
 	void Setup(  const CViewSetup &view, bool bDrawSkybox, const VisibleFogVolumeInfo_t &fogInfo, const WaterRenderInfo_t& waterInfo );
@@ -391,13 +371,13 @@ public:
 	{
 		DECLARE_CLASS( CReflectionView, CBaseWorldViewDeferred );
 	public:
-		CReflectionView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView ) {}
+		CReflectionView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView ), m_flWaterHeight( 0.0f ) {}
 
-		void Setup( bool bReflectEntities );
+		void Setup( const CViewSetup &view, float flWaterHeight, bool bReflectEntities );
 		void Draw();
 
 	private:
-		CAboveWaterViewDeferred *GetOuter() { return GET_OUTER( CAboveWaterViewDeferred, m_ReflectionView ); }
+		float m_flWaterHeight;
 	};
 
 	class CRefractionView : public CBaseWorldViewDeferred
@@ -413,29 +393,13 @@ public:
 		CAboveWaterViewDeferred *GetOuter() { return GET_OUTER( CAboveWaterViewDeferred, m_RefractionView ); }
 	};
 
-	class CIntersectionView : public CBaseWorldViewDeferred
-	{
-		DECLARE_CLASS( CIntersectionView, CBaseWorldViewDeferred );
-	public:
-		CIntersectionView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView ) {}
-
-		void Setup();
-		void Draw();
-
-	private:
-		CAboveWaterViewDeferred *GetOuter() { return GET_OUTER( CAboveWaterViewDeferred, m_IntersectionView ); }
-	};
-
-
-	friend class CRefractionView;
 	friend class CReflectionView;
-	friend class CIntersectionView;
+	friend class CRefractionView;
 
 	bool m_bViewIntersectsWater;
 
 	CReflectionView m_ReflectionView;
 	CRefractionView m_RefractionView;
-	CIntersectionView m_IntersectionView;
 };
 
 
@@ -519,7 +483,7 @@ void CBaseWorldViewDeferred::DrawSetup( float waterHeight, int nSetupFlags, floa
 	}
 
 	const bool bDrawEntities = ( nSetupFlags & DF_DRAW_ENTITITES ) != 0;
-	const bool bDrawReflection = ( nSetupFlags & DF_RENDER_REFLECTION ) != 0;
+	const bool bDrawReflection = ( ( nSetupFlags & DF_RENDER_REFLECTION ) != 0 ) || ( ( nSetupFlags & DF_CLIP_Z ) != 0 );
 	BuildWorldRenderLists( bDrawEntities, iForceViewLeaf, ShouldCacheLists(), false, bDrawReflection ? &waterHeight : NULL );
 
 	PruneWorldListInfo();
@@ -814,17 +778,25 @@ void CSimpleWorldViewDeferred::Draw()
 	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
 }
 
-void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox )
+void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight, bool bClipWater )
 {
 	m_fogInfo.m_bEyeInFogVolume = false;
 	m_bDrewSkybox = bDrewSkybox;
+	m_waterHeight = flWaterHeight;
 
 	BaseClass::Setup( view );
 
 	m_ClearFlags = 0;
-	m_DrawFlags = DF_DRAW_ENTITITES;
+	m_DrawFlags = DF_DRAW_ENTITITES | DF_RENDER_ABOVEWATER;
 
-	m_DrawFlags |= DF_RENDER_UNDERWATER | DF_RENDER_ABOVEWATER;
+	if ( bClipWater )
+	{
+		m_DrawFlags |= DF_CLIP_Z | DF_CLIP_BELOW;
+	}
+	else
+	{
+		m_DrawFlags |= DF_RENDER_UNDERWATER;
+	}
 
 #if DEFCFG_DEFERRED_SHADING
 	if ( !bDrewSkybox )
@@ -845,10 +817,10 @@ void CGBufferView::Draw()
 
 	SetupCurrentView( origin, angles, VIEW_DEFERRED_GBUFFER );
 
-	DrawSetup( 0, m_DrawFlags, 0 );
+	DrawSetup( m_waterHeight, m_DrawFlags, 0 );
 
 	const bool bOptimizedGbuffer = DEFCFG_DEFERRED_SHADING == 0;
-	DrawExecute( 0, CurrentViewID(), 0, bOptimizedGbuffer );
+	DrawExecute( m_waterHeight, CurrentViewID(), 0, bOptimizedGbuffer );
 
 	pRenderContext.GetFrom( materials );
 	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
@@ -860,15 +832,39 @@ void CGBufferView::Draw()
 
 void CGBufferView::PushView( float waterHeight )
 {
-	PushGBuffer( !m_bDrewSkybox );
+	MaterialHeightClipMode_t clipMode = MATERIAL_HEIGHTCLIPMODE_DISABLE;
+	if ( ( m_DrawFlags & DF_CLIP_Z ) && mat_clipz.GetBool() )
+	{
+		if ( m_DrawFlags & DF_CLIP_BELOW )
+		{
+			clipMode = MATERIAL_HEIGHTCLIPMODE_RENDER_ABOVE_HEIGHT;
+		}
+		else
+		{
+			clipMode = MATERIAL_HEIGHTCLIPMODE_RENDER_BELOW_HEIGHT;
+		}
+	}
+
+	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->SetHeightClipZ( waterHeight );
+	pRenderContext->SetHeightClipMode( clipMode );
+
+	render->Push3DView( *this, 0, NULL, GetFrustum() );
+
+	PushGBuffer( !m_bDrewSkybox, 1.0f, true, x, y, width, height );
 }
 
 void CGBufferView::PopView()
 {
+	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->SetHeightClipMode( MATERIAL_HEIGHTCLIPMODE_DISABLE );
+
 	PopGBuffer();
+
+	render->PopView( GetFrustum() );
 }
 
-void CGBufferView::PushGBuffer( bool bInitial, float zScale, bool bClearDepth )
+void CGBufferView::PushGBuffer( bool bInitial, float zScale, bool bClearDepth, int vx, int vy, int vw, int vh )
 {
 	ITexture *pNormals = GetDefRT_Normals();
 	ITexture *pDepth = GetDefRT_Depth();
@@ -877,18 +873,30 @@ void CGBufferView::PushGBuffer( bool bInitial, float zScale, bool bClearDepth )
 
 	pRenderContext->ClearColor4ub( 0, 0, 0, 0 );
 
+#if DEFCFG_DEFERRED_SHADING == 1
+	ITexture *pColorRT = GetDefRT_Albedo();
+#else
+	ITexture *pColorRT = pNormals;
+#endif
+
+	if ( vw <= 0 || vh <= 0 )
+	{
+		vx = vy = 0;
+		vw = pColorRT->GetActualWidth();
+		vh = pColorRT->GetActualHeight();
+	}
+
 	if ( bInitial )
 	{
-		pRenderContext->PushRenderTargetAndViewport( pDepth );
+		pRenderContext->PushRenderTargetAndViewport( pDepth, NULL, vx, vy, vw, vh );
 		pRenderContext->ClearBuffers( true, false );
 		pRenderContext->PopRenderTargetAndViewport();
 	}
 
-#if DEFCFG_DEFERRED_SHADING == 1
-	pRenderContext->PushRenderTargetAndViewport( GetDefRT_Albedo() );
-#else
-	pRenderContext->PushRenderTargetAndViewport( pNormals );
-#endif
+	pRenderContext->PushRenderTargetAndViewport( pColorRT, NULL, vx, vy, vw, vh );
+
+	if ( bInitial )
+		pRenderContext->ClearBuffers( true, false );
 
 	if ( bClearDepth )
 		pRenderContext->ClearBuffers( false, true );
@@ -1620,6 +1628,52 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 {
 	VPROF( "CViewRender::ViewDrawScene" );
 
+	VisibleFogVolumeInfo_t fogVolumeInfo;
+	render->GetVisibleFogVolume( view.origin, &fogVolumeInfo );
+
+	WaterRenderInfo_t waterInfo;
+	DetermineWaterRenderInfo( fogVolumeInfo, waterInfo );
+
+	static ConVarRef r_WaterDrawReflection( "r_WaterDrawReflection" );
+	const bool bNeedReflection = !fogVolumeInfo.m_bEyeInFogVolume &&
+								 !waterInfo.m_bCheapWater &&
+								 waterInfo.m_bReflect &&
+								 r_WaterDrawReflection.GetBool();
+
+	if ( bNeedReflection )
+	{
+		RenderGlobalShadows( view );
+
+		CViewSetup reflView = view;
+		float flWaterHeight = fogVolumeInfo.m_flWaterHeight;
+		ITexture *pReflectTex = GetWaterReflectionTexture();
+
+		reflView.x = reflView.y = 0;
+		reflView.width = pReflectTex->GetActualWidth();
+		reflView.height = pReflectTex->GetActualHeight();
+		reflView.angles[0] = -reflView.angles[0];
+		reflView.angles[2] = -reflView.angles[2];
+		reflView.origin[2] -= 2.0f * ( reflView.origin[2] - flWaterHeight );
+
+		ProcessDeferredGlobals( reflView );
+		GetLightingManager()->LightTearDown();
+		GetLightingManager()->LightSetup( reflView );
+
+		bool bDrew3dSkyboxRefl = false;
+		SkyboxVisibility_t nSkyboxVisibleRefl = SKYBOX_NOT_VISIBLE;
+		ViewDrawGBuffer( reflView, bDrew3dSkyboxRefl, nSkyboxVisibleRefl, false, flWaterHeight, true );
+
+		PerformLighting( reflView );
+
+		CAboveWaterViewDeferred::CReflectionView reflViewDeferred( this );
+		reflViewDeferred.Setup( view, flWaterHeight, waterInfo.m_bReflectEntities );
+		reflViewDeferred.Draw();
+
+		ProcessDeferredGlobals( view );
+		GetLightingManager()->LightTearDown();
+		GetLightingManager()->LightSetup( view );
+	}
+
 	bool bDrew3dSkybox = false;
 	SkyboxVisibility_t nSkyboxVisible = SKYBOX_NOT_VISIBLE;
 
@@ -1693,28 +1747,33 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 }
 
 void CDeferredViewRender::ViewDrawGBuffer( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
-	bool bDrawViewModel )
+	bool bDrawViewModel, float flWaterHeight, bool bClipWater )
 {
 	MDLCACHE_CRITICAL_SECTION();
 
 	view_id_t oldViewID = g_CurrentViewID;
 	g_CurrentViewID = VIEW_DEFERRED_GBUFFER;
 
-	CSkyboxViewDeferred *pSkyView = new CSkyboxViewDeferred( this );
-	if ( ( bDrew3dSkybox = pSkyView->Setup( view, true, &nSkyboxVisible ) ) != false )
-		AddViewToScene( pSkyView );
+	bDrew3dSkybox = false;
+	if ( !bClipWater )
+	{
+		CSkyboxViewDeferred *pSkyView = new CSkyboxViewDeferred( this );
+		if ( ( bDrew3dSkybox = pSkyView->Setup( view, true, &nSkyboxVisible ) ) != false )
+			AddViewToScene( pSkyView );
 
-	SafeRelease( pSkyView );
+		SafeRelease( pSkyView );
+	}
 
 	// Start view
 	unsigned int visFlags;
 	SetupVis( view, visFlags, NULL );
 
 	CRefPtr<CGBufferView> pGBufferView = new CGBufferView( this );
-	pGBufferView->Setup( view, bDrew3dSkybox );
+	pGBufferView->Setup( view, bDrew3dSkybox, flWaterHeight, bClipWater );
 	AddViewToScene( pGBufferView );
 
-	DrawViewModels( view, bDrawViewModel, true );
+	if ( bDrawViewModel )
+		DrawViewModels( view, bDrawViewModel, true );
 
 	g_CurrentViewID = oldViewID;
 }
@@ -1830,7 +1889,6 @@ void CDeferredViewRender::DrawSkyboxComposite( const CViewSetup &view, const boo
 
 void CDeferredViewRender::DrawWorldComposite( const CViewSetup &view, int nClearFlags, bool bDrawSkybox )
 {
-#if 0
 	MDLCACHE_CRITICAL_SECTION();
 
 	VisibleFogVolumeInfo_t fogVolumeInfo;
@@ -1840,22 +1898,8 @@ void CDeferredViewRender::DrawWorldComposite( const CViewSetup &view, int nClear
 	WaterRenderInfo_t info;
 	DetermineWaterRenderInfo( fogVolumeInfo, info );
 
-	if ( info.m_bCheapWater )
+	if ( info.m_bCheapWater && !fogVolumeInfo.m_bEyeInFogVolume )
 	{
-#if 0 // TODO
-		cplane_t glassReflectionPlane;
-		if ( IsReflectiveGlassInView( view, glassReflectionPlane ) )
-		{
-			CRefPtr<CReflectiveGlassViewDeferred> pGlassReflectionView = new CReflectiveGlassViewDeferred( this );
-			pGlassReflectionView->Setup( view, VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, bDrawSkybox, fogVolumeInfo, info, glassReflectionPlane );
-			AddViewToScene( pGlassReflectionView );
-
-			CRefPtr<CRefractiveGlassViewDeferred> pGlassRefractionView = new CRefractiveGlassViewDeferred( this );
-			pGlassRefractionView->Setup( view, VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, bDrawSkybox, fogVolumeInfo, info, glassReflectionPlane );
-			AddViewToScene( pGlassRefractionView );
-		}
-#endif // 0
-
 		CRefPtr<CSimpleWorldViewDeferred> pNoWaterView = new CSimpleWorldViewDeferred( this );
 		pNoWaterView->Setup( view, nClearFlags, bDrawSkybox, fogVolumeInfo, info );
 		AddViewToScene( pNoWaterView );
@@ -1881,18 +1925,42 @@ void CDeferredViewRender::DrawWorldComposite( const CViewSetup &view, int nClear
 		pUnderWaterView->Setup( view, bDrawSkybox, fogVolumeInfo, info );
 		AddViewToScene( pUnderWaterView );
 	}
+}
+
+void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view )
+{
+	if ( GetGlobalLight() == NULL )
+		return;
+
+	lightData_Global_t lightDataState = GetActiveGlobalLightState();
+
+	if ( !GetLightingEditor()->IsEditorLightingActive() &&
+		r_deferred_light_global_override.GetBool() )
+	{
+		lightDataState.bShadow = r_deferred_light_global_override_shadow.GetBool();
+		UTIL_StringToVector( lightDataState.diff.AsVector3D().Base(), r_deferred_light_global_override_diffuse.GetString() );
+		UTIL_StringToVector( lightDataState.ambh.AsVector3D().Base(), r_deferred_light_global_override_ambient_high.GetString() );
+		UTIL_StringToVector( lightDataState.ambl.AsVector3D().Base(), r_deferred_light_global_override_ambient_low.GetString() );
+
+		lightDataState.bEnabled = ( lightDataState.diff.LengthSqr() > 0.01f ||
+			lightDataState.ambh.LengthSqr() > 0.01f ||
+			lightDataState.ambl.LengthSqr() > 0.01f );
+	}
+
+	QUEUE_FIRE( CommitLightData_Global, lightDataState );
+
+	if ( lightDataState.bEnabled && lightDataState.bShadow )
+	{
+#if DEFCFG_ENABLE_RADIOSITY
+		const bool bRadiosityEnabled = r_deferred_radiosity.GetBool();
 #else
-	MDLCACHE_CRITICAL_SECTION();
-	VisibleFogVolumeInfo_t fogVolumeInfo;
-	render->GetVisibleFogVolume( view.origin, &fogVolumeInfo );
-
-	WaterRenderInfo_t info;
-	DetermineWaterRenderInfo( fogVolumeInfo, info );
-
-	CRefPtr<CSimpleWorldViewDeferred> pNoWaterView = new CSimpleWorldViewDeferred( this );
-	pNoWaterView->Setup( view, nClearFlags, bDrawSkybox, fogVolumeInfo, info );
-	AddViewToScene( pNoWaterView );
+		const bool bRadiosityEnabled = false;
 #endif
+		Vector origins[2] = { view.origin, view.origin + lightDataState.vecLight.AsVector3D() * 1024 };
+		render->ViewSetupVis( false, 2, origins );
+
+		RenderCascadedShadows( view, bRadiosityEnabled );
+	}
 }
 
 void CDeferredViewRender::PerformLighting( const CViewSetup &view )
@@ -1948,17 +2016,7 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 
 		QUEUE_FIRE( CommitLightData_Global, lightDataState );
 
-		if ( lightDataState.bEnabled )
-		{
-			if ( lightDataState.bShadow )
-			{
-				Vector origins[2] = { view.origin, view.origin + lightDataState.vecLight.AsVector3D() * 1024 };
-				render->ViewSetupVis( false, 2, origins );
-
-				RenderCascadedShadows( view, bRadiosityEnabled );
-			}
-		}
-		else
+		if ( !lightDataState.bEnabled )
 			bResetLightAccum = true;
 	}
 	else
@@ -1970,7 +2028,7 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 		engine->GetScreenSize( lightingView.width, lightingView.height );
 
 	CMatRenderContextPtr pRenderContext( materials );
-	pRenderContext->PushRenderTargetAndViewport( GetDefRT_Lightaccum() );
+	pRenderContext->PushRenderTargetAndViewport( GetDefRT_Lightaccum(), 0, 0, lightingView.width, lightingView.height );
 
 	if ( bResetLightAccum )
 	{
@@ -2509,6 +2567,24 @@ void CDeferredViewRender::DrawViewModels( const CViewSetup &view, bool drawViewm
 	// Restore the matrices
 	pRenderContext->MatrixMode( MATERIAL_PROJECTION );
 	pRenderContext->PopMatrix();
+}
+
+void CDeferredViewRender::DrawUnderwaterOverlay( void )
+{
+	if ( !m_UnderWaterOverlayMaterial || m_UnderWaterOverlayMaterial->IsErrorMaterial() )
+	{
+		int cont = enginetrace->GetPointContents( m_CurrentView.origin );
+		if ( ( cont & MASK_WATER ) )
+		{
+			IMaterial *pOverlayMat = materials->FindMaterial( "effects/water_warp01", TEXTURE_GROUP_OTHER );
+			if ( pOverlayMat && !pOverlayMat->IsErrorMaterial() )
+			{
+				SetWaterOverlayMaterial( pOverlayMat );
+			}
+		}
+	}
+
+	BaseClass::DrawUnderwaterOverlay();
 }
 
 void CDeferredViewRender::RenderView( const CViewSetup &view, int nClearFlags, int whatToDraw )
@@ -3088,30 +3164,6 @@ void CBaseWaterViewDeferred::CalcWaterEyeAdjustments( const VisibleFogVolumeInfo
 	//		( float )view.origin[2], newWaterHeight, fogInfo.m_flWaterHeight, waterZAdjust );
 }
 
-
-//-----------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------
-void CBaseWaterViewDeferred::CSoftwareIntersectionView::Setup( bool bAboveWater )
-{
-	BaseClass::Setup( *GetOuter() );
-
-	m_DrawFlags = 0;
-	m_DrawFlags = ( bAboveWater ) ? DF_RENDER_UNDERWATER : DF_RENDER_ABOVEWATER;
-}
-
-
-//-----------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------
-void CBaseWaterViewDeferred::CSoftwareIntersectionView::Draw()
-{
-	PushComposite();
-	DrawSetup( GetOuter()->m_waterHeight, m_DrawFlags, GetOuter()->m_waterZAdjust );
-	DrawExecute( GetOuter()->m_waterHeight, CurrentViewID(), GetOuter()->m_waterZAdjust );
-	PopComposite();
-}
-
 //-----------------------------------------------------------------------------
 // Draws the scene when the view point is above the level of the water
 //-----------------------------------------------------------------------------
@@ -3167,13 +3219,6 @@ void CAboveWaterViewDeferred::Draw()
 
 	CMatRenderContextPtr pRenderContext( materials );
 
-	// render the reflection
-	if( m_waterInfo.m_bReflect )
-	{
-		m_ReflectionView.Setup( m_waterInfo.m_bReflectEntities );
-		m_pMainView->AddViewToScene( &m_ReflectionView );
-	}
-
 	bool bViewIntersectsWater = false;
 
 	// render refraction
@@ -3212,30 +3257,17 @@ void CAboveWaterViewDeferred::Draw()
 	EnableWorldFog();
 	DrawExecute( m_waterHeight, CurrentViewID(), m_waterZAdjust );
 	PopComposite();
-
-	if ( m_waterInfo.m_bRefract )
-	{
-		if ( m_bSoftwareUserClipPlane )
-		{
-			m_SoftwareIntersectionView.Setup( true );
-			m_SoftwareIntersectionView.Draw( );
-		}
-		else if ( bViewIntersectsWater )
-		{
-			m_IntersectionView.Setup();
-			m_pMainView->AddViewToScene( &m_IntersectionView );
-		}
-	}
 }
 
 
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-void CAboveWaterViewDeferred::CReflectionView::Setup( bool bReflectEntities )
+void CAboveWaterViewDeferred::CReflectionView::Setup( const CViewSetup &view, float flWaterHeight, bool bReflectEntities )
 {
-	BaseClass::Setup( *GetOuter() );
+	BaseClass::Setup( view );
 
+	m_flWaterHeight = flWaterHeight;
 	m_ClearFlags = VIEW_CLEAR_DEPTH;
 
 	// NOTE: Clearing the color is unnecessary since we're drawing the skybox
@@ -3247,7 +3279,7 @@ void CAboveWaterViewDeferred::CReflectionView::Setup( bool bReflectEntities )
 	// (which we want to do instead of drawing the 3d skybox)
 	m_DrawFlags |= DF_DRAWSKYBOX;
 
-	if( bReflectEntities )
+	if ( bReflectEntities )
 	{
 		m_DrawFlags |= DF_DRAW_ENTITITES;
 	}
@@ -3273,10 +3305,10 @@ void CAboveWaterViewDeferred::CReflectionView::Draw()
 
 	PushComposite();
 
-	DrawSetup( GetOuter()->m_fogInfo.m_flWaterHeight, m_DrawFlags, 0.0f, GetOuter()->m_fogInfo.m_nVisibleFogVolumeLeaf );
+	DrawSetup( m_flWaterHeight, m_DrawFlags, 0.0f );
 
 	EnableWorldFog();
-	DrawExecute( GetOuter()->m_fogInfo.m_flWaterHeight, VIEW_REFLECTION, 0.0f );
+	DrawExecute( m_flWaterHeight, VIEW_REFLECTION, 0.0f );
 
 	PopComposite();
 
@@ -3350,35 +3382,6 @@ void CAboveWaterViewDeferred::CRefractionView::Draw()
 
 
 //-----------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------
-void CAboveWaterViewDeferred::CIntersectionView::Setup()
-{
-	BaseClass::Setup( *GetOuter() );
-	m_DrawFlags = DF_RENDER_UNDERWATER | DF_CLIP_Z | DF_DRAW_ENTITITES;
-}
-
-
-//-----------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------
-void CAboveWaterViewDeferred::CIntersectionView::Draw()
-{
-	PushComposite();
-
-	DrawSetup( GetOuter()->m_fogInfo.m_flWaterHeight, m_DrawFlags, 0 );
-
-	SetFogVolumeState( GetOuter()->m_fogInfo, true );
-	SetClearColorToFogColor( );
-	DrawExecute( GetOuter()->m_fogInfo.m_flWaterHeight, VIEW_NONE, 0 );
-	CMatRenderContextPtr pRenderContext( materials );
-	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
-
-	PopComposite();
-}
-
-
-//-----------------------------------------------------------------------------
 // Draws the scene when the view point is under the level of the water
 //-----------------------------------------------------------------------------
 void CUnderWaterViewDeferred::Setup( const CViewSetup &view, bool bDrawSkybox, const VisibleFogVolumeInfo_t &fogInfo, const WaterRenderInfo_t& waterInfo )
@@ -3390,18 +3393,14 @@ void CUnderWaterViewDeferred::Setup( const CViewSetup &view, bool bDrawSkybox, c
 	CalcWaterEyeAdjustments( fogInfo, m_waterHeight, m_waterZAdjust, m_bSoftwareUserClipPlane );
 
 	IMaterial *pWaterMaterial = fogInfo.m_pFogVolumeMaterial;
-	if (engine->GetDXSupportLevel() >= 90 )					// screen overlays underwater are a dx9 feature
+	if ( engine->GetDXSupportLevel() >= 90 )					// screen overlays underwater are a dx9 feature
 	{
-		IMaterialVar *pScreenOverlayVar = pWaterMaterial->FindVar( "$underwateroverlay", NULL, false );
-		if ( pScreenOverlayVar && ( pScreenOverlayVar->IsDefined() ) )
-		{
-			char const *pOverlayName = pScreenOverlayVar->GetStringValue();
-			if ( pOverlayName[0] != '0' )						// fixme!!!
-			{
-				IMaterial *pOverlayMaterial = materials->FindMaterial( pOverlayName,  TEXTURE_GROUP_OTHER );
-				m_pMainView->SetWaterOverlayMaterial( pOverlayMaterial );
-			}
-		}
+		IMaterialVar *pScreenOverlayVar = pWaterMaterial ? pWaterMaterial->FindVar( "$underwateroverlay", NULL, false ) : NULL;
+		const char *pOverlayName = ( pScreenOverlayVar && pScreenOverlayVar->IsDefined() ) ? pScreenOverlayVar->GetStringValue() : NULL;
+		if ( !pOverlayName || pOverlayName[0] == '\0' || pOverlayName[0] == '0' )
+			pOverlayName = "effects/water_warp01";
+
+		m_pMainView->SetWaterOverlayMaterial( materials->FindMaterial( pOverlayName, TEXTURE_GROUP_OTHER ) );
 	}
 	// NOTE: We're not drawing the 2d skybox under water since it's assumed to not be visible.
 
@@ -3464,13 +3463,7 @@ void CUnderWaterViewDeferred::Draw()
 
 	PopComposite();
 
-	if( m_waterZAdjust != 0.0f && m_bSoftwareUserClipPlane && m_waterInfo.m_bRefract )
-	{
-		m_SoftwareIntersectionView.Setup( false );
-		m_SoftwareIntersectionView.Draw( );
-	}
 	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
-
 }
 
 
@@ -3484,7 +3477,7 @@ void CUnderWaterViewDeferred::CRefractionView::Setup()
 	// NOTE: Refraction renders into the back buffer, over the top of the 3D skybox
 	// It is then blitted out into the refraction target. This is so that
 	// we only have to set up 3d sky vis once, and only render it once also!
-	m_DrawFlags = DF_CLIP_Z |
+	m_DrawFlags = DF_RENDER_REFRACTION | DF_CLIP_Z |
 		DF_CLIP_BELOW | DF_RENDER_ABOVEWATER |
 		DF_DRAW_ENTITITES;
 
@@ -3516,13 +3509,4 @@ void CUnderWaterViewDeferred::CRefractionView::Draw()
 	DrawExecute( GetOuter()->m_waterHeight, VIEW_REFRACTION, GetOuter()->m_waterZAdjust );
 
 	PopComposite();
-
-	Rect_t srcRect;
-	srcRect.x = x;
-	srcRect.y = y;
-	srcRect.width = width;
-	srcRect.height = height;
-
-	ITexture *pTexture = GetWaterRefractionTexture();
-	pRenderContext->CopyRenderTargetToTextureEx( pTexture, 0, &srcRect, NULL );
 }

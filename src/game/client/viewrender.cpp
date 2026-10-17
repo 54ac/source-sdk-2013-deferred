@@ -2603,12 +2603,12 @@ void CViewRender::DetermineWaterRenderInfo( const VisibleFogVolumeInfo_t &fogVol
 
 	// Check if the water is out of the cheap water LOD range; if so, use cheap water
 #ifdef _X360
-	if ( !bForceExpensive && ( bForceCheap || ( fogVolumeInfo.m_flDistanceToWater >= m_flCheapWaterEndDistance ) ) )
+	if ( !bForceExpensive && ( bForceCheap || ( !fogVolumeInfo.m_bEyeInFogVolume && ( fogVolumeInfo.m_flDistanceToWater >= m_flCheapWaterEndDistance ) ) ) )
 	{
 		return;
 	}
 #else
-	if ( ( (fogVolumeInfo.m_flDistanceToWater >= m_flCheapWaterEndDistance) && !bLocalReflection ) || bForceCheap )
+	if ( ( !fogVolumeInfo.m_bEyeInFogVolume && (fogVolumeInfo.m_flDistanceToWater >= m_flCheapWaterEndDistance) && !bLocalReflection ) || bForceCheap )
  		return;
 #endif
 	// Get the material that is for the water surface that is visible and check to see
@@ -6118,7 +6118,7 @@ void CUnderWaterView::Setup( const CViewSetup &underView, bool bDrawSkybox, cons
 	CalcWaterEyeAdjustments( fogInfo, m_waterHeight, m_waterZAdjust, m_bSoftwareUserClipPlane );
 
 	IMaterial *pWaterMaterial = fogInfo.m_pFogVolumeMaterial;
-	if (engine->GetDXSupportLevel() >= 90 )					// screen voerlays underwater are a dx9 feature
+	if ( pWaterMaterial && engine->GetDXSupportLevel() >= 90 )					// screen voerlays underwater are a dx9 feature
 	{
 		IMaterialVar *pScreenOverlayVar = pWaterMaterial->FindVar( "$underwateroverlay", NULL, false );
 		if ( pScreenOverlayVar && ( pScreenOverlayVar->IsDefined() ) )

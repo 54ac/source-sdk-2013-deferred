@@ -25,7 +25,7 @@ public:
 										   bool bDrawViewModel );
 
 	void			ViewDrawGBuffer( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
-									 bool bDrawViewModel );
+									 bool bDrawViewModel, float flWaterHeight = 0.0f, bool bClipWater = false );
 	void			ViewDrawComposite( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
 									   int nClearFlags, view_id_t viewID, bool bDrawViewModel );
 
@@ -36,6 +36,8 @@ public:
 	void			DrawWorldComposite( const CViewSetup &view, int nClearFlags, bool bDrawSkybox );
 
 	void			DrawLightShadowView( const CViewSetup &view, int iDesiredShadowmap, def_light_t *l );
+
+	virtual void	DrawUnderwaterOverlay( void );
 protected:
 	void			DrawViewModels( const CViewSetup &view, bool drawViewmodel, bool bGBuffer );
 
@@ -44,6 +46,7 @@ private:
 	void ProcessDeferredGlobals( const CViewSetup &view );
 
 	void PerformLighting( const CViewSetup &view );
+	void RenderGlobalShadows( const CViewSetup &view );
 
 	void BeginRadiosity( const CViewSetup &view );
 	void UpdateRadiosityPosition();

@@ -78,10 +78,13 @@ void OnCookieTableChanged( void *object, INetworkStringTable *stringTable, int s
 inline void DrawLightPassFullscreen( IMaterial *pMaterial, int w, int t )
 {
 	CMatRenderContextPtr pRenderContext( materials );
+	ITexture *pNormals = GetDefRT_Normals();
+	const int srcW = pNormals ? pNormals->GetActualWidth() : w;
+	const int srcH = pNormals ? pNormals->GetActualHeight() : t;
 	pRenderContext->DrawScreenSpaceRectangle( pMaterial,
 		0, 0, w, t,
 		0, 0, w - 1.0f, t - 1.0f,
-		w, t
+		srcW, srcH
 		);
 }
 

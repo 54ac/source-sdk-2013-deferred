@@ -184,8 +184,7 @@ PS_OUTPUT main( const PS_INPUT In )
 	Out.vColor_0.w = 1;
 #endif
 
-	//float2 screenPos = GetLightAccumUVs( In.vProjPosXYW, g_vecHalfScreenTexel );
-	float2 screenPos = ( In.vScreenPos + 0.5f ) * g_vecFullScreenTexel;
+	float2 screenPos = ( In.vScreenPos + 0.5f ) * g_vecFullScreenTexel.xy;
 
 	float4 flLighting = ReadLighting( tex2D( sLightAccum, screenPos ) );
 
@@ -329,10 +328,17 @@ PS_OUTPUT main( const PS_INPUT In )
 		+ flSpecularHighlight
 		+ flSpecularLighting ) * flLightScale;
 
-#if PIXELFOGTYPE == 0
-	float fogAmt = CalcPixelFogFactor( PIXELFOGTYPE, g_vecFogParams, g_vecOrigin, In.vWorldPos, 0 );
+	float flDist = length( In.vWorldPos - g_vecOrigin );
+	float fogAmt = CalcPixelFogFactor( PIXELFOGTYPE, g_vecFogParams, g_vecOrigin, In.vWorldPos, flDist );
 
-	Out.vColor_0.xyz = lerp( Out.vColor_0.xyz, g_LinearFogColor, fogAmt );
+#if PIXELFOGTYPE == 1
+	Out.vColor_0.xyz = lerp( Out.vColor_0.xyz, g_LinearFogColor.rgb, saturate( fogAmt ) );
+	Out.vColor_0.w = fogAmt;
+#elif PIXELFOGTYPE == 0
+	Out.vColor_0.xyz = lerp( Out.vColor_0.xyz, g_LinearFogColor.rgb, saturate( fogAmt ) );
+	Out.vColor_0.w = 1.0f;
+#else
+	Out.vColor_0.w = 1.0f;
 #endif
 
 	return Out;

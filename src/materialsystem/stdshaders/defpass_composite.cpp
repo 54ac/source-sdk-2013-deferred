@@ -200,7 +200,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 			pShaderShadow->EnableSRGBRead( SHADER_SAMPLER8, false );
 		}
 
-		pShaderShadow->EnableAlphaWrites( false );
+		pShaderShadow->EnableAlphaWrites( true );
 		pShaderShadow->EnableDepthWrites( !bTranslucent );
 
 		pShader->DefaultFog();
@@ -335,12 +335,6 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 				tmpBuf.BindTexture( pShader, SHADER_SAMPLER4, info.iSelfIllumMask );
 			}
 
-			ShaderViewport_t viewport;
-			pShaderAPI->GetViewports( &viewport, 1 );
-			float fl1[4] = { 1.0f / viewport.m_nWidth, 1.0f / viewport.m_nHeight, 0, 0 };
-
-			tmpBuf.SetPixelShaderConstant( 1, fl1 );
-
 			tmpBuf.SetPixelShaderFogParams( 2 );
 
 			float flPhongBoost = 1.0f;
@@ -422,6 +416,19 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		{
 			pShaderAPI->SetPixelShaderConstant( 10, params[ info.iSelfIllumTint ]->GetVecValue() );
 		}
+
+		ITexture *pLightAccum = GetDeferredExt()->GetTexture_LightAccum();
+		int texW = pLightAccum ? pLightAccum->GetActualWidth() : 0;
+		int texH = pLightAccum ? pLightAccum->GetActualHeight() : 0;
+		if ( texW <= 0 || texH <= 0 )
+		{
+			ShaderViewport_t viewport;
+			pShaderAPI->GetViewports( &viewport, 1 );
+			texW = viewport.m_nWidth;
+			texH = viewport.m_nHeight;
+		}
+		float fl1[4] = { 1.0f / (float)texW, 1.0f / (float)texH, 0.0f, 0.0f };
+		pShaderAPI->SetPixelShaderConstant( 1, fl1 );
 	}
 
 	pShader->Draw();

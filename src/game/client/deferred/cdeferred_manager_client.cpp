@@ -556,6 +556,10 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 #if DEBUG
 	for ( int i = 0; i < DEF_MAT_COUNT; i++ )
 	{
+#if !DEFCFG_ENABLE_RADIOSITY
+		if ( i >= DEF_MAT_LIGHT_RADIOSITY_GLOBAL && i <= DEF_MAT_LIGHT_RADIOSITY_BLEND )
+			continue;
+#endif
 		Assert( m_pKV_Def[ i ] != NULL );
 		Assert( m_pMat_Def[ i ] != NULL );
 	}
@@ -563,7 +567,8 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 
 	for ( IMaterial* material : m_pMat_Def )
 	{
-		material->Refresh();
+		if ( material != NULL )
+			material->Refresh();
 	}
 }
 
