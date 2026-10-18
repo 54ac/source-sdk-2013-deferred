@@ -2,6 +2,7 @@
 #include "deferred/deferred_shared_common.h"
 #include "deferred/vgui/vgui_deferred.h"
 #include "collisionutils.h"
+#include "materialsystem/imaterialvar.h"
 
 #include "viewrender.h"
 #include "view_shared.h"
@@ -963,7 +964,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 	if ( m_bDrawVolumetrics )
 	{
 		CMatRenderContextPtr pRenderContext( materials );
-		pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0 );
+		pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
 		pRenderContext->ClearColor3ub( 0, 0, 0 );
 		pRenderContext->ClearBuffers( true, false );
 		pRenderContext->PopRenderTargetAndViewport();
@@ -1040,7 +1041,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 						def_light_t* pLight = commitableLights[iShadowed];
 						pCaller->DrawLightShadowView( view, iShadowed, pLight );
 
-						if ( pLight->HasVolumetrics() )
+						if ( pLight->HasVolumetrics() && r_deferred_volumetric_intensity.GetFloat() > 0.0f )
 						{
 							const int iDataOffset	 = iShadowed * lightTypes[i].constCount_advanced * 4;
 							const int iSamplerOffset = iShadowed;
@@ -1117,10 +1118,11 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 						DrawVolumePrepass( true, view, entry.pLight );
 
 						CMatRenderContextPtr pRenderContext( materials );
-						pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0 );
+						pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
 
 						DrawLightPassFullscreen( lightTypes[i].pMatVolumeFullscreen,
-						                         view.width / 4.0f, view.height / 4.0f );
+						                         view.width / 4, view.height / 4,
+						                         view.width, view.height );
 
 						pRenderContext->PopRenderTargetAndViewport();
 
@@ -1292,7 +1294,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 				DrawVolumePrepass( false, view, l );
 
-				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0 );
+				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
 
 				pRenderContext->Bind( lightTypes[i].pMatVolumeWorld );
 				l->pMesh_Volumetrics->Draw();
@@ -1316,7 +1318,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			const bool bShadow      = l->ShouldRenderShadow();
 			const bool bCookie      = l->HasCookie() && l->IsCookieReady();
-			const bool bVolumetrics = l->HasVolumetrics() && bShadow;
+			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
 
 			const bool bAdvanced = ( bShadow || bCookie );
 
@@ -1414,7 +1416,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 				DrawVolumePrepass( false, view, l );
 
-				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0 );
+				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
 
 				pRenderContext->Bind( lightTypes[i].pMatVolumeWorld );
 				l->pMesh_Volumetrics->Draw();
@@ -1486,29 +1488,60 @@ void CLightingManager::RenderVolumetrics( const CViewSetup& view )
 	if ( !m_bDrawVolumetrics )
 		return;
 
+	const float flIntensity = r_deferred_volumetric_intensity.GetFloat();
+	if ( flIntensity <= 0.0f )
+		return;
+
 	ITexture* pVolumBuffer0 = GetDefRT_VolumetricsBuffer( 0 );
 	ITexture* pVolumBuffer1 = GetDefRT_VolumetricsBuffer( 1 );
+	const int rtW = pVolumBuffer0 ? pVolumBuffer0->GetActualWidth() : ( view.width / 4 );
+	const int rtH = pVolumBuffer0 ? pVolumBuffer0->GetActualHeight() : ( view.height / 4 );
 
 	CMatRenderContextPtr pRenderContext( materials );
 
-	pRenderContext->PushRenderTargetAndViewport( pVolumBuffer1 );
-	pRenderContext->DrawScreenSpaceRectangle( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_X ),
-	                                          0, 0, view.width / 4, view.height / 4,
-	                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
-	                                          view.width / 4, view.height / 4 );
-	pRenderContext->PopRenderTargetAndViewport();
+	const float flBlur = r_deferred_volumetric_blur.GetFloat();
+	if ( flBlur > 0.0f )
+	{
+		IMaterial* pMatBlurX = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_X );
+		IMaterial* pMatBlurY = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_Y );
 
-	pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0 );
-	pRenderContext->DrawScreenSpaceRectangle( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_Y ),
-	                                          0, 0, view.width / 4, view.height / 4,
-	                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
-	                                          view.width / 4, view.height / 4 );
-	pRenderContext->PopRenderTargetAndViewport();
+		if ( pMatBlurX != NULL && pMatBlurY != NULL )
+		{
+			const int iPasses = Clamp( RoundFloatToInt( flBlur ), 1, 5 );
+			for ( int p = 0; p < iPasses; p++ )
+			{
+				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer1, 0, 0, view.width / 4, view.height / 4 );
+				pRenderContext->DrawScreenSpaceRectangle( pMatBlurX,
+				                                          0, 0, view.width / 4, view.height / 4,
+				                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
+				                                          rtW, rtH );
+				pRenderContext->PopRenderTargetAndViewport();
 
-	pRenderContext->DrawScreenSpaceRectangle( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_BLEND ),
+				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
+				pRenderContext->DrawScreenSpaceRectangle( pMatBlurY,
+				                                          0, 0, view.width / 4, view.height / 4,
+				                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
+				                                          rtW, rtH );
+				pRenderContext->PopRenderTargetAndViewport();
+			}
+		}
+	}
+
+	IMaterial* pMatBlend = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_BLEND );
+	if ( pMatBlend != NULL )
+	{
+		bool bFound = false;
+		IMaterialVar* pIntensityVar = pMatBlend->FindVar( "$INTENSITY", &bFound, true );
+		if ( pIntensityVar != NULL )
+		{
+			pIntensityVar->SetFloatValue( flIntensity );
+		}
+	}
+
+	pRenderContext->DrawScreenSpaceRectangle( pMatBlend,
 	                                          0, 0, view.width, view.height,
-	                                          0, 0, view.width - 1, view.height - 1,
-	                                          view.width, view.height );
+	                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
+	                                          rtW, rtH );
 }
 
 void CLightingManager::DoSceneDebug()

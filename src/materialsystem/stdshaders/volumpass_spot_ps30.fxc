@@ -51,8 +51,8 @@ const float3 g_vecViewOrigin				: register( c0 );
 const float3 g_vecFrustumCenter		: register( c3 );
 const float3 g_vecFrustumRight		: register( c4 );
 const float3 g_vecFrustumUp			: register( c5 );
-const float2 g_vecHalfScreenTexel		: register( c6 );
 #endif
+const float2 g_vecHalfScreenTexel		: register( c6 );
 
 static const bool g_bDoSpotFalloff = NUM_SHADOWED == 1;
 
@@ -114,7 +114,7 @@ PS_OUTPUT main( const PS_INPUT In )
 #else
 	vecTexcoords = In.vTexCoord;
 	vecWorldRay = In.vecWorldRay;
-	vecWorld = g_vecViewOrigin + In.vecWorldRay;
+	vecWorld = g_vecViewOrigin;
 #endif
 
 	float flDepth = tex2D( sDepth, vecTexcoords ).x;
@@ -122,12 +122,18 @@ PS_OUTPUT main( const PS_INPUT In )
 #if USEWORLDTRANSFORM
 	flDepth = min( DEPTH_RECONSTRUCTION_LIMIT, flDepth );
 	flDepth = lerp( DEPTH_RECONSTRUCTION_LIMIT, flDepth, any( flDepth ) );
+	float flPrepassDepth = tex2D( sVolumeprepass, vecTexcoords ).x;
+	if ( flPrepassDepth > 0.001f )
+	{
+		flDepth = min( flDepth, flPrepassDepth );
+	}
 #else
 	flDepth = min( DEPTH_RECONSTRUCTION_LIMIT_FULLSCREEN, flDepth );
 	flDepth = lerp( DEPTH_RECONSTRUCTION_LIMIT_FULLSCREEN, flDepth, any( flDepth ) );
+	float flPrepassDepth = tex2D( sVolumeprepass, vecTexcoords ).x;
+	clip( flPrepassDepth - 0.001f );
+	flDepth = min( flDepth, flPrepassDepth );
 #endif
-
-	flDepth = min( flDepth, tex2D( sVolumeprepass, vecTexcoords ).x );
 
 	// definitive end of ray
 	float3 worldPosProjected = g_vecViewOrigin + vecWorldRay * flDepth;
@@ -164,12 +170,11 @@ PS_OUTPUT main( const PS_INPUT In )
 	float iNumSamples = VOLUMQUALITY_POINT_SAMPLES;
 #endif
 
-#if NUM_SHADOWED
-	float flValidSamples = 0.1f;
-#endif
+	float2 screenPix = vecTexcoords / ( 2.0f * max( 1e-6f, g_vecHalfScreenTexel ) );
+	float dither = frac( 52.9829189f * frac( dot( screenPix, float2( 0.06711056f, 0.00583715f ) ) ) );
 
 	vecMarchingRay /= iNumSamples;
-	float3 vecPosition = vecWorld;
+	float3 vecPosition = vecWorld + vecMarchingRay * dither;
 
 	float4 depthPos;
 	float3 flShadowPeeling = 0;
@@ -179,13 +184,13 @@ PS_OUTPUT main( const PS_INPUT In )
 		depthPos = mul( float4( vecPosition, 1 ), spotWorldToTexture );
 		depthPos.xyz /= depthPos.w;
 
+		float inFrustum = step( 0.001f, depthPos.w ) * ( 1.0f - any( floor( depthPos.xyz ) ) );
+
 		float2 dist2D = abs( float2( 0.5f, 0.5f ) - depthPos.xy );
-		float flFalloff = DoSpotLightVolum( 0, vecPosition, g_bDoSpotFalloff );
+		float flFalloff = DoSpotLightVolum( 0, vecPosition, g_bDoSpotFalloff ) * inFrustum;
 
 #if NUM_SHADOWED_COOKIE
-		flFalloff *= ( 0.5f - max( dist2D.x, dist2D.y ) ) * 2.0f;
-#else
-		flValidSamples += any( flFalloff );
+		flFalloff *= saturate( ( 0.5f - max( dist2D.x, dist2D.y ) ) * 2.0f );
 #endif
 
 		float3 sample = PerformProjectedShadow( sMixedSampler[ 0 ],
@@ -204,14 +209,9 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	Out.vColor_0.a = 1;
 
-#if NUM_SHADOWED
-	Out.vColor_0.xyz = flShadowPeeling / flValidSamples;
-#else
 	Out.vColor_0.xyz = flShadowPeeling / iNumSamples;
-#endif
 
 	Out.vColor_0.xyz *= g_flMixedData[ 1 ].rgb *		// diffuse color
-		(1 - g_flMixedData[ 4 ].x) *					// shadow min
 		VOLUMTWEAK_INTENSITY_SPOT;
 
 	return Out;

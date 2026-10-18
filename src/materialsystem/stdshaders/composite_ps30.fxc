@@ -331,12 +331,9 @@ PS_OUTPUT main( const PS_INPUT In )
 	float flDist = length( In.vWorldPos - g_vecOrigin );
 	float fogAmt = CalcPixelFogFactor( PIXELFOGTYPE, g_vecFogParams, g_vecOrigin, In.vWorldPos, flDist );
 
+	Out.vColor_0.xyz = BlendPixelFog( Out.vColor_0.xyz, fogAmt, g_LinearFogColor.rgb, PIXELFOGTYPE );
 #if PIXELFOGTYPE == 1
-	Out.vColor_0.xyz = lerp( Out.vColor_0.xyz, g_LinearFogColor.rgb, saturate( fogAmt ) );
 	Out.vColor_0.w = fogAmt;
-#elif PIXELFOGTYPE == 0
-	Out.vColor_0.xyz = lerp( Out.vColor_0.xyz, g_LinearFogColor.rgb, saturate( fogAmt ) );
-	Out.vColor_0.w = 1.0f;
 #else
 	Out.vColor_0.w = 1.0f;
 #endif

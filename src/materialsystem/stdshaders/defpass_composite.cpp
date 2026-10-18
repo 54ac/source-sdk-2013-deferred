@@ -417,7 +417,8 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 			pShaderAPI->SetPixelShaderConstant( 10, params[ info.iSelfIllumTint ]->GetVecValue() );
 		}
 
-		ITexture *pLightAccum = GetDeferredExt()->GetTexture_LightAccum();
+		const int iDeferredViewID = pShaderAPI->GetIntRenderingParameter( INT_RENDERPARM_DEFERRED_VIEW_ID );
+		ITexture *pLightAccum = ( iDeferredViewID != DEFERRED_VIEW_REFRACTION ) ? GetDeferredExt()->GetTexture_LightAccum() : NULL;
 		int texW = pLightAccum ? pLightAccum->GetActualWidth() : 0;
 		int texH = pLightAccum ? pLightAccum->GetActualHeight() : 0;
 		if ( texW <= 0 || texH <= 0 )
@@ -427,7 +428,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 			texW = viewport.m_nWidth;
 			texH = viewport.m_nHeight;
 		}
-		float fl1[4] = { 1.0f / (float)texW, 1.0f / (float)texH, 0.0f, 0.0f };
+		float fl1[4] = { texW > 0 ? ( 1.0f / (float)texW ) : 0.0f, texH > 0 ? ( 1.0f / (float)texH ) : 0.0f, 0.0f, 0.0f };
 		pShaderAPI->SetPixelShaderConstant( 1, fl1 );
 	}
 

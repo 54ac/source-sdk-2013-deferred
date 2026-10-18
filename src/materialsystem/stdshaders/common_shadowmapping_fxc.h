@@ -305,9 +305,9 @@ float ShadowColor_5x5SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float
 	return flLight;
 }
 
-cbuffer POISSON_DISKS 
+cbuffer POISSON_DISKS
 {
-	float2 poissonDisk[16] = 
+	float2 poissonDisk[16] =
 	{
 		float2( -0.94201624, -0.39906216 ),
 		float2( 0.94558609, -0.76890725 ),
@@ -347,97 +347,97 @@ void FindBlocker4x4
 	numBlockers = 0;
 
 	float shadowMapDepth = tex2D( depthMap, uv + poissonDisk[0] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[1] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[2] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[3] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[4] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[5] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[6] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[7] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[8] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[9] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[10] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[11] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[12] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[13] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[14] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
 	}
 	shadowMapDepth = tex2D( depthMap, uv + poissonDisk[15] * searchWidth ).r;
-	if ( shadowMapDepth < zReceiver ) 
+	if ( shadowMapDepth < zReceiver )
 	{
 		blockerSum += shadowMapDepth;
 		numBlockers++;
@@ -481,7 +481,7 @@ float ShadowColor_PCSS4X4_PCF4X4( sampler depthMap, float3 uvw, float zNear, flo
 	FindBlocker4x4( avgBlockerDepth, numBlockers, depthMap, uvw.xy, uvw.z, zNear, lightSizeUV );
 
 	float flOut = 1.0f;
-	
+
 	if( numBlockers >= 1 )
 	{
 		// STEP 2: penumbra size
@@ -548,55 +548,54 @@ float PerformCascadedShadow( sampler sShadowMap, float3 worldPos,
 	float4 vecFilterConfig_A[SHADOW_NUM_CASCADES], float4 vecFilterConfig_B[SHADOW_NUM_CASCADES],
 	float3 flNormal, float viewFwdDot )
 {
-#if 1
-	float3 shadow_uvz = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[0], viewProjOrtho[0] );
-	float3 shadow_uvz_2 = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[1], viewProjOrtho[1] );
+	float3 shadow_uvz_0 = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[0], viewProjOrtho[0] );
+	float3 shadow_uvz_1 = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[1], viewProjOrtho[1] );
 
-#if VENDOR == VENDOR_FXC_AMD
-	float3 AMDVec = abs( floor( (shadow_uvz.xyz - 0.0015f) * 1.003f ) );
-	float AMDAmt = AMDVec.x + AMDVec.y + AMDVec.z;
-	int flLerpTo1 = step( 0.0001f, AMDAmt );
-#else
-	float flLerpTo1 = any( floor( (shadow_uvz.xyz - 0.0015f) * 1.003f) );
-#endif
+	float2 vDist0 = min( shadow_uvz_0.xy, 1.0f - shadow_uvz_0.xy );
+	float flEdgeDist0 = min( vDist0.x, vDist0.y );
 
-	shadow_uvz = lerp( shadow_uvz, shadow_uvz_2, flLerpTo1 );
+	const float flCascade0BlendMargin = 0.10f;
+	float flCascade0Weight = saturate( flEdgeDist0 / flCascade0BlendMargin );
+	if ( shadow_uvz_0.z < 0.0f || shadow_uvz_0.z > 1.0f )
+	{
+		flCascade0Weight = 0.0f;
+	}
 
-#if VENDOR == VENDOR_FXC_AMD
-	AMDVec = abs( floor( (shadow_uvz_2.xyz - 0.003f) * 1.006f ) );
-	AMDAmt = AMDVec.x + AMDVec.y + AMDVec.z;
-	int flLerpTo2 = step( 0.0001f, AMDAmt );
-#else
-	float flLerpTo2 = any( floor( (shadow_uvz_2.xyz - 0.003f) * 1.006f) );
-#endif
+	float2 vDist1 = min( shadow_uvz_1.xy, 1.0f - shadow_uvz_1.xy );
+	float flEdgeDist1 = min( vDist1.x, vDist1.y );
 
-	shadow_uvz.xy = shadow_uvz.xy * vecUVTransform[flLerpTo1].zw + vecUVTransform[flLerpTo1].xy;
+	const float flCascade1FadeMargin = 0.15f;
+	float flCascade1Fade = saturate( flEdgeDist1 / flCascade1FadeMargin );
+	if ( shadow_uvz_1.z < 0.0f || shadow_uvz_1.z > 1.0f )
+	{
+		flCascade1Fade = 0.0f;
+	}
 
-	float flLight = lerp( PerformShadowMapping( sShadowMap, shadow_uvz,
-				vecFilterConfig_A[flLerpTo1], vecFilterConfig_B[flLerpTo1] ), 1, flLerpTo2 );
-#else
-	int curCascade = 0;
-	bool bDoShadowmapping = true;
 	float flLight = 1.0f;
 
-	float3 shadow_uvz = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[curCascade], viewProjOrtho[curCascade] );
-
-	if ( any( floor( (shadow_uvz.xyz - 0.0015f) * 1.003f) ) )
+	if ( flCascade0Weight > 0.0f )
 	{
-		curCascade++;
-		shadow_uvz = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[curCascade], viewProjOrtho[curCascade] );
+		float2 atlasUV0 = saturate( shadow_uvz_0.xy ) * vecUVTransform[0].zw + vecUVTransform[0].xy;
+		flLight = PerformShadowMapping( sShadowMap, float3( atlasUV0, shadow_uvz_0.z ),
+			vecFilterConfig_A[0], vecFilterConfig_B[0] );
 
-		bDoShadowmapping = !any( floor( (shadow_uvz.xyz - 0.003f) * 1.006f ) );
+		if ( flCascade0Weight < 1.0f )
+		{
+			float2 atlasUV1 = saturate( shadow_uvz_1.xy ) * vecUVTransform[1].zw + vecUVTransform[1].xy;
+			float shadow1 = PerformShadowMapping( sShadowMap, float3( atlasUV1, shadow_uvz_1.z ),
+				vecFilterConfig_A[1], vecFilterConfig_B[1] );
+
+			flLight = lerp( shadow1, flLight, flCascade0Weight );
+		}
 	}
-
-	if ( bDoShadowmapping )
+	else if ( flCascade1Fade > 0.0f )
 	{
-		shadow_uvz.xy = shadow_uvz.xy * vecUVTransform[curCascade].zw + vecUVTransform[curCascade].xy;
+		float2 atlasUV1 = saturate( shadow_uvz_1.xy ) * vecUVTransform[1].zw + vecUVTransform[1].xy;
+		float shadow1 = PerformShadowMapping( sShadowMap, float3( atlasUV1, shadow_uvz_1.z ),
+			vecFilterConfig_A[1], vecFilterConfig_B[1] );
 
-		flLight *= PerformShadowMapping( sShadowMap, shadow_uvz,
-				vecFilterConfig_A[curCascade], vecFilterConfig_B[curCascade] );
+		flLight = lerp( 1.0f, shadow1, flCascade1Fade );
 	}
-#endif
 
 	return flLight;
 }

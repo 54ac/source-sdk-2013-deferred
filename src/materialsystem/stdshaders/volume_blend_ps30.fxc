@@ -4,6 +4,8 @@
 
 sampler sTex							: register( s0 );
 
+const float4 g_vecParams				: register( c0 );
+
 struct PS_INPUT
 {
 	float2 vTexCoord			: TEXCOORD0;
@@ -18,7 +20,7 @@ PS_OUTPUT main( const PS_INPUT In )
 {
 	PS_OUTPUT Out;
 
-	Out.vColor_0 = tex2D( sTex, In.vTexCoord ) * GAMMA_LIGHT_SCALE;
+	Out.vColor_0 = tex2D( sTex, In.vTexCoord ) * ( GAMMA_LIGHT_SCALE * g_vecParams.x );
 
 	return Out;
 }

@@ -25,7 +25,7 @@ public:
 										   bool bDrawViewModel );
 
 	void			ViewDrawGBuffer( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
-									 bool bDrawViewModel, float flWaterHeight = 0.0f, bool bClipWater = false );
+									 bool bDrawViewModel, float flWaterHeight = 0.0f, bool bClipWater = false, bool bDrawEntities = true );
 	void			ViewDrawComposite( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
 									   int nClearFlags, view_id_t viewID, bool bDrawViewModel );
 
@@ -46,7 +46,7 @@ private:
 	void ProcessDeferredGlobals( const CViewSetup &view );
 
 	void PerformLighting( const CViewSetup &view );
-	void RenderGlobalShadows( const CViewSetup &view );
+	void RenderGlobalShadows( const CViewSetup &view, const CViewSetup *pReflView = NULL );
 
 	void BeginRadiosity( const CViewSetup &view );
 	void UpdateRadiosityPosition();
@@ -54,7 +54,7 @@ private:
 	void EndRadiosity( const CViewSetup &view );
 	void DebugRadiosity( const CViewSetup &view );
 
-	void RenderCascadedShadows( const CViewSetup &view, bool bEnableRadiosity );
+	void RenderCascadedShadows( const CViewSetup &view, bool bEnableRadiosity, const CViewSetup *pReflView = NULL );
 
 	float m_flRenderDelay[SHADOW_NUM_CASCADES];
 

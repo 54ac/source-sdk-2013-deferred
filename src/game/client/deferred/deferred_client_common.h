@@ -25,12 +25,18 @@ extern ConVar r_deferred_light_global_override_diffuse;
 extern ConVar r_deferred_light_global_override_ambient_high;
 extern ConVar r_deferred_light_global_override_ambient_low;
 
+extern ConVar r_deferred_csm_max_dist;
+extern ConVar r_deferred_csm_split_dist;
+
 extern ConVar r_deferred_radiosity;
 extern ConVar r_deferred_radiosity_propagate_count;
 extern ConVar r_deferred_radiosity_propagate_far_count;
 extern ConVar r_deferred_radiosity_blur_count;
 extern ConVar r_deferred_radiosity_blur_far_count;
 extern ConVar r_deferred_radiosity_nodes;
+
+extern ConVar r_deferred_volumetric_intensity;
+extern ConVar r_deferred_volumetric_blur;
 
 
 #define PROFILER_DECLARE CFastTimer __pft; __pft.Start()
@@ -75,15 +81,17 @@ void OnCookieTableChanged( void *object, INetworkStringTable *stringTable, int s
 
 #define SATURATE( x ) ( Clamp( (x), 0.f, 1.f ) )
 
-inline void DrawLightPassFullscreen( IMaterial *pMaterial, int w, int t )
+inline void DrawLightPassFullscreen( IMaterial *pMaterial, int w, int t, int srcViewW = 0, int srcViewH = 0 )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 	ITexture *pNormals = GetDefRT_Normals();
 	const int srcW = pNormals ? pNormals->GetActualWidth() : w;
 	const int srcH = pNormals ? pNormals->GetActualHeight() : t;
+	const float flSrcViewW = ( srcViewW > 0 ) ? srcViewW : w;
+	const float flSrcViewH = ( srcViewH > 0 ) ? srcViewH : t;
 	pRenderContext->DrawScreenSpaceRectangle( pMaterial,
 		0, 0, w, t,
-		0, 0, w - 1.0f, t - 1.0f,
+		0, 0, flSrcViewW - 1.0f, flSrcViewH - 1.0f,
 		srcW, srcH
 		);
 }

@@ -178,10 +178,7 @@ void DrawPassLightPassVolum( const lightPassParms &info, CBaseVSShader *pShader,
 			pExt->GetActiveLightData() + vData.iDataOffset,
 			vData.iNumRows );
 
-		if ( bWorldProjection )
-		{
-			CommitHalfScreenTexel( pShaderAPI, 6 );
-		}
+		CommitHalfScreenTexel( pShaderAPI, 6 );
 	}
 
 	pShader->Draw();

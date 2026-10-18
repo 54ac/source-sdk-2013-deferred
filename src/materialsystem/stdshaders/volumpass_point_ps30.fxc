@@ -51,8 +51,8 @@ const float3 g_vecViewOrigin				: register( c0 );
 const float3 g_vecFrustumCenter		: register( c3 );
 const float3 g_vecFrustumRight		: register( c4 );
 const float3 g_vecFrustumUp			: register( c5 );
-const float2 g_vecHalfScreenTexel		: register( c6 );
 #endif
+const float2 g_vecHalfScreenTexel		: register( c6 );
 
 sampler sMixedSampler[FREE_LIGHT_SAMPLERS]						: register( FIRST_LIGHT_SAMPLER_FXC );
 const float4 g_flMixedData[MAX_LIGHTDATA_CONSTANT_ROWS]			: register( FIRST_SHARED_LIGHTDATA_CONSTANT_FXC );
@@ -91,7 +91,7 @@ PS_OUTPUT main( const PS_INPUT In )
 #else
 	vecTexcoords = In.vTexCoord;
 	vecWorldRay = In.vecWorldRay;
-	vecWorld = g_vecViewOrigin + In.vecWorldRay; // * 7.0f;
+	vecWorld = g_vecViewOrigin;
 #endif
 
 	float flDepth = tex2D( sDepth, vecTexcoords ).x;
@@ -134,9 +134,12 @@ PS_OUTPUT main( const PS_INPUT In )
 #else
 	float flMoveToPlane = dot( vecApproxSphereDelta, vecMarchingNormal );
 	float3 vecOnPlaneDelta = g_flMixedData[ 0 ].xyz - ( vecWorld + vecMarchingNormal * flMoveToPlane );
+	float flDistToCenter = length( vecOnPlaneDelta );
+	clip( g_flMixedData[ 0 ].w - flDistToCenter );
 
-	float flApproxRadius = sqrt( sin( ( 1.0f - ( length( vecOnPlaneDelta ) / g_flMixedData[ 0 ].w ) ) * 1.570796f ) );
-	float flExpectedMaxDiameter = flApproxRadius * g_flMixedData[ 0 ].w + flMoveToPlane;
+	float flApproxRadius = sqrt( max( 0.0f, g_flMixedData[ 0 ].w * g_flMixedData[ 0 ].w - flDistToCenter * flDistToCenter ) );
+	float flExpectedMaxDiameter = flApproxRadius + flMoveToPlane;
+	clip( flExpectedMaxDiameter );
 #endif
 
 	float flCurrentRayLength = min( flApproxActualDiameter, flExpectedMaxDiameter );
@@ -182,6 +185,10 @@ PS_OUTPUT main( const PS_INPUT In )
 	vecMarchingRay = vecEnd - vecStart;
 	vecMarchingRay /= iNumSamples;
 
+	float2 screenPix = vecTexcoords / ( 2.0f * max( 1e-6f, g_vecHalfScreenTexel ) );
+	float dither = frac( 52.9829189f * frac( dot( screenPix, float2( 0.06711056f, 0.00583715f ) ) ) );
+	vecStart += vecMarchingRay * dither;
+
 	for ( int itr = iNumSamples; itr > 0; itr-- )
 	{
 		float dist = length( vecStart );
@@ -211,7 +218,6 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	Out.vColor_0.xyz = flLight *
 		g_flMixedData[ 1 ].xyz *			// diffuse color
-		(1 - g_flMixedData[ 2 ].w) *		// shadow min
 		VOLUMTWEAK_INTENSITY_POINT;
 
 	return Out;

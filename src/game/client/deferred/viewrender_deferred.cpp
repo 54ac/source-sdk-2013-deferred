@@ -152,7 +152,7 @@ public:
 	{
 	}
 
-	void			Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight = 0.0f, bool bClipWater = false );
+	void			Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight = 0.0f, bool bClipWater = false, bool bDrawEntities = true );
 	void			Draw();
 
 	virtual void	PushView( float waterHeight );
@@ -225,11 +225,13 @@ public:
 	CBaseShadowView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView )
 	{
 		m_bOutputRadiosity = false;
+		m_bHasReflectionView = false;
 	};
 
 	void			Setup( const CViewSetup &view,
 						ITexture *pDepthTexture,
-						ITexture *pDummyTexture );
+						ITexture *pDummyTexture,
+						const CViewSetup *pReflView = NULL );
 	void			SetupRadiosityTargets(
 						ITexture *pAlbedoTexture,
 						ITexture *pNormalTexture );
@@ -245,6 +247,11 @@ public:
 	virtual void	CommitData(){};
 
 	virtual int		GetShadowMode() = 0;
+
+protected:
+	CViewSetup		m_CameraView;
+	bool			m_bHasReflectionView;
+	CViewSetup		m_ReflectionView;
 
 private:
 
@@ -480,6 +487,7 @@ void CBaseWorldViewDeferred::DrawSetup( float waterHeight, int nSetupFlags, floa
 	if ( bViewChanged )
 	{
 		render->Push3DView( *this, 0, NULL, GetFrustum() );
+		SetupCurrentView( origin, angles, (view_id_t)savedViewID );
 	}
 
 	const bool bDrawEntities = ( nSetupFlags & DF_DRAW_ENTITITES ) != 0;
@@ -525,6 +533,14 @@ void CBaseWorldViewDeferred::DrawExecute( float waterHeight, view_id_t viewID, f
 
 	CMatRenderContextPtr pRenderContext( materials );
 
+	int iDeferredViewID = DEFERRED_VIEW_MAIN;
+	if ( viewID == VIEW_REFRACTION )
+		iDeferredViewID = DEFERRED_VIEW_REFRACTION;
+	else if ( viewID == VIEW_REFLECTION )
+		iDeferredViewID = DEFERRED_VIEW_REFLECTION;
+
+	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_VIEW_ID, iDeferredViewID );
+
 	ITexture *pSaveFrameBufferCopyTexture = pRenderContext->GetFrameBufferCopyTexture( 0 );
 	if ( engine->GetDXSupportLevel() >= 80 )
 	{
@@ -558,6 +574,7 @@ void CBaseWorldViewDeferred::DrawExecute( float waterHeight, view_id_t viewID, f
 	}
 
 	pRenderContext.GetFrom( materials );
+	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_VIEW_ID, DEFERRED_VIEW_NONE );
 	pRenderContext->SetFrameBufferCopyTexture( pSaveFrameBufferCopyTexture );
 	PopView();
 
@@ -569,7 +586,7 @@ void CBaseWorldViewDeferred::DrawExecute( float waterHeight, view_id_t viewID, f
 
 void CBaseWorldViewDeferred::PushView( float waterHeight )
 {
-	float spread = 2.0f;
+	float spread = 4.0f;
 	if( m_DrawFlags & DF_FUDGE_UP )
 	{
 		waterHeight += spread;
@@ -778,7 +795,7 @@ void CSimpleWorldViewDeferred::Draw()
 	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
 }
 
-void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight, bool bClipWater )
+void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox, float flWaterHeight, bool bClipWater, bool bDrawEntities )
 {
 	m_fogInfo.m_bEyeInFogVolume = false;
 	m_bDrewSkybox = bDrewSkybox;
@@ -787,7 +804,11 @@ void CGBufferView::Setup( const CViewSetup &view, bool bDrewSkybox, float flWate
 	BaseClass::Setup( view );
 
 	m_ClearFlags = 0;
-	m_DrawFlags = DF_DRAW_ENTITITES | DF_RENDER_ABOVEWATER;
+	m_DrawFlags = DF_RENDER_ABOVEWATER;
+	if ( bDrawEntities )
+	{
+		m_DrawFlags |= DF_DRAW_ENTITITES;
+	}
 
 	if ( bClipWater )
 	{
@@ -832,6 +853,16 @@ void CGBufferView::Draw()
 
 void CGBufferView::PushView( float waterHeight )
 {
+	float spread = 4.0f;
+	if ( m_DrawFlags & DF_FUDGE_UP )
+	{
+		waterHeight += spread;
+	}
+	else
+	{
+		waterHeight -= spread;
+	}
+
 	MaterialHeightClipMode_t clipMode = MATERIAL_HEIGHTCLIPMODE_DISABLE;
 	if ( ( m_DrawFlags & DF_CLIP_Z ) && mat_clipz.GetBool() )
 	{
@@ -1273,10 +1304,16 @@ void CPostLightingView::PopDeferredShadingFrameBuffer()
 	pRenderContext->PopRenderTargetAndViewport();
 }
 
-void CBaseShadowView::Setup( const CViewSetup &view, ITexture *pDepthTexture, ITexture *pDummyTexture )
+void CBaseShadowView::Setup( const CViewSetup &view, ITexture *pDepthTexture, ITexture *pDummyTexture, const CViewSetup *pReflView )
 {
 	m_pDepthTexture = pDepthTexture;
 	m_pDummyTexture = pDummyTexture;
+	m_CameraView = view;
+	m_bHasReflectionView = ( pReflView != NULL );
+	if ( pReflView )
+	{
+		m_ReflectionView = *pReflView;
+	}
 
 	BaseClass::Setup( view );
 
@@ -1383,11 +1420,93 @@ static lightData_Global_t& GetActiveGlobalLightState()
 	return data;
 }
 
+static void ComputeFrustumCorners( const CViewSetup &camView, float flNear, float flFar, Vector outCorners[8] )
+{
+	Vector camOrigin = camView.origin;
+	Vector camFwd, camRight, camUp;
+	AngleVectors( camView.angles, &camFwd, &camRight, &camUp );
+
+	float flFov = ( camView.fov > 0.0f ) ? camView.fov : 75.0f;
+	float flAspectRatio = camView.m_flAspectRatio;
+	if ( flAspectRatio <= 0.0f )
+	{
+		if ( engine && engine->GetScreenAspectRatio() > 0.0f )
+		{
+			flAspectRatio = engine->GetScreenAspectRatio();
+		}
+		else if ( camView.width > 0 && camView.height > 0 )
+		{
+			flAspectRatio = ( (float)camView.width / (float)camView.height );
+		}
+		else
+		{
+			flAspectRatio = 4.0f / 3.0f;
+		}
+	}
+
+	float flFovRad = DEG2RAD( flFov );
+	float tanHalfFovX = tanf( flFovRad * 0.5f );
+	float tanHalfFovY = tanHalfFovX / flAspectRatio;
+
+	float nearW = flNear * tanHalfFovX;
+	float nearH = flNear * tanHalfFovY;
+	float farW  = flFar * tanHalfFovX;
+	float farH  = flFar * tanHalfFovY;
+
+	outCorners[0] = camOrigin + camFwd * flNear - camRight * nearW - camUp * nearH;
+	outCorners[1] = camOrigin + camFwd * flNear + camRight * nearW - camUp * nearH;
+	outCorners[2] = camOrigin + camFwd * flNear - camRight * nearW + camUp * nearH;
+	outCorners[3] = camOrigin + camFwd * flNear + camRight * nearW + camUp * nearH;
+
+	outCorners[4] = camOrigin + camFwd * flFar - camRight * farW - camUp * farH;
+	outCorners[5] = camOrigin + camFwd * flFar + camRight * farW - camUp * farH;
+	outCorners[6] = camOrigin + camFwd * flFar - camRight * farW + camUp * farH;
+	outCorners[7] = camOrigin + camFwd * flFar + camRight * farW + camUp * farH;
+}
+
 void COrthoShadowView::CalcShadowView()
 {
 	const cascade_t &m_data = GetCascadeInfo( iCascadeIndex );
-	Vector mainFwd;
-	AngleVectors( angles, &mainFwd );
+
+	float flMaxDist = r_deferred_csm_max_dist.GetFloat();
+	float flSplitDist = r_deferred_csm_split_dist.GetFloat();
+
+	if ( flSplitDist <= 64.0f ) flSplitDist = 1024.0f;
+	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
+
+	float flSplitNear = 0.0f;
+	float flSplitFar  = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
+
+	Vector frustumCorners[16];
+	int numCorners = 8;
+	ComputeFrustumCorners( m_CameraView, flSplitNear, flSplitFar, frustumCorners );
+
+	if ( m_bHasReflectionView )
+	{
+		ComputeFrustumCorners( m_ReflectionView, flSplitNear, flSplitFar, &frustumCorners[8] );
+		numCorners = 16;
+	}
+
+	Vector vMins = frustumCorners[0];
+	Vector vMaxs = frustumCorners[0];
+	for ( int i = 1; i < numCorners; i++ )
+	{
+		VectorMin( vMins, frustumCorners[i], vMins );
+		VectorMax( vMaxs, frustumCorners[i], vMaxs );
+	}
+	Vector vFrustumCenter = ( vMins + vMaxs ) * 0.5f;
+
+	float flMaxDistSqr = 0.0f;
+	for ( int i = 0; i < numCorners; i++ )
+	{
+		float flDistSqr = ( frustumCorners[i] - vFrustumCenter ).LengthSqr();
+		if ( flDistSqr > flMaxDistSqr )
+			flMaxDistSqr = flDistSqr;
+	}
+
+	float flOrthoSize = ceilf( sqrtf( flMaxDistSqr ) * 2.0f * 1.05f );
+	if ( flOrthoSize < 128.0f )
+		flOrthoSize = 128.0f;
 
 	const lightData_Global_t& state = GetActiveGlobalLightState();
 	QAngle lightAng;
@@ -1396,13 +1515,20 @@ void COrthoShadowView::CalcShadowView()
 	Vector viewFwd, viewRight, viewUp;
 	AngleVectors( lightAng, &viewFwd, &viewRight, &viewUp );
 
-	const float halfOrthoSize = m_data.flProjectionSize * 0.5f;
+	float flLightSpaceX = DotProduct( vFrustumCenter, viewRight );
+	float flLightSpaceY = DotProduct( vFrustumCenter, viewUp );
 
-	origin += -viewFwd * m_data.flOriginOffset +
-		viewUp * halfOrthoSize -
-		viewRight * halfOrthoSize +
-		mainFwd * halfOrthoSize;
+	float flWorldUnitsPerTexel = flOrthoSize / (float)m_data.iResolution;
+	float flSnappedX = floorf( flLightSpaceX / flWorldUnitsPerTexel + 0.5f ) * flWorldUnitsPerTexel;
+	float flSnappedY = floorf( flLightSpaceY / flWorldUnitsPerTexel + 0.5f ) * flWorldUnitsPerTexel;
 
+	Vector vSnappedCenter = vFrustumCenter
+		+ viewRight * ( flSnappedX - flLightSpaceX )
+		+ viewUp * ( flSnappedY - flLightSpaceY );
+
+	const float halfOrthoSize = flOrthoSize * 0.5f;
+
+	origin = vSnappedCenter - viewFwd * m_data.flOriginOffset;
 	angles = lightAng;
 
 	x = 0;
@@ -1411,20 +1537,17 @@ void COrthoShadowView::CalcShadowView()
 	width = m_data.iResolution;
 
 	m_bOrtho = true;
-	m_OrthoLeft = 0;
-	m_OrthoTop = -m_data.flProjectionSize;
-	m_OrthoRight = m_data.flProjectionSize;
-	m_OrthoBottom = 0;
+	m_OrthoLeft   = -halfOrthoSize;
+	m_OrthoRight  =  halfOrthoSize;
+	m_OrthoTop    = -halfOrthoSize;
+	m_OrthoBottom =  halfOrthoSize;
 
-	zNear = zNearViewmodel = 0;
-	zFar = zFarViewmodel = m_data.flFarZ;
-	m_flAspectRatio = 0;
+	zNear = zNearViewmodel = 0.0f;
+	zFar = zFarViewmodel = m_data.flOriginOffset + flOrthoSize * 1.5f;
+	if ( zFar < m_data.flFarZ )
+		zFar = zFarViewmodel = m_data.flFarZ;
 
-	float mapping_world = m_data.flProjectionSize / m_data.iResolution;
-	origin -= fmod( DotProduct( viewRight, origin ), mapping_world ) * viewRight;
-	origin -= fmod( DotProduct( viewUp, origin ), mapping_world ) * viewUp;
-
-	origin -= fmod( DotProduct( viewFwd, origin ), GetDepthMapDepthResolution( zFar - zNear ) ) * viewFwd;
+	m_flAspectRatio = 1.0f;
 
 #if CSM_USE_COMPOSITED_TARGET
 	x = m_data.iViewport_x;
@@ -1640,12 +1763,13 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 								 waterInfo.m_bReflect &&
 								 r_WaterDrawReflection.GetBool();
 
+	CViewSetup reflView;
+	float flWaterHeight = 0.0f;
+
 	if ( bNeedReflection )
 	{
-		RenderGlobalShadows( view );
-
-		CViewSetup reflView = view;
-		float flWaterHeight = fogVolumeInfo.m_flWaterHeight;
+		reflView = view;
+		flWaterHeight = fogVolumeInfo.m_flWaterHeight;
 		ITexture *pReflectTex = GetWaterReflectionTexture();
 
 		reflView.x = reflView.y = 0;
@@ -1654,14 +1778,19 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 		reflView.angles[0] = -reflView.angles[0];
 		reflView.angles[2] = -reflView.angles[2];
 		reflView.origin[2] -= 2.0f * ( reflView.origin[2] - flWaterHeight );
+	}
 
+	RenderGlobalShadows( view, bNeedReflection ? &reflView : NULL );
+
+	if ( bNeedReflection )
+	{
 		ProcessDeferredGlobals( reflView );
 		GetLightingManager()->LightTearDown();
 		GetLightingManager()->LightSetup( reflView );
 
 		bool bDrew3dSkyboxRefl = false;
 		SkyboxVisibility_t nSkyboxVisibleRefl = SKYBOX_NOT_VISIBLE;
-		ViewDrawGBuffer( reflView, bDrew3dSkyboxRefl, nSkyboxVisibleRefl, false, flWaterHeight, true );
+		ViewDrawGBuffer( reflView, bDrew3dSkyboxRefl, nSkyboxVisibleRefl, false, flWaterHeight, true, waterInfo.m_bReflectEntities );
 
 		PerformLighting( reflView );
 
@@ -1747,7 +1876,7 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 }
 
 void CDeferredViewRender::ViewDrawGBuffer( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
-	bool bDrawViewModel, float flWaterHeight, bool bClipWater )
+	bool bDrawViewModel, float flWaterHeight, bool bClipWater, bool bDrawEntities )
 {
 	MDLCACHE_CRITICAL_SECTION();
 
@@ -1769,7 +1898,7 @@ void CDeferredViewRender::ViewDrawGBuffer( const CViewSetup &view, bool &bDrew3d
 	SetupVis( view, visFlags, NULL );
 
 	CRefPtr<CGBufferView> pGBufferView = new CGBufferView( this );
-	pGBufferView->Setup( view, bDrew3dSkybox, flWaterHeight, bClipWater );
+	pGBufferView->Setup( view, bDrew3dSkybox, flWaterHeight, bClipWater, bDrawEntities );
 	AddViewToScene( pGBufferView );
 
 	if ( bDrawViewModel )
@@ -1927,7 +2056,7 @@ void CDeferredViewRender::DrawWorldComposite( const CViewSetup &view, int nClear
 	}
 }
 
-void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view )
+void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view, const CViewSetup *pReflView )
 {
 	if ( GetGlobalLight() == NULL )
 		return;
@@ -1956,10 +2085,18 @@ void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view )
 #else
 		const bool bRadiosityEnabled = false;
 #endif
-		Vector origins[2] = { view.origin, view.origin + lightDataState.vecLight.AsVector3D() * 1024 };
-		render->ViewSetupVis( false, 2, origins );
+		Vector origins[3];
+		int numOrigins = 2;
+		origins[0] = view.origin;
+		origins[1] = view.origin + lightDataState.vecLight.AsVector3D() * 1024;
+		if ( pReflView )
+		{
+			origins[2] = pReflView->origin;
+			numOrigins = 3;
+		}
+		render->ViewSetupVis( false, numOrigins, origins );
 
-		RenderCascadedShadows( view, bRadiosityEnabled );
+		RenderCascadedShadows( view, bRadiosityEnabled, pReflView );
 	}
 }
 
@@ -2374,7 +2511,7 @@ void CDeferredViewRender::DebugRadiosity( const CViewSetup &view )
 	}
 }
 
-void CDeferredViewRender::RenderCascadedShadows( const CViewSetup &view, const bool bEnableRadiosity )
+void CDeferredViewRender::RenderCascadedShadows( const CViewSetup &view, const bool bEnableRadiosity, const CViewSetup *pReflView )
 {
 	for ( int i = 0; i < SHADOW_NUM_CASCADES; i++ )
 	{
@@ -2389,7 +2526,7 @@ void CDeferredViewRender::RenderCascadedShadows( const CViewSetup &view, const b
 #endif
 
 		CRefPtr<COrthoShadowView> pOrthoDepth = new COrthoShadowView( this, i );
-		pOrthoDepth->Setup( view, GetShadowDepthRT_Ortho( textureIndex ), GetShadowColorRT_Ortho( textureIndex ) );
+		pOrthoDepth->Setup( view, GetShadowDepthRT_Ortho( textureIndex ), GetShadowColorRT_Ortho( textureIndex ), pReflView );
 		if ( bDoRadiosity )
 		{
 			pOrthoDepth->SetRadiosityOutputEnabled( true );
@@ -3268,7 +3405,7 @@ void CAboveWaterViewDeferred::CReflectionView::Setup( const CViewSetup &view, fl
 	BaseClass::Setup( view );
 
 	m_flWaterHeight = flWaterHeight;
-	m_ClearFlags = VIEW_CLEAR_DEPTH;
+	m_ClearFlags = VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR;
 
 	// NOTE: Clearing the color is unnecessary since we're drawing the skybox
 	// and dest-alpha is never used in the reflection
@@ -3297,7 +3434,8 @@ void CAboveWaterViewDeferred::CReflectionView::Draw()
 
 	// Store off view origin and angles and set the new view
 	int nSaveViewID = CurrentViewID();
-	SetupCurrentView( origin, angles, VIEW_REFLECTION );
+	Vector vecSavedOrigin = origin;
+	QAngle angSavedAngles = angles;
 
 	// Disable occlusion visualization in reflection
 	bool bVisOcclusion = r_visocclusion.GetInt();
@@ -3307,6 +3445,9 @@ void CAboveWaterViewDeferred::CReflectionView::Draw()
 
 	DrawSetup( m_flWaterHeight, m_DrawFlags, 0.0f );
 
+	SetupCurrentView( origin, angles, VIEW_REFLECTION );
+
+	SetClearColorToFogColor();
 	EnableWorldFog();
 	DrawExecute( m_flWaterHeight, VIEW_REFLECTION, 0.0f );
 
@@ -3320,10 +3461,11 @@ void CAboveWaterViewDeferred::CReflectionView::Draw()
 #endif
 
 	// finish off the view and restore the previous view.
-	SetupCurrentView( origin, angles, ( view_id_t )nSaveViewID );
+	SetupCurrentView( vecSavedOrigin, angSavedAngles, ( view_id_t )nSaveViewID );
 
 	// This is here for multithreading
 	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->ClearColor4ub( 0, 0, 0, 255 );
 	pRenderContext->Flush();
 }
 

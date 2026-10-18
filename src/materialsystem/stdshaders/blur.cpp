@@ -10,11 +10,14 @@ BEGIN_VS_SHADER( GAUSSIAN_BLUR_6, "" )
 	BEGIN_SHADER_PARAMS
 
 		SHADER_PARAM( ISVERTICAL, SHADER_PARAM_TYPE_BOOL, "0", "" )
+		SHADER_PARAM( BLURSIZE, SHADER_PARAM_TYPE_FLOAT, "1.0", "Blur kernel step in texels" )
 
 	END_SHADER_PARAMS
 
 	SHADER_INIT_PARAMS()
 	{
+		if ( !params[ BLURSIZE ]->IsDefined() )
+			params[ BLURSIZE ]->SetFloatValue( 1.0f );
 	}
 
 	SHADER_INIT
@@ -64,9 +67,22 @@ BEGIN_VS_SHADER( GAUSSIAN_BLUR_6, "" )
 
 			BindTexture( SHADER_SAMPLER0, BASETEXTURE );
 
+			ITexture *pTexture = params[ BASETEXTURE ]->GetTextureValue();
 			int w, t;
-			pShaderAPI->GetBackBufferDimensions( w, t );
-			float fl4[4] = { 4.0f / w, 4.0f / t, 0, 0 };
+			if ( pTexture )
+			{
+				w = pTexture->GetActualWidth();
+				t = pTexture->GetActualHeight();
+			}
+			else
+			{
+				pShaderAPI->GetBackBufferDimensions( w, t );
+				w /= 4;
+				t /= 4;
+			}
+
+			float flBlurSize = params[ BLURSIZE ]->IsDefined() ? params[ BLURSIZE ]->GetFloatValue() : 1.0f;
+			float fl4[4] = { flBlurSize / w, flBlurSize / t, 0, 0 };
 
 			if ( params[ ISVERTICAL ]->GetIntValueFast() != 0 )
 				fl4[ 0 ] = 0;

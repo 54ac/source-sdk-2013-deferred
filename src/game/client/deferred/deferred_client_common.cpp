@@ -23,12 +23,18 @@ ConVar r_deferred_light_global_override_diffuse( "r_deferred_light_global_overri
 ConVar r_deferred_light_global_override_ambient_high( "r_deferred_light_global_override_ambient_high", "0 0.04 0.08" );
 ConVar r_deferred_light_global_override_ambient_low( "r_deferred_light_global_override_ambient_low", "0 0.07 0.09" );
 
+ConVar r_deferred_csm_max_dist( "r_deferred_csm_max_dist", "4096", FCVAR_ARCHIVE, "Maximum view distance for directional cascaded shadow maps" );
+ConVar r_deferred_csm_split_dist( "r_deferred_csm_split_dist", "1024", FCVAR_ARCHIVE, "Split distance between cascades" );
+
 ConVar r_deferred_radiosity( "r_deferred_radiosity", "0", 0, "Enable radiosity for diffused lighting simulation - buggy" );
 ConVar r_deferred_radiosity_propagate_count( "r_deferred_radiosity_propagate_count", "1" ); // 1
 ConVar r_deferred_radiosity_propagate_far_count( "r_deferred_radiosity_propagate_far_count", "0" );
 ConVar r_deferred_radiosity_blur_count( "r_deferred_radiosity_blur_count", "4" ); // 2
 ConVar r_deferred_radiosity_blur_far_count( "r_deferred_radiosity_blur_far_count", "2" ); // 1
 ConVar r_deferred_radiosity_nodes( "r_deferred_radiosity_nodes", "0", 0, "Shows radiosity nodes in the world for debugging" );
+
+ConVar r_deferred_volumetric_intensity( "r_deferred_volumetric_intensity", "0.75", FCVAR_ARCHIVE, "Intensity multiplier for volumetric light" );
+ConVar r_deferred_volumetric_blur( "r_deferred_volumetric_blur", "1.0", FCVAR_ARCHIVE, "Blur scale for volumetric lights" );
 
 void OnCookieTableChanged( void *object, INetworkStringTable *stringTable, int stringNumber, const char *newString, void const *newData )
 {

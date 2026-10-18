@@ -7,10 +7,14 @@
 BEGIN_VS_SHADER( VOLUME_BLEND, "" )
 	BEGIN_SHADER_PARAMS
 
+		SHADER_PARAM( INTENSITY, SHADER_PARAM_TYPE_FLOAT, "1.0", "Intensity multiplier" )
+
 	END_SHADER_PARAMS
 
 	SHADER_INIT_PARAMS()
 	{
+		if ( !params[ INTENSITY ]->IsDefined() )
+			params[ INTENSITY ]->SetFloatValue( 1.0f );
 	}
 
 	SHADER_INIT
@@ -58,6 +62,10 @@ BEGIN_VS_SHADER( VOLUME_BLEND, "" )
 			SET_DYNAMIC_PIXEL_SHADER( volume_blend_ps30 );
 
 			BindTexture( SHADER_SAMPLER0, BASETEXTURE );
+
+			float flIntensity = params[ INTENSITY ]->IsDefined() ? params[ INTENSITY ]->GetFloatValue() : 1.0f;
+			float flParams[4] = { flIntensity, 0.0f, 0.0f, 0.0f };
+			pShaderAPI->SetPixelShaderConstant( 0, flParams );
 		}
 
 		Draw();
