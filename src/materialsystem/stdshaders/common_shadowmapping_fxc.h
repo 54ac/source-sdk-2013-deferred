@@ -546,7 +546,8 @@ float3 ToShadowSpace_Ortho( float3 worldPos, float viewFwdDot, float3 vecNormal,
 float PerformCascadedShadow( sampler sShadowMap, float3 worldPos,
 	float4x3 viewProjOrtho[SHADOW_NUM_CASCADES], float4 vecUVTransform[SHADOW_NUM_CASCADES], float3 vecSlopeData[SHADOW_NUM_CASCADES],
 	float4 vecFilterConfig_A[SHADOW_NUM_CASCADES], float4 vecFilterConfig_B[SHADOW_NUM_CASCADES],
-	float3 flNormal, float viewFwdDot )
+	float3 flNormal, float viewFwdDot,
+	float flEyeDist, float4 csmDistances )
 {
 	float3 shadow_uvz_0 = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[0], viewProjOrtho[0] );
 	float3 shadow_uvz_1 = ToShadowSpace_Ortho( worldPos, viewFwdDot, flNormal, vecSlopeData[1], viewProjOrtho[1] );
@@ -556,16 +557,16 @@ float PerformCascadedShadow( sampler sShadowMap, float3 worldPos,
 
 	const float flCascade0BlendMargin = 0.10f;
 	float flCascade0Weight = saturate( flEdgeDist0 / flCascade0BlendMargin );
+	if ( csmDistances.x > 0.0f )
+	{
+		flCascade0Weight = min( flCascade0Weight, saturate( (csmDistances.x - flEyeDist) * csmDistances.z ) );
+	}
 	if ( shadow_uvz_0.z < 0.0f || shadow_uvz_0.z > 1.0f )
 	{
 		flCascade0Weight = 0.0f;
 	}
 
-	float2 vDist1 = min( shadow_uvz_1.xy, 1.0f - shadow_uvz_1.xy );
-	float flEdgeDist1 = min( vDist1.x, vDist1.y );
-
-	const float flCascade1FadeMargin = 0.15f;
-	float flCascade1Fade = saturate( flEdgeDist1 / flCascade1FadeMargin );
+	float flCascade1Fade = saturate( (csmDistances.y - flEyeDist) * csmDistances.w );
 	if ( shadow_uvz_1.z < 0.0f || shadow_uvz_1.z > 1.0f )
 	{
 		flCascade1Fade = 0.0f;

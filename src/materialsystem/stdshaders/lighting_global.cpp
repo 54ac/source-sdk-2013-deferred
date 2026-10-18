@@ -77,6 +77,7 @@ BEGIN_VS_SHADER( LIGHTING_GLOBAL, "" )
 				COMPILE_TIME_ASSERT( SHADOW_NUM_CASCADES == 2 ); // This shader has been made for 2 cascades!
 
 				CommitShadowProjectionConstants_Ortho_Composite( pShaderAPI, 2, 2 );
+				CommitCSMDistances( pShaderAPI, 19 );
 			}
 
 			CommitGlobalLightForward( pShaderAPI, 1 );

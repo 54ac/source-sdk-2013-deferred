@@ -1420,50 +1420,6 @@ static lightData_Global_t& GetActiveGlobalLightState()
 	return data;
 }
 
-static void ComputeFrustumCorners( const CViewSetup &camView, float flNear, float flFar, Vector outCorners[8] )
-{
-	Vector camOrigin = camView.origin;
-	Vector camFwd, camRight, camUp;
-	AngleVectors( camView.angles, &camFwd, &camRight, &camUp );
-
-	float flFov = ( camView.fov > 0.0f ) ? camView.fov : 75.0f;
-	float flAspectRatio = camView.m_flAspectRatio;
-	if ( flAspectRatio <= 0.0f )
-	{
-		if ( engine && engine->GetScreenAspectRatio() > 0.0f )
-		{
-			flAspectRatio = engine->GetScreenAspectRatio();
-		}
-		else if ( camView.width > 0 && camView.height > 0 )
-		{
-			flAspectRatio = ( (float)camView.width / (float)camView.height );
-		}
-		else
-		{
-			flAspectRatio = 4.0f / 3.0f;
-		}
-	}
-
-	float flFovRad = DEG2RAD( flFov );
-	float tanHalfFovX = tanf( flFovRad * 0.5f );
-	float tanHalfFovY = tanHalfFovX / flAspectRatio;
-
-	float nearW = flNear * tanHalfFovX;
-	float nearH = flNear * tanHalfFovY;
-	float farW  = flFar * tanHalfFovX;
-	float farH  = flFar * tanHalfFovY;
-
-	outCorners[0] = camOrigin + camFwd * flNear - camRight * nearW - camUp * nearH;
-	outCorners[1] = camOrigin + camFwd * flNear + camRight * nearW - camUp * nearH;
-	outCorners[2] = camOrigin + camFwd * flNear - camRight * nearW + camUp * nearH;
-	outCorners[3] = camOrigin + camFwd * flNear + camRight * nearW + camUp * nearH;
-
-	outCorners[4] = camOrigin + camFwd * flFar - camRight * farW - camUp * farH;
-	outCorners[5] = camOrigin + camFwd * flFar + camRight * farW - camUp * farH;
-	outCorners[6] = camOrigin + camFwd * flFar - camRight * farW + camUp * farH;
-	outCorners[7] = camOrigin + camFwd * flFar + camRight * farW + camUp * farH;
-}
-
 void COrthoShadowView::CalcShadowView()
 {
 	const cascade_t &m_data = GetCascadeInfo( iCascadeIndex );
@@ -1474,39 +1430,8 @@ void COrthoShadowView::CalcShadowView()
 	if ( flSplitDist <= 64.0f ) flSplitDist = 1024.0f;
 	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
 
-	float flSplitNear = 0.0f;
-	float flSplitFar  = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
-
-	Vector frustumCorners[16];
-	int numCorners = 8;
-	ComputeFrustumCorners( m_CameraView, flSplitNear, flSplitFar, frustumCorners );
-
-	if ( m_bHasReflectionView )
-	{
-		ComputeFrustumCorners( m_ReflectionView, flSplitNear, flSplitFar, &frustumCorners[8] );
-		numCorners = 16;
-	}
-
-	Vector vMins = frustumCorners[0];
-	Vector vMaxs = frustumCorners[0];
-	for ( int i = 1; i < numCorners; i++ )
-	{
-		VectorMin( vMins, frustumCorners[i], vMins );
-		VectorMax( vMaxs, frustumCorners[i], vMaxs );
-	}
-	Vector vFrustumCenter = ( vMins + vMaxs ) * 0.5f;
-
-	float flMaxDistSqr = 0.0f;
-	for ( int i = 0; i < numCorners; i++ )
-	{
-		float flDistSqr = ( frustumCorners[i] - vFrustumCenter ).LengthSqr();
-		if ( flDistSqr > flMaxDistSqr )
-			flMaxDistSqr = flDistSqr;
-	}
-
-	float flOrthoSize = ceilf( sqrtf( flMaxDistSqr ) * 2.0f * 1.05f );
-	if ( flOrthoSize < 128.0f )
-		flOrthoSize = 128.0f;
+	float flCascadeDist = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
+	float flOrthoSize   = flCascadeDist * 2.0f;
 
 	const lightData_Global_t& state = GetActiveGlobalLightState();
 	QAngle lightAng;
@@ -1514,6 +1439,8 @@ void COrthoShadowView::CalcShadowView()
 
 	Vector viewFwd, viewRight, viewUp;
 	AngleVectors( lightAng, &viewFwd, &viewRight, &viewUp );
+
+	Vector vFrustumCenter = m_CameraView.origin;
 
 	float flLightSpaceX = DotProduct( vFrustumCenter, viewRight );
 	float flLightSpaceY = DotProduct( vFrustumCenter, viewUp );

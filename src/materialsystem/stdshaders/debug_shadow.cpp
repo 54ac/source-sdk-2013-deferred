@@ -66,6 +66,7 @@ BEGIN_VS_SHADER( DEBUG_SHADOW, "" )
 
 			CommitGlobalLightForward( pShaderAPI, 1 );
 			CommitShadowProjectionConstants_Ortho_Composite( pShaderAPI, 2, 2 );
+			CommitCSMDistances( pShaderAPI, 19 );
 		}
 
 		Draw();

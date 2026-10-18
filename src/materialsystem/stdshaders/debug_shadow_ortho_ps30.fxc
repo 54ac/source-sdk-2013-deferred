@@ -15,6 +15,7 @@ const float4 g_vecUVTransform[2]				: register( c8 );
 const float3 g_vecSlopeData[2]					: register( c10 );
 const float4 g_vecFilterConfig_A[2]				: register( c12 );
 const float4 g_vecFilterConfig_B[2]				: register( c14 );
+const float4 g_vecCSMDistances					: register( c19 );
 
 
 struct PS_INPUT
@@ -42,10 +43,12 @@ PS_OUTPUT main( const PS_INPUT In )
 		float3 flNormal = tex2D( sNormals, In.vTexCoord ).xyz * 2.0f - 1.0f;
 
 		float viewFwdDot = dot( g_vecWorldToLight.xyz, flNormal );
-		float3 worldPos = g_vecViewOrigin + In.vecWorldRay * flDepth;
+		float3 eyeToWorld = In.vecWorldRay * flDepth;
+		float3 worldPos = g_vecViewOrigin + eyeToWorld;
+		float flEyeDist = length( eyeToWorld );
 
 		float flLight = viewFwdDot * PerformCascadedShadow( sShadowDepth, worldPos, g_matOrtho, g_vecUVTransform, g_vecSlopeData,
-									g_vecFilterConfig_A, g_vecFilterConfig_B, flNormal, viewFwdDot );
+									g_vecFilterConfig_A, g_vecFilterConfig_B, flNormal, viewFwdDot, flEyeDist, g_vecCSMDistances );
 
 		Out.vColor_0 = flLight;
 	}
