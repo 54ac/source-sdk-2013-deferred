@@ -13,6 +13,8 @@
 #include "fx.h"
 #include "clientsideeffects.h"
 #include "c_pixel_visibility.h"
+#include "deferred/deferred_shared_common.h"
+#include "deferred/clight_manager.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -31,6 +33,8 @@ public:
 	DECLARE_CLIENTCLASS();
 
 	C_Flare();
+	virtual ~C_Flare();
+	virtual void UpdateOnRemove();
 
 	void	OnDataChanged( DataUpdateType_t updateType );
 	void	Update( float timeDelta );
@@ -44,6 +48,7 @@ public:
 	bool	m_bSmoke;
 	bool	m_bPropFlare;
 	pixelvis_handle_t m_queryHandle;
+	def_light_t *m_pDeferredLight;
 
 
 private:
@@ -51,7 +56,7 @@ private:
 	TimedEvent	m_teSmokeSpawn;
 
 	int		m_iAttachment;
-	
+
 	SimpleParticle	*m_pParticle[2];
 };
 
@@ -80,18 +85,33 @@ C_Flare::C_Flare() : CSimpleEmitter( "C_Flare" )
 	m_queryHandle = 0;
 
 	m_iAttachment = -1;
+	m_pDeferredLight = NULL;
 }
 
+C_Flare::~C_Flare()
+{
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+}
+
+void C_Flare::UpdateOnRemove()
+{
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	BaseClass::UpdateOnRemove();
+}
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : state - 
+// Purpose:
+// Input  : state -
 //-----------------------------------------------------------------------------
 void C_Flare::NotifyShouldTransmit( ShouldTransmitState_t state )
 {
 	if ( state == SHOULDTRANSMIT_END )
 	{
 		AddEffects( EF_NODRAW );
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 	}
 	else if ( state == SHOULDTRANSMIT_START )
 	{
@@ -102,8 +122,8 @@ void C_Flare::NotifyShouldTransmit( ShouldTransmitState_t state )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : bool - 
+// Purpose:
+// Input  : bool -
 //-----------------------------------------------------------------------------
 void C_Flare::OnDataChanged( DataUpdateType_t updateType )
 {
@@ -120,14 +140,14 @@ void C_Flare::OnDataChanged( DataUpdateType_t updateType )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose:
 //-----------------------------------------------------------------------------
 void C_Flare::RestoreResources( void )
 {
 	if ( m_pParticle[0] == NULL )
 	{
 		m_pParticle[0] = (SimpleParticle *) AddParticle( sizeof( SimpleParticle ), GetPMaterial( "effects/redflare" ), GetAbsOrigin() );
-		
+
 		if ( m_pParticle[0] != NULL )
 		{
 			m_pParticle[0]->m_uchColor[0] = m_pParticle[0]->m_uchColor[1] = m_pParticle[0]->m_uchColor[2] = 0;
@@ -145,7 +165,7 @@ void C_Flare::RestoreResources( void )
 	if ( m_pParticle[1] == NULL )
 	{
 		m_pParticle[1] = (SimpleParticle *) AddParticle( sizeof( SimpleParticle ), GetPMaterial( "effects/yellowflare_noz" ), GetAbsOrigin() );
-		
+
 		if ( m_pParticle[1] != NULL )
 		{
 			m_pParticle[1]->m_uchColor[0] = m_pParticle[1]->m_uchColor[1] = m_pParticle[1]->m_uchColor[2] = 0;
@@ -162,8 +182,8 @@ void C_Flare::RestoreResources( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : pParticle - 
+// Purpose:
+// Input  : pParticle -
 //-----------------------------------------------------------------------------
 void C_Flare::NotifyDestroyParticle( Particle* pParticle )
 {
@@ -181,8 +201,8 @@ void C_Flare::NotifyDestroyParticle( Particle* pParticle )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
-// Input  : timeDelta - 
+// Purpose:
+// Input  : timeDelta -
 //-----------------------------------------------------------------------------
 void C_Flare::Update( float timeDelta )
 {
@@ -202,7 +222,7 @@ void C_Flare::Update( float timeDelta )
 	pixelvis_queryparams_t params;
 	params.Init(GetAbsOrigin());
 	params.proxySize = 8.0f; // Inches
-	
+
 	float visible = PixelVisibility_FractionVisible( params, &m_queryHandle );
 
 	float	fColor;
@@ -224,7 +244,7 @@ void C_Flare::Update( float timeDelta )
 	if ( !bVisible )
 	{
 		if ( m_pParticle[0] != NULL )
-		{	
+		{
 			m_pParticle[0]->m_flDieTime		= gpGlobals->curtime;
 			m_pParticle[0]->m_uchStartSize	= m_pParticle[0]->m_uchEndSize = 0;
 			m_pParticle[0]->m_uchColor[0]	= 0;
@@ -233,7 +253,7 @@ void C_Flare::Update( float timeDelta )
 		}
 
 		if ( m_pParticle[1] != NULL )
-		{	
+		{
 			m_pParticle[1]->m_flDieTime		= gpGlobals->curtime;
 			m_pParticle[1]->m_uchStartSize	= m_pParticle[1]->m_uchEndSize = 0;
 			m_pParticle[1]->m_uchColor[0]	= 0;
@@ -243,57 +263,104 @@ void C_Flare::Update( float timeDelta )
 	}
 
 	if ( baseScale < 0.01f )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 		return;
+	}
 	//
 	// Dynamic light
 	//
 
 	if ( m_bLight )
 	{
-		dlight_t *dl= effects->CL_AllocDlight( index );
-
-		
-
-		if ( m_bPropFlare == false )
+		if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
 		{
-			dl->origin	= GetAbsOrigin();
-			dl->color.r = 255;
-			dl->die		= gpGlobals->curtime + 0.1f;
+			Vector lightOrigin;
+			float flRadius;
 
-			dl->radius	= baseScale * random->RandomFloat( 110.0f, 128.0f );
-			dl->color.g = dl->color.b = random->RandomInt( 32, 64 );
+			if ( m_bPropFlare == false )
+			{
+				lightOrigin = GetAbsOrigin() + Vector( 0, 0, 6 );
+				flRadius = baseScale * 256.0f;
+			}
+			else
+			{
+				if ( m_iAttachment == -1 )
+				{
+					m_iAttachment = LookupAttachment( "fuse" );
+				}
+
+				if ( m_iAttachment != -1 )
+				{
+					Vector effect_origin;
+					QAngle effect_angles;
+					GetAttachment( m_iAttachment, effect_origin, effect_angles );
+					lightOrigin = effect_origin + Vector( 0, 0, 6 );
+					flRadius = baseScale * 280.0f;
+				}
+				else
+				{
+					lightOrigin = GetAbsOrigin() + Vector( 0, 0, 6 );
+					flRadius = baseScale * 256.0f;
+				}
+			}
+
+			Vector fallbackPos = GetAbsOrigin();
+			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, Vector( 1.0f, 0.25f, 0.15f ), flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 512.0f, flRadius * 3.5f ), &fallbackPos );
 		}
 		else
 		{
-			if ( m_iAttachment == -1 )
-			{
-				m_iAttachment =  LookupAttachment( "fuse" );
-			}
+			dlight_t *dl= effects->CL_AllocDlight( index );
 
-			if ( m_iAttachment != -1 )
-			{
-				Vector effect_origin;
-				QAngle effect_angles;
-				
-				GetAttachment( m_iAttachment, effect_origin, effect_angles );
 
-				//Raise the light a little bit away from the flare so it lights it up better.
-				dl->origin	= effect_origin + Vector( 0, 0, 4 );
+
+			if ( m_bPropFlare == false )
+			{
+				dl->origin	= GetAbsOrigin();
 				dl->color.r = 255;
 				dl->die		= gpGlobals->curtime + 0.1f;
 
-				dl->radius	= baseScale * random->RandomFloat( 245.0f, 256.0f );
-				dl->color.g = dl->color.b = random->RandomInt( 95, 128 );
-		
-				dlight_t *el= effects->CL_AllocElight( index );
+				dl->radius	= baseScale * random->RandomFloat( 110.0f, 128.0f );
+				dl->color.g = dl->color.b = random->RandomInt( 32, 64 );
+			}
+			else
+			{
+				if ( m_iAttachment == -1 )
+				{
+					m_iAttachment =  LookupAttachment( "fuse" );
+				}
 
-				el->origin	= effect_origin;
-				el->color.r = 255;
-				el->color.g = dl->color.b = random->RandomInt( 95, 128 );
-				el->radius	= baseScale * random->RandomFloat( 260.0f, 290.0f );
-				el->die		= gpGlobals->curtime + 0.1f;
+				if ( m_iAttachment != -1 )
+				{
+					Vector effect_origin;
+					QAngle effect_angles;
+
+					GetAttachment( m_iAttachment, effect_origin, effect_angles );
+
+					//Raise the light a little bit away from the flare so it lights it up better.
+					dl->origin	= effect_origin + Vector( 0, 0, 4 );
+					dl->color.r = 255;
+					dl->die		= gpGlobals->curtime + 0.1f;
+
+					dl->radius	= baseScale * random->RandomFloat( 245.0f, 256.0f );
+					dl->color.g = dl->color.b = random->RandomInt( 95, 128 );
+
+					dlight_t *el= effects->CL_AllocElight( index );
+
+					el->origin	= effect_origin;
+					el->color.r = 255;
+					el->color.g = dl->color.b = random->RandomInt( 95, 128 );
+					el->radius	= baseScale * random->RandomFloat( 260.0f, 290.0f );
+					el->die		= gpGlobals->curtime + 0.1f;
+				}
 			}
 		}
+	}
+	else if ( m_pDeferredLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 	}
 
 	//
@@ -315,13 +382,13 @@ void C_Flare::Update( float timeDelta )
 			smokeOrg[2] += baseScale * 4.0f;
 
 			SimpleParticle *sParticle = (SimpleParticle *) AddParticle( sizeof( SimpleParticle ), g_Mat_DustPuff[1], smokeOrg );
-				
+
 			if ( sParticle == NULL )
 				return;
 
 			sParticle->m_flLifetime		= 0.0f;
 			sParticle->m_flDieTime		= 1.0f;
-			
+
 			sParticle->m_vecVelocity	= Vector( random->RandomFloat( -16.0f, 16.0f ), random->RandomFloat( -16.0f, 16.0f ), random->RandomFloat( 8.0f, 16.0f ) + 32.0f );
 
 			if ( m_bPropFlare )
@@ -354,7 +421,7 @@ void C_Flare::Update( float timeDelta )
 	//
 
 	Vector	offset;
-	
+
 	//Cause the base of the effect to shake
 	offset.Random( -0.5f * baseScale, 0.5f * baseScale );
 	offset += GetAbsOrigin();
@@ -364,7 +431,7 @@ void C_Flare::Update( float timeDelta )
 		m_pParticle[0]->m_Pos			= offset;
 		m_pParticle[0]->m_flLifetime	= 0.0f;
 		m_pParticle[0]->m_flDieTime		= 2.0f;
-		
+
 		m_pParticle[0]->m_vecVelocity.Init();
 
 		fColor = random->RandomInt( 100.0f, 128.0f ) * visible;
@@ -377,7 +444,7 @@ void C_Flare::Update( float timeDelta )
 		m_pParticle[0]->m_uchStartSize	= baseScale * (float) random->RandomInt( 32, 48 );
 		m_pParticle[0]->m_uchEndSize	= m_pParticle[0]->m_uchStartSize;
 		m_pParticle[0]->m_flRollDelta	= 0.0f;
-		
+
 		if ( random->RandomInt( 0, 4 ) == 3 )
 		{
 			m_pParticle[0]->m_flRoll	+= random->RandomInt( 2, 8 );
@@ -397,7 +464,7 @@ void C_Flare::Update( float timeDelta )
 		m_pParticle[1]->m_Pos			= offset;
 		m_pParticle[1]->m_flLifetime	= 0.0f;
 		m_pParticle[1]->m_flDieTime		= 2.0f;
-		
+
 		m_pParticle[1]->m_vecVelocity.Init();
 
 		fColor = 255 * visible;

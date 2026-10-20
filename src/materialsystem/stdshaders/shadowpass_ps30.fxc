@@ -58,7 +58,7 @@ struct PS_OUTPUT
 PS_OUTPUT main( const PS_INPUT In )
 {
 #if SHADOW_MODE == DEFERRED_SHADOW_MODE_DPSM
-	clip( In.flBack );
+	clip( In.flBack + 0.02f );
 #endif
 
 #if DEFCFG_BILATERAL_DEPTH_TEST

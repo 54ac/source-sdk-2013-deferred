@@ -60,13 +60,8 @@ C_PropCombineBall::~C_PropCombineBall( void )
 
 void C_PropCombineBall::UpdateOnRemove( void )
 {
-	if ( m_pDefLight )
-	{
-		if ( GetLightingManager() )
-			GetLightingManager()->RemoveLight( m_pDefLight );
-		delete m_pDefLight;
-		m_pDefLight = NULL;
-	}
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDefLight );
 	BaseClass::UpdateOnRemove();
 }
 
@@ -90,32 +85,17 @@ void C_PropCombineBall::ClientThink( void )
 {
 	if ( m_bEmit && GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
 	{
-		if ( !m_pDefLight )
-		{
-			m_pDefLight = new def_light_t();
-			m_pDefLight->flFalloffPower = 2.0f;
-			m_pDefLight->iVisible_Dist = 3072;
-			m_pDefLight->iVisible_Range = 512;
-			GetLightingManager()->AddLight( m_pDefLight );
-		}
-
-		m_pDefLight->pos = GetAbsOrigin();
-		m_pDefLight->ang = vec3_angle;
-
 		float flPulse = 0.85f + 0.15f * sin( gpGlobals->curtime * 25.0f );
 		float flRadiusScale = ( m_flRadius > 0.0f ) ? ( m_flRadius * 15.0f ) : 300.0f;
 		flRadiusScale = clamp( flRadiusScale, 200.0f, 350.0f );
 
-		m_pDefLight->flRadius = flRadiusScale * flPulse;
-		m_pDefLight->col_diffuse = Vector( 0.25f, 0.588f, 1.0f ) * flPulse;
-		m_pDefLight->MakeDirtyAll();
+		Vector fallbackPos = GetAbsOrigin();
+		GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, GetAbsOrigin(), Vector( 0.25f, 0.588f, 1.0f ) * flPulse, flRadiusScale * flPulse, 0, 3072.0f, &fallbackPos );
 	}
 	else if ( m_pDefLight )
 	{
 		if ( GetLightingManager() )
-			GetLightingManager()->RemoveLight( m_pDefLight );
-		delete m_pDefLight;
-		m_pDefLight = NULL;
+			GetLightingManager()->FreeDynamicLight( m_pDefLight );
 	}
 }
 

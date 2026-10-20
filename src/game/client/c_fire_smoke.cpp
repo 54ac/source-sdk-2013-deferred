@@ -289,13 +289,8 @@ m_flSpawnTime( -1.0f )
 C_EntityFlame::~C_EntityFlame( void )
 {
 	StopEffect();
-	if ( m_pDeferredLight )
-	{
-		if ( GetLightingManager() )
-			GetLightingManager()->RemoveLight( m_pDeferredLight );
-		delete m_pDeferredLight;
-		m_pDeferredLight = NULL;
-	}
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 }
 
 //-----------------------------------------------------------------------------
@@ -303,13 +298,8 @@ C_EntityFlame::~C_EntityFlame( void )
 //-----------------------------------------------------------------------------
 void C_EntityFlame::StopEffect( void )
 {
-	if ( m_pDeferredLight )
-	{
-		if ( GetLightingManager() )
-			GetLightingManager()->RemoveLight( m_pDeferredLight );
-		delete m_pDeferredLight;
-		m_pDeferredLight = NULL;
-	}
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 
 	if ( m_hEffect )
 	{
@@ -425,41 +415,14 @@ void C_EntityFlame::Simulate( void )
 
 		float flFullRadius = bIsNPC ? 300.0f : 240.0f;
 		Vector vecFlameColor = Vector( 0.96f, 0.38f, 0.04f ) * ( 0.90f * flGrowth );
+		Vector fallbackPos = GetAbsOrigin();
 
-		if ( !m_pDeferredLight )
-		{
-			m_pDeferredLight = new def_light_t();
-			m_pDeferredLight->pos = vecTargetPos;
-			m_pDeferredLight->ang = vec3_angle;
-			m_pDeferredLight->flFalloffPower = 1.5f;
-			m_pDeferredLight->iVisible_Dist = 2048;
-			m_pDeferredLight->iVisible_Range = 512;
-			m_pDeferredLight->flRadius = flFullRadius;
-			m_pDeferredLight->col_diffuse = vecFlameColor;
-			m_pDeferredLight->MakeDirtyAll();
-
-			GetLightingManager()->AddLight( m_pDeferredLight );
-		}
-		else
-		{
-			if ( ( m_pDeferredLight->pos - vecTargetPos ).LengthSqr() > 1.0f )
-			{
-				m_pDeferredLight->pos = vecTargetPos;
-				m_pDeferredLight->MakeDirtyXForms();
-			}
-
-			m_pDeferredLight->col_diffuse = vecFlameColor;
-		}
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, vecTargetPos, vecFlameColor, flFullRadius, 0, 2048.0f, &fallbackPos );
 	}
 	else
 	{
-		if ( m_pDeferredLight )
-		{
-			if ( GetLightingManager() )
-				GetLightingManager()->RemoveLight( m_pDeferredLight );
-			delete m_pDeferredLight;
-			m_pDeferredLight = NULL;
-		}
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 
 #ifdef HL2_EPISODIC
 

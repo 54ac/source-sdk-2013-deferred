@@ -80,13 +80,8 @@ public:
 	}
 	virtual void EffectShutdown( void )
 	{
-		if ( m_pDefLight )
-		{
-			if ( GetLightingManager() )
-				GetLightingManager()->RemoveLight( m_pDefLight );
-			delete m_pDefLight;
-			m_pDefLight = NULL;
-		}
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDefLight );
 		m_limitHitTime = 0;
 		BaseClass::EffectShutdown();
 	}
@@ -615,27 +610,11 @@ int	C_StriderFX::DrawModel( int )
 		{
 			if ( bright > 0.01f )
 			{
-				if ( !m_pDefLight )
-				{
-					m_pDefLight = new def_light_t();
-					GetLightingManager()->AddLight( m_pDefLight );
-				}
-				m_pDefLight->pos = m_worldPosition;
-				m_pDefLight->ang = vec3_angle;
-				m_pDefLight->col_diffuse = Vector( 0.157f, 0.235f, 1.0f ) * bright;
-				m_pDefLight->flRadius = bright * 250.0f;
-				m_pDefLight->flFalloffPower = 2.0f;
-				m_pDefLight->iVisible_Dist = 4096;
-				m_pDefLight->iVisible_Range = 1024;
-				m_pDefLight->iShadow_Dist = 1536;
-				m_pDefLight->iShadow_Range = 512;
-				m_pDefLight->MakeDirtyAll();
+				GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, m_worldPosition, Vector( 0.157f, 0.235f, 1.0f ) * bright, bright * 250.0f, DEFLIGHT_SHADOW_ENABLED, 4096.0f, &m_worldPosition );
 			}
 			else if ( m_pDefLight )
 			{
-				GetLightingManager()->RemoveLight( m_pDefLight );
-				delete m_pDefLight;
-				m_pDefLight = NULL;
+				GetLightingManager()->FreeDynamicLight( m_pDefLight );
 			}
 		}
 		else
@@ -653,9 +632,7 @@ int	C_StriderFX::DrawModel( int )
 	else if ( m_pDefLight )
 	{
 		if ( GetLightingManager() )
-			GetLightingManager()->RemoveLight( m_pDefLight );
-		delete m_pDefLight;
-		m_pDefLight = NULL;
+			GetLightingManager()->FreeDynamicLight( m_pDefLight );
 	}
 
 	if ( m_t >= STRIDERFX_END_ALL_TIME && !hasAny )

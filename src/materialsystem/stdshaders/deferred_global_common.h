@@ -231,7 +231,7 @@
 
 /* Global hard coded filter tweaks
  */
-#define SHADOWMAPPINGTWEAK_DPSM_EPSILON 0.01f
+#define SHADOWMAPPINGTWEAK_DPSM_EPSILON 0.0015f
 
 
 /* Lighting tweaks

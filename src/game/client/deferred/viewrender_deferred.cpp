@@ -239,6 +239,7 @@ public:
 	void SetRadiosityOutputEnabled( bool bEnabled );
 
 	void			Draw();
+	void			DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
 	virtual bool	AdjustView( float waterHeight );
 	virtual void	PushView( float waterHeight );
 	virtual void	PopView();
@@ -297,7 +298,6 @@ public:
 			m_pLight = pLight;
 			m_bSecondary = bSecondary;
 	}
-	virtual bool	AdjustView( float waterHeight );
 	virtual void	PushView( float waterHeight );
 	virtual void	PopView();
 
@@ -1361,14 +1361,36 @@ void CBaseShadowView::Draw()
 
 bool CBaseShadowView::AdjustView( float waterHeight )
 {
+	return false;
+}
+
+void CBaseShadowView::DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf, bool bShadowDepth )
+{
 	CommitData();
 
-	return true;
+	const view_id_t savedViewID = g_CurrentViewID;
+	g_CurrentViewID = VIEW_DEFERRED_SHADOW;
+
+	render->Push3DView( *this, 0, m_pDummyTexture, GetFrustum(), m_pDepthTexture );
+	SetupCurrentView( origin, angles, VIEW_DEFERRED_SHADOW );
+
+	const bool bDrawEntities = ( nSetupFlags & DF_DRAW_ENTITITES ) != 0;
+	BuildWorldRenderLists( bDrawEntities, iForceViewLeaf, ShouldCacheLists(), false, NULL );
+	PruneWorldListInfo();
+	if ( bDrawEntities )
+	{
+		BuildRenderableRenderLists( VIEW_SHADOW_DEPTH_TEXTURE );
+	}
+
+	render->PopView( GetFrustum() );
+
+	g_CurrentViewID = savedViewID;
 }
 
 void CBaseShadowView::PushView( float waterHeight )
 {
 	render->Push3DView( *this, 0, m_pDummyTexture, GetFrustum(), m_pDepthTexture );
+	SetupCurrentView( origin, angles, VIEW_DEFERRED_SHADOW );
 
 	CMatRenderContextPtr pRenderContext( materials );
 	pRenderContext->PushRenderTargetAndViewport( m_pDummyTexture, m_pDepthTexture, x, y, width, height );
@@ -1403,6 +1425,50 @@ void CBaseShadowView::SetRadiosityOutputEnabled( bool bEnabled )
 	m_bOutputRadiosity = bEnabled;
 }
 
+static void ComputeFrustumCorners( const CViewSetup &camView, float flNear, float flFar, Vector outCorners[8] )
+{
+	Vector camOrigin = camView.origin;
+	Vector camFwd, camRight, camUp;
+	AngleVectors( camView.angles, &camFwd, &camRight, &camUp );
+
+	float flFov = ( camView.fov > 0.0f ) ? camView.fov : 75.0f;
+	float flAspectRatio = camView.m_flAspectRatio;
+	if ( flAspectRatio <= 0.0f )
+	{
+		if ( engine && engine->GetScreenAspectRatio() > 0.0f )
+		{
+			flAspectRatio = engine->GetScreenAspectRatio();
+		}
+		else if ( camView.width > 0 && camView.height > 0 )
+		{
+			flAspectRatio = ( (float)camView.width / (float)camView.height );
+		}
+		else
+		{
+			flAspectRatio = 4.0f / 3.0f;
+		}
+	}
+
+	float flFovRad = DEG2RAD( flFov );
+	float tanHalfFovX = tanf( flFovRad * 0.5f );
+	float tanHalfFovY = tanHalfFovX / flAspectRatio;
+
+	float nearW = flNear * tanHalfFovX;
+	float nearH = flNear * tanHalfFovY;
+	float farW  = flFar  * tanHalfFovX;
+	float farH  = flFar  * tanHalfFovY;
+
+	outCorners[0] = camOrigin + camFwd * flNear - camRight * nearW - camUp * nearH;
+	outCorners[1] = camOrigin + camFwd * flNear + camRight * nearW - camUp * nearH;
+	outCorners[2] = camOrigin + camFwd * flNear - camRight * nearW + camUp * nearH;
+	outCorners[3] = camOrigin + camFwd * flNear + camRight * nearW + camUp * nearH;
+
+	outCorners[4] = camOrigin + camFwd * flFar - camRight * farW - camUp * farH;
+	outCorners[5] = camOrigin + camFwd * flFar + camRight * farW - camUp * farH;
+	outCorners[6] = camOrigin + camFwd * flFar - camRight * farW + camUp * farH;
+	outCorners[7] = camOrigin + camFwd * flFar + camRight * farW + camUp * farH;
+}
+
 static lightData_Global_t& GetActiveGlobalLightState()
 {
 	static lightData_Global_t data;
@@ -1430,8 +1496,38 @@ void COrthoShadowView::CalcShadowView()
 	if ( flSplitDist <= 64.0f ) flSplitDist = 1024.0f;
 	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
 
-	float flCascadeDist = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
-	float flOrthoSize   = flCascadeDist * 2.0f;
+	float flSplitFar = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
+
+	Vector frustumCorners[16];
+	int numCorners = 8;
+	ComputeFrustumCorners( m_CameraView, 0.0f, flSplitFar, frustumCorners );
+
+	if ( m_bHasReflectionView )
+	{
+		ComputeFrustumCorners( m_ReflectionView, 0.0f, flSplitFar, &frustumCorners[8] );
+		numCorners = 16;
+	}
+
+	Vector vMins = frustumCorners[0];
+	Vector vMaxs = frustumCorners[0];
+	for ( int i = 1; i < numCorners; i++ )
+	{
+		VectorMin( vMins, frustumCorners[i], vMins );
+		VectorMax( vMaxs, frustumCorners[i], vMaxs );
+	}
+	Vector vFrustumCenter = ( vMins + vMaxs ) * 0.5f;
+
+	float flMaxDistSqr = 0.0f;
+	for ( int i = 0; i < numCorners; i++ )
+	{
+		float flDistSqr = ( frustumCorners[i] - vFrustumCenter ).LengthSqr();
+		if ( flDistSqr > flMaxDistSqr )
+			flMaxDistSqr = flDistSqr;
+	}
+
+	float flOrthoSize = ceilf( sqrtf( flMaxDistSqr ) * 2.0f * 1.05f );
+	if ( flOrthoSize < 128.0f )
+		flOrthoSize = 128.0f;
 
 	const lightData_Global_t& state = GetActiveGlobalLightState();
 	QAngle lightAng;
@@ -1439,8 +1535,6 @@ void COrthoShadowView::CalcShadowView()
 
 	Vector viewFwd, viewRight, viewUp;
 	AngleVectors( lightAng, &viewFwd, &viewRight, &viewUp );
-
-	Vector vFrustumCenter = m_CameraView.origin;
 
 	float flLightSpaceX = DotProduct( vFrustumCenter, viewRight );
 	float flLightSpaceY = DotProduct( vFrustumCenter, viewUp );
@@ -1539,15 +1633,6 @@ void COrthoShadowView::CommitData()
 
 	CMatRenderContextPtr pRenderContext( materials );
 	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_INDEX, iCascadeIndex );
-}
-
-bool CDualParaboloidShadowView::AdjustView( float waterHeight )
-{
-	BaseClass::AdjustView( waterHeight );
-
-	// HACK: when pushing our actual view the renderer fails building the worldlist right!
-	// So we can't. Shit.
-	return false;
 }
 
 void CDualParaboloidShadowView::PushView( float waterHeight )

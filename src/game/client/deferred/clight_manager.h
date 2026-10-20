@@ -41,6 +41,28 @@ public:
 	void AddTempLight( def_light_temp_t *l );
 	void UpdateTemplights(float deltaTime);
 
+	// Unified dynamic light helpers
+	static Vector SanitizeLightOrigin( const Vector &vecOrigin, const Vector *pFallback = NULL, float flMinClearance = 6.0f );
+
+	def_light_t *AllocDynamicPointLight( const Vector &vecOrigin, const Vector &vecColor, float flRadius,
+		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 2048.0f, const Vector *pFallbackOrigin = NULL );
+
+	def_light_t *AllocDynamicSpotLight( const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
+		float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags = DEFLIGHT_SHADOW_ENABLED,
+		float flVisibleDist = 2048.0f, const Vector *pFallbackOrigin = NULL );
+
+	void UpdateDynamicLight( def_light_t *pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
+		const QAngle *pAngles = NULL, bool bSanitizeOrigin = true, const Vector *pFallbackOrigin = NULL );
+
+	bool EnsureDynamicPointLight( def_light_t *&pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
+		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 2048.0f, const Vector *pFallbackOrigin = NULL );
+
+	bool EnsureDynamicSpotLight( def_light_t *&pLight, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
+		float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags = DEFLIGHT_SHADOW_ENABLED,
+		float flVisibleDist = 2048.0f, const Vector *pFallbackOrigin = NULL );
+
+	void FreeDynamicLight( def_light_t *&pLight );
+
 #if DEFCFG_USE_SSE
 	void AllocateSortDataBuffer();
 	void BuildLightSortDataBuffer();

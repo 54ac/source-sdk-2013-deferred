@@ -159,8 +159,9 @@ VS_OUTPUT main( const VS_INPUT In )
 
 	Out.flBack = orthoPos.z;
 
-	Out.vProjPos.xy = orthoPos.xy / ( orthoPos.z + 1 );
-	Out.vProjPos.z = dist;
+	float denom = max( 0.001f, orthoPos.z + 1.0f );
+	Out.vProjPos.xy = orthoPos.xy / denom;
+	Out.vProjPos.z = min( 0.999f, dist );
 	Out.vProjPos.w = 1;
 
 #else

@@ -76,7 +76,7 @@ def_light_t::def_light_t( bool bWorld )
 
 	iVisible_Dist = 2048;
 	iVisible_Range = 512;
-	iShadow_Dist = 1536;
+	iShadow_Dist = 2048;
 	iShadow_Range = 512;
 
 	iStyleSeed = RandomInt( 0, DEFLIGHT_SEED_MAX );

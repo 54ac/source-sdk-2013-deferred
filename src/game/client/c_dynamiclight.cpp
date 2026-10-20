@@ -10,6 +10,8 @@
 #include "dlight.h"
 #include "iefx.h"
 #include "iviewrender.h"
+#include "deferred/deferred_shared_common.h"
+#include "deferred/clight_manager.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -37,6 +39,8 @@ public:
 	DECLARE_CLIENTCLASS();
 
 	C_DynamicLight();
+	virtual ~C_DynamicLight();
+	virtual void UpdateOnRemove();
 
 public:
 	void	OnDataChanged(DataUpdateType_t updateType);
@@ -56,6 +60,7 @@ public:
 private:
 	dlight_t*	m_pDynamicLight;
 	dlight_t*	m_pSpotlightEnd;
+	def_light_t*	m_pDeferredLight;
 
 
 	inline bool ShouldBeElight() { return (m_Flags & DLIGHT_NO_WORLD_ILLUMINATION); }
@@ -69,14 +74,27 @@ IMPLEMENT_CLIENTCLASS_DT(C_DynamicLight, DT_DynamicLight, CDynamicLight)
 	RecvPropFloat	(RECVINFO(m_InnerAngle)),
 	RecvPropFloat	(RECVINFO(m_OuterAngle)),
 	RecvPropFloat	(RECVINFO(m_SpotRadius)),
-END_RECV_TABLE()
+	END_RECV_TABLE()
 
 
 //------------------------------------------------------------------------------
 // Purpose :
 //------------------------------------------------------------------------------
-C_DynamicLight::C_DynamicLight(void) : m_pSpotlightEnd(0), m_pDynamicLight(0)
+C_DynamicLight::C_DynamicLight(void) : m_pSpotlightEnd(0), m_pDynamicLight(0), m_pDeferredLight(0)
 {
+}
+
+C_DynamicLight::~C_DynamicLight()
+{
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+}
+
+void C_DynamicLight::UpdateOnRemove()
+{
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	BaseClass::UpdateOnRemove();
 }
 
 
@@ -107,6 +125,9 @@ bool C_DynamicLight::ShouldDraw()
 //------------------------------------------------------------------------------
 void C_DynamicLight::Release()
 {
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+
 	if (m_pDynamicLight)
 	{
 		m_pDynamicLight->die = gpGlobals->curtime;
@@ -131,7 +152,43 @@ void C_DynamicLight::ClientThink(void)
 	Vector forward;
 	AngleVectors( GetAbsAngles(), &forward );
 
-	if ( (m_Flags & DLIGHT_NO_MODEL_ILLUMINATION) == 0 )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		const bool bLightDisabled = ( ( m_Flags & DLIGHT_NO_WORLD_ILLUMINATION ) && ( m_Flags & DLIGHT_NO_MODEL_ILLUMINATION ) ) || ( m_Radius <= 0.0f );
+
+		if ( bLightDisabled )
+		{
+			if ( GetLightingManager() )
+				GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+		}
+		else
+		{
+			float flStyle = engine->LightStyleValue( m_LightStyle );
+			float flR = TexLightToLinear( m_clrRender->r, m_Exponent );
+			float flG = TexLightToLinear( m_clrRender->g, m_Exponent );
+			float flB = TexLightToLinear( m_clrRender->b, m_Exponent );
+			Vector lightColor( flR * flStyle, flG * flStyle, flB * flStyle );
+			float flVisibleDist = clamp( m_Radius * 3.0f, 1024.0f, 4096.0f );
+			Vector fallbackPos = GetAbsOrigin();
+
+			const bool bIsSpot = ( m_OuterAngle > 0.0f );
+			if ( bIsSpot )
+			{
+				GetLightingManager()->EnsureDynamicSpotLight( m_pDeferredLight, GetAbsOrigin(), GetAbsAngles(), lightColor, m_Radius, m_InnerAngle, m_OuterAngle, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos );
+			}
+			else
+			{
+				GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, m_Radius, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos );
+			}
+		}
+	}
+	else if ( m_pDeferredLight )
+	{
+		if ( GetLightingManager() )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	}
+
+	if ( (m_Flags & DLIGHT_NO_MODEL_ILLUMINATION) == 0 && !GetDeferredManager()->IsDeferredRenderingEnabled() )
 	{
 		// Deal with the model light
  		if ( !m_pDynamicLight || (m_pDynamicLight->key != index) )
@@ -173,9 +230,9 @@ void C_DynamicLight::ClientThink(void)
 	}
 	
 #if DLIGHT_NO_WORLD_USES_ELIGHT
-	if (( m_OuterAngle > 0 ) && !ShouldBeElight())
+	if (( m_OuterAngle > 0 ) && !ShouldBeElight() && !GetDeferredManager()->IsDeferredRenderingEnabled())
 #else
-	if (( m_OuterAngle > 0 ) && ((m_Flags & DLIGHT_NO_WORLD_ILLUMINATION) == 0))
+	if (( m_OuterAngle > 0 ) && ((m_Flags & DLIGHT_NO_WORLD_ILLUMINATION) == 0) && !GetDeferredManager()->IsDeferredRenderingEnabled())
 #endif
 	{
 		// Raycast to where the endpoint goes
