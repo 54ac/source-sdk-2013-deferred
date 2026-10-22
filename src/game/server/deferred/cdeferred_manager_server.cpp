@@ -463,10 +463,10 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		const float radius = type == 2 ? entity->GetFloat( "spotlightlength" ) :
 		ComputeLightRadius( entity->GetFloat( "_distance" ), color[3], entity->GetFloat( "_constant_attn" ), entity->GetFloat( "_linear_attn" ), entity->GetFloat( "_quadratic_attn" ) );
 		lightEntity->KeyValue( szParamRadius, radius );
-		lightEntity->KeyValue( szParamVisDist, radius * 2 );
-		lightEntity->KeyValue( szParamVisRange, radius * 1.25f );
-		lightEntity->KeyValue( szParamShadowDist, radius * ( 5.f / 6.f ) );
-		lightEntity->KeyValue( szParamShadowRange, radius * ( 2.f / 3.f ) );
+		lightEntity->KeyValue( szParamVisDist, max( 16384.0f, radius * 4.0f ) );
+		lightEntity->KeyValue( szParamVisRange, 1024.0f );
+		lightEntity->KeyValue( szParamShadowDist, max( 4096.0f, radius * 3.0f ) );
+		lightEntity->KeyValue( szParamShadowRange, 1024.0f );
 
 		if ( KeyValues* targetname = entity->FindKey( "targetname" ) )
 			lightEntity->KeyValue( "targetname", targetname->GetString() );
@@ -476,57 +476,6 @@ void CDeferredManagerServer::LevelInitPreEntity()
 
 		DispatchSpawn( lightEntity );
 	}
-
-	/*
-	const int numUnspawnedLights = unspawnedLights.Count();
-	for ( int i = 0; i < numUnspawnedLights; ++i )
-	{
-		const dworldlight_t* light = unspawnedLights[i];
-		const float radius = ComputeLightRadius( *light );
-
-		if ( radius == 0 )
-			continue;
-
-		CDeferredLight* lightEntity = static_cast<CDeferredLight*>( CBaseEntity::CreateNoSpawn( "light_deferred", light->origin, vec3_angle ) );
-		if ( !lightEntity )
-			break;
-
-		Vector intensity = light->intensity;
-		const float ratio = light->constant_attn + 100 * light->linear_attn + 100 * 100 * light->quadratic_attn;
-		if ( ratio > 0 )
-			VectorScale( light->intensity, 1.f / ratio, intensity );
-		intensity *= 255.f;
-
-		char string[256];
-		V_sprintf_safe( string, "%f %f %f 255", intensity.x, intensity.y, intensity.z );
-		lightEntity->KeyValue( szParamDiffuse, string );
-
-		lightEntity->KeyValue( "spawnflags", "3" );
-		if ( light->type == emit_spotlight )
-		{
-			QAngle angle;
-			VectorAngles( light->normal, angle );
-			lightEntity->SetAbsAngles( angle );
-			lightEntity->KeyValue( szParamLightType, "1" );
-			lightEntity->KeyValue( szParamSpotConeInner, acos( light->stopdot ) * 180.f / M_PI_F );
-			lightEntity->KeyValue( szParamSpotConeOuter, acos( light->stopdot2 ) * 180.f / M_PI_F );
-			lightEntity->KeyValue( szParamPower, light->exponent );
-		}
-		else
-		{
-			lightEntity->KeyValue( szParamLightType, "0" );
-			lightEntity->KeyValue( szParamPower, "1" );
-		}
-
-		lightEntity->KeyValue( szParamRadius, radius );
-		lightEntity->KeyValue( szParamVisDist, radius * 2 );
-		lightEntity->KeyValue( szParamVisRange, radius * 1.25f );
-		lightEntity->KeyValue( szParamShadowDist, radius * ( 5.f / 6.f ) );
-		lightEntity->KeyValue( szParamShadowRange, radius * ( 2.f / 3.f ) );
-
-		DispatchSpawn( lightEntity );
-	}
-	*/
 
 	delete[] lights;
 }

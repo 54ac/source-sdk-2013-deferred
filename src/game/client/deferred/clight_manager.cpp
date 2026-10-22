@@ -307,7 +307,7 @@ def_light_t *CLightingManager::AllocDynamicPointLight( const Vector &vecOrigin, 
 	l->col_diffuse = vecColor;
 	l->flFalloffPower = 1.0f;
 	l->iFlags |= iFlags;
-	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 8192.0f );
+	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 32768.0f );
 	l->iVisible_Range = 512;
 	l->iShadow_Dist = l->iVisible_Dist;
 	l->iShadow_Range = l->iVisible_Range;
@@ -333,7 +333,7 @@ def_light_t *CLightingManager::AllocDynamicSpotLight( const Vector &vecOrigin, c
 	l->flFOV = flOuterConeDeg * 2.0f;
 	l->flFalloffPower = 1.0f;
 	l->iFlags |= iFlags;
-	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 8192.0f );
+	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 32768.0f );
 	l->iVisible_Range = 512;
 	l->iShadow_Dist = l->iVisible_Dist;
 	l->iShadow_Range = l->iVisible_Range;
@@ -413,6 +413,20 @@ void CLightingManager::FreeDynamicLight( def_light_t *&pLight )
 		pLight = NULL;
 	}
 }
+
+ConVar r_deferred_light_distance_fade(
+	"r_deferred_light_distance_fade",
+	"0",
+	FCVAR_ARCHIVE,
+	"distance attenuation fading for deferred dynamic lights"
+);
+
+ConVar r_deferred_shadow_dist_min(
+	"r_deferred_shadow_dist_min",
+	"4096",
+	FCVAR_ARCHIVE,
+	"minimum distance for dynamic light shadow fade"
+);
 
 #if DEFCFG_USE_SSE
 void CLightingManager::AllocateSortDataBuffer()
@@ -642,12 +656,15 @@ void CLightingManager::CullLights()
 
 		Vector veclightDelta = l->boundsCenter - m_vecViewOrigin;
 
-		if ( veclightDelta.LengthSqr() > l->flMaxDistSqr )
+		if ( r_deferred_light_distance_fade.GetBool() && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
 			continue;
+
+		const float flEffectiveShadowDist  = max( (float)l->iShadow_Dist, r_deferred_shadow_dist_min.GetFloat() );
+		const float flEffectiveShadowRange = max( (float)l->iShadow_Range, 1024.0f );
 
 		l->flDistance_ViewOrigin = veclightDelta.Length();
 		l->flShadowFade          = l->HasShadow()
-			                           ? ( SATURATE( ( l->flDistance_ViewOrigin - l->iShadow_Dist ) / l->iShadow_Range ) )
+			                           ? ( SATURATE( ( l->flDistance_ViewOrigin - flEffectiveShadowDist ) / flEffectiveShadowRange ) )
 			                           : 1.0f;
 
 		m_hRenderLights.AddToTail( l );
@@ -896,7 +913,9 @@ FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4 )
 
 	const float flLightstyle = DoLightStyle( l );
 	const float flDistance   = l->flDistance_ViewOrigin;
-	const float flMasterFade = flLightstyle * ( 1.0f - SATURATE( ( flDistance - l->iVisible_Dist ) / l->iVisible_Range ) );
+	const float flMasterFade = r_deferred_light_distance_fade.GetBool()
+		                           ? ( flLightstyle * ( 1.0f - SATURATE( ( flDistance - l->iVisible_Dist ) / l->iVisible_Range ) ) )
+		                           : flLightstyle;
 
 	const int iFloatSize = sizeof( float );
 

@@ -74,10 +74,10 @@ def_light_t::def_light_t( bool bWorld )
 	flSpotCone_Outer = SPOT_DEGREE_TO_RAD( 45 );
 	flFOV = 90.0f;
 
-	iVisible_Dist = 2048;
-	iVisible_Range = 512;
-	iShadow_Dist = 2048;
-	iShadow_Range = 512;
+	iVisible_Dist = 16384;
+	iVisible_Range = 1024;
+	iShadow_Dist = 4096;
+	iShadow_Range = 1024;
 
 	iStyleSeed = RandomInt( 0, DEFLIGHT_SEED_MAX );
 	flStyle_Amount = 0;

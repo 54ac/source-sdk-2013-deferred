@@ -168,7 +168,7 @@ void C_DynamicLight::ClientThink(void)
 			float flG = TexLightToLinear( m_clrRender->g, m_Exponent );
 			float flB = TexLightToLinear( m_clrRender->b, m_Exponent );
 			Vector lightColor( flR * flStyle, flG * flStyle, flB * flStyle );
-			float flVisibleDist = clamp( m_Radius * 3.0f, 1024.0f, 4096.0f );
+			float flVisibleDist = 16384.0f;
 			Vector fallbackPos = GetAbsOrigin();
 
 			const bool bIsSpot = ( m_OuterAngle > 0.0f );
