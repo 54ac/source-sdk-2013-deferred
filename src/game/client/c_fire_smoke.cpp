@@ -25,6 +25,8 @@ CLIENTEFFECT_REGISTER_BEGIN( SmokeStackMaterials )
 	CLIENTEFFECT_MATERIAL( "particle/SmokeStack" )
 CLIENTEFFECT_REGISTER_END()
 
+static ConVar r_deferred_fire_shadows( "r_deferred_fire_shadows", "1", FCVAR_ARCHIVE, "dynamic shadows for burning entities and props" );
+
 
 //-----------------------------------------------------------------------------
 // Purpose:
@@ -417,7 +419,8 @@ void C_EntityFlame::Simulate( void )
 		Vector vecFlameColor = Vector( 0.96f, 0.38f, 0.04f ) * ( 0.90f * flGrowth );
 		Vector fallbackPos = GetAbsOrigin();
 
-		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, vecTargetPos, vecFlameColor, flFullRadius, 0, 2048.0f, &fallbackPos );
+		int iShadowFlags = r_deferred_fire_shadows.GetBool() ? DEFLIGHT_SHADOW_ENABLED : 0;
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, vecTargetPos, vecFlameColor, flFullRadius, iShadowFlags, 2048.0f, &fallbackPos );
 	}
 	else
 	{

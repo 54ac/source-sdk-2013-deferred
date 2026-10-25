@@ -54,6 +54,7 @@ IMesh *def_light_t::pMeshUnitSphere = NULL;
 def_light_t::def_light_t( bool bWorld )
 {
 	bWorldLight = bWorld;
+	bWasShadowActive = false;
 
 	pos.Init();
 	ang.Init();

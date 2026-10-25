@@ -111,6 +111,10 @@ void TE_DynamicLight( IRecipientFilter& filter, float delay,
 			l->iVisible_Range = (uint16)clamp( radius, 512.0f, 2048.0f );
 			l->iShadow_Dist = l->iVisible_Dist / 2;
 			l->iShadow_Range = l->iVisible_Range / 2;
+			if ( nLightIndex != LIGHT_INDEX_MUZZLEFLASH )
+			{
+				l->iFlags |= DEFLIGHT_SHADOW_ENABLED;
+			}
 			l->MakeDirtyAll();
 			GetLightingManager()->AddTempLight( l );
 		}

@@ -10,6 +10,7 @@
 #pragma once
 
 class C_HL2MP_Player;
+struct def_light_t;
 #include "c_basehlplayer.h"
 #include "hl2mp_player_shared.h"
 #include "beamdraw.h"
@@ -157,6 +158,7 @@ private:
 
 	void ReleaseFlashlight( void );
 	Beam_t	*m_pFlashlightBeam;
+	def_light_t *m_pFlashlightEndLight;
 
 	CNetworkVar( HL2MPPlayerState, m_iPlayerState );	
 

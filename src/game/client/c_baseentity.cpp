@@ -47,6 +47,8 @@
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "deferred/deferred_shared_common.h"
+#include "deferred/cdeferred_manager_client.h"
+#include "deferred/clight_manager.h"
 
 #include "tier0/memdbgon.h"
 
@@ -904,6 +906,7 @@ C_BaseEntity::C_BaseEntity() :
 {
 	m_pAttributes = NULL;
 	m_bHasSpecialRenderer = false;
+	m_pDeferredLight = NULL;
 
 	AddVar( &m_vecOrigin, &m_iv_vecOrigin, LATCH_SIMULATION_VAR );
 	AddVar( &m_angRotation, &m_iv_angRotation, LATCH_SIMULATION_VAR );
@@ -1190,6 +1193,11 @@ void C_BaseEntity::TrackAngRotation( bool bTrack )
 
 void C_BaseEntity::Term()
 {
+	if ( GetLightingManager() && m_pDeferredLight )
+	{
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	}
+
 	C_BaseEntity::PhysicsRemoveTouchedList( this );
 	C_BaseEntity::PhysicsRemoveGroundList( this );
 	DestroyAllDataObjects();
@@ -3057,28 +3065,57 @@ bool C_BaseEntity::IsSubModel( void )
 //-----------------------------------------------------------------------------
 void C_BaseEntity::CreateLightEffects( void )
 {
-	dlight_t *dl;
-
 	// Is this for player flashlights only, if so move to linkplayers?
 	if ( index == render->GetViewEntity() )
 		return;
 
-	if (IsEffectActive(EF_BRIGHTLIGHT))
+	const bool bBright = IsEffectActive( EF_BRIGHTLIGHT );
+	const bool bDim = IsEffectActive( EF_DIMLIGHT );
+
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
 	{
-		dl = effects->CL_AllocDlight ( index );
-		dl->origin = GetAbsOrigin();
-		dl->origin[2] += 16;
-		dl->color.r = dl->color.g = dl->color.b = 250;
-		dl->radius = random->RandomFloat(400,431);
-		dl->die = gpGlobals->curtime + 0.001;
+		if ( bBright || bDim )
+		{
+			Vector lightColor = bBright ? Vector( 250.0f / 255.0f, 250.0f / 255.0f, 250.0f / 255.0f )
+			                            : Vector( 100.0f / 255.0f, 100.0f / 255.0f, 100.0f / 255.0f );
+			float flRadius = bBright ? 400.0f : 200.0f;
+			Vector lightOrigin = GetAbsOrigin();
+			if ( bBright )
+				lightOrigin.z += 16.0f;
+
+			Vector fallbackPos = lightOrigin;
+			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, lightColor, flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 1024.0f, flRadius * 3.0f ), &fallbackPos );
+		}
+		else if ( m_pDeferredLight )
+		{
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+		}
 	}
-	if (IsEffectActive(EF_DIMLIGHT))
-	{			
-		dl = effects->CL_AllocDlight ( index );
-		dl->origin = GetAbsOrigin();
-		dl->color.r = dl->color.g = dl->color.b = 100;
-		dl->radius = random->RandomFloat(200,231);
-		dl->die = gpGlobals->curtime + 0.001;
+	else
+	{
+		if ( m_pDeferredLight && GetLightingManager() )
+		{
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+		}
+
+		dlight_t *dl;
+		if ( bBright )
+		{
+			dl = effects->CL_AllocDlight ( index );
+			dl->origin = GetAbsOrigin();
+			dl->origin[2] += 16;
+			dl->color.r = dl->color.g = dl->color.b = 250;
+			dl->radius = random->RandomFloat(400,431);
+			dl->die = gpGlobals->curtime + 0.001;
+		}
+		if ( bDim )
+		{			
+			dl = effects->CL_AllocDlight ( index );
+			dl->origin = GetAbsOrigin();
+			dl->color.r = dl->color.g = dl->color.b = 100;
+			dl->radius = random->RandomFloat(200,231);
+			dl->die = gpGlobals->curtime + 0.001;
+		}
 	}
 }
 

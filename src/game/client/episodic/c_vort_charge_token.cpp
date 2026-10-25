@@ -20,6 +20,9 @@
 #include "proxyentity.h"
 #include "materialsystem/imaterial.h"
 #include "materialsystem/imaterialvar.h"
+#include "deferred/deferred_shared_common.h"
+#include "deferred/cdeferred_manager_client.h"
+#include "deferred/clight_manager.h"
 
 #define NUM_INTERIOR_PARTICLES	8
 
@@ -197,6 +200,13 @@ class C_VortigauntChargeToken : public C_BaseEntity
 	DECLARE_CLIENTCLASS();
 
 public:
+	C_VortigauntChargeToken() : m_pDeferredLight( NULL ), m_pDLight( NULL ), m_hEffect( NULL ) {}
+	virtual ~C_VortigauntChargeToken()
+	{
+		if ( GetLightingManager() && m_pDeferredLight )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	}
+
 	virtual void	UpdateOnRemove( void );
 	virtual void	ClientThink( void );
 	virtual void	NotifyShouldTransmit( ShouldTransmitState_t state );
@@ -212,6 +222,7 @@ private:
 	bool							m_bFadeOut;
 	CNewParticleEffect				*m_hEffect;
 	dlight_t						*m_pDLight;
+	def_light_t					*m_pDeferredLight;
 };
 
 void RecvProxy_FadeOutDuration( const CRecvProxyData *pData, void *pStruct, void *pOut )
@@ -238,6 +249,12 @@ void C_VortigauntChargeToken::UpdateOnRemove( void )
 	if ( m_pDLight != NULL )
 	{
 		m_pDLight->die = gpGlobals->curtime;
+		m_pDLight = NULL;
+	}
+
+	if ( GetLightingManager() && m_pDeferredLight )
+	{
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 	}
 }
 
@@ -278,6 +295,11 @@ void C_VortigauntChargeToken::OnDataChanged( DataUpdateType_t type )
 			m_hEffect->StopEmission();
 			m_hEffect = NULL;
 		}
+
+		if ( GetLightingManager() && m_pDeferredLight )
+		{
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+		}
 	}
 
 	BaseClass::OnDataChanged( type );
@@ -288,11 +310,13 @@ void C_VortigauntChargeToken::OnDataChanged( DataUpdateType_t type )
 //-----------------------------------------------------------------------------
 void C_VortigauntChargeToken::ClientThink( void )
 {
-	//
-	// -- DLight 
-	//
-
-	if ( m_pDLight != NULL )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		Vector lightColor( 64.0f / 255.0f, 255.0f / 255.0f, 64.0f / 255.0f );
+		Vector fallbackPos = GetAbsOrigin();
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos );
+	}
+	else if ( m_pDLight != NULL )
 	{
 		m_pDLight->origin = GetAbsOrigin();
 		m_pDLight->radius = DLIGHT_RADIUS;
@@ -311,6 +335,13 @@ class C_VortigauntEffectDispel : public C_BaseEntity
 	DECLARE_CLIENTCLASS();
 
 public:
+	C_VortigauntEffectDispel() : m_pDeferredLight( NULL ), m_pDLight( NULL ), m_hEffect( NULL ) {}
+	virtual ~C_VortigauntEffectDispel()
+	{
+		if ( GetLightingManager() && m_pDeferredLight )
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
+	}
+
 	virtual void	UpdateOnRemove( void );
 	virtual void	ClientThink( void );
 	virtual void	NotifyShouldTransmit( ShouldTransmitState_t state );
@@ -326,6 +357,7 @@ private:
 	CNewParticleEffect				*m_hEffect;
 	bool							m_bFadeOut;
 	dlight_t						*m_pDLight;
+	def_light_t					*m_pDeferredLight;
 };
 
 void RecvProxy_DispelFadeOutDuration( const CRecvProxyData *pData, void *pStruct, void *pOut )
@@ -352,6 +384,12 @@ void C_VortigauntEffectDispel::UpdateOnRemove( void )
 	if ( m_pDLight != NULL )
 	{
 		m_pDLight->die = gpGlobals->curtime;
+		m_pDLight = NULL;
+	}
+
+	if ( GetLightingManager() && m_pDeferredLight )
+	{
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 	}
 }
 
@@ -366,6 +404,11 @@ void C_VortigauntEffectDispel::OnDataChanged( DataUpdateType_t type )
 		{
 			m_hEffect->StopEmission();
 			m_hEffect = NULL;
+		}
+
+		if ( GetLightingManager() && m_pDeferredLight )
+		{
+			GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 		}
 	}
 
@@ -404,16 +447,19 @@ bool C_VortigauntEffectDispel::SetupEmitters( void )
 {
 	m_pDLight = NULL;
 
+	if ( !GetDeferredManager()->IsDeferredRenderingEnabled() )
+	{
 #ifndef _X360
-	m_pDLight = effects->CL_AllocDlight ( index );
-	m_pDLight->origin = GetAbsOrigin();
-	m_pDLight->color.r = 64;
-	m_pDLight->color.g = 255;
-	m_pDLight->color.b = 64;
-	m_pDLight->radius = 0;
-	m_pDLight->minlight = DLIGHT_MINLIGHT;
-	m_pDLight->die = FLT_MAX;
+		m_pDLight = effects->CL_AllocDlight ( index );
+		m_pDLight->origin = GetAbsOrigin();
+		m_pDLight->color.r = 64;
+		m_pDLight->color.g = 255;
+		m_pDLight->color.b = 64;
+		m_pDLight->radius = 0;
+		m_pDLight->minlight = DLIGHT_MINLIGHT;
+		m_pDLight->die = FLT_MAX;
 #endif // _X360
+	}
 
 	return true;
 }
@@ -423,7 +469,13 @@ bool C_VortigauntEffectDispel::SetupEmitters( void )
 //-----------------------------------------------------------------------------
 void C_VortigauntEffectDispel::ClientThink( void )
 {
-	if ( m_pDLight != NULL )
+	if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+	{
+		Vector lightColor( 64.0f / 255.0f, 255.0f / 255.0f, 64.0f / 255.0f );
+		Vector fallbackPos = GetAbsOrigin();
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos );
+	}
+	else if ( m_pDLight != NULL )
 	{
 		m_pDLight->origin = GetAbsOrigin();
 		m_pDLight->radius = DLIGHT_RADIUS;

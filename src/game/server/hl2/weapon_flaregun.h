@@ -40,6 +40,7 @@ public:
 	static CFlare *Create( Vector vecOrigin, QAngle vecAngles, CBaseEntity *pOwner, float lifetime );
 
 	virtual unsigned int PhysicsSolidMaskForEntity( void ) const;
+	virtual int UpdateTransmitState() { return SetTransmitState( FL_EDICT_ALWAYS ); }
 
 	void	Spawn( void );
 	void	Precache( void );

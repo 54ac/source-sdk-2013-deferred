@@ -30,6 +30,7 @@ struct def_light_t
 	void ApplyKeyValueProperties( KeyValues *pKV );
 
 	bool bWorldLight;
+	bool bWasShadowActive;
 
 	Vector pos;
 	QAngle ang;

@@ -14,6 +14,9 @@
 #include "iviewrender_beams.h"			// flashlight beam
 #include "r_efx.h"
 #include "dlight.h"
+#include "deferred/deferred_shared_common.h"
+#include "deferred/cdeferred_manager_client.h"
+#include "deferred/clight_manager.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -113,6 +116,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_blinkTimer.Invalidate();
 
 	m_pFlashlightBeam = NULL;
+	m_pFlashlightEndLight = NULL;
 
 	SuitPower_Initialize();
 }
@@ -646,13 +650,28 @@ void C_HL2MP_Player::AddEntity( void )
 
 				beams->UpdateBeamInfo( m_pFlashlightBeam, beamInfo );
 
-				dlight_t *el = effects->CL_AllocDlight( 0 );
-				el->origin = tr.endpos;
-				el->radius = 50; 
-				el->color.r = 200;
-				el->color.g = 200;
-				el->color.b = 200;
-				el->die = gpGlobals->curtime + 0.1;
+				if ( GetDeferredManager()->IsDeferredRenderingEnabled() && GetLightingManager() )
+				{
+					Vector lightColor( 200.0f / 255.0f, 200.0f / 255.0f, 200.0f / 255.0f );
+					Vector lightOrigin = tr.endpos + tr.plane.normal * 2.0f;
+					Vector fallbackPos = lightOrigin;
+					GetLightingManager()->EnsureDynamicPointLight( m_pFlashlightEndLight, lightOrigin, lightColor, 80.0f, 0, 2048.0f, &fallbackPos );
+				}
+				else
+				{
+					if ( GetLightingManager() && m_pFlashlightEndLight )
+					{
+						GetLightingManager()->FreeDynamicLight( m_pFlashlightEndLight );
+					}
+
+					dlight_t *el = effects->CL_AllocDlight( 0 );
+					el->origin = tr.endpos;
+					el->radius = 50; 
+					el->color.r = 200;
+					el->color.g = 200;
+					el->color.b = 200;
+					el->die = gpGlobals->curtime + 0.1;
+				}
 			}
 		}
 		else if ( m_pFlashlightBeam )
@@ -746,6 +765,11 @@ void C_HL2MP_Player::ReleaseFlashlight( void )
 		m_pFlashlightBeam->die = gpGlobals->curtime - 1;
 
 		m_pFlashlightBeam = NULL;
+	}
+
+	if ( GetLightingManager() && m_pFlashlightEndLight )
+	{
+		GetLightingManager()->FreeDynamicLight( m_pFlashlightEndLight );
 	}
 }
 

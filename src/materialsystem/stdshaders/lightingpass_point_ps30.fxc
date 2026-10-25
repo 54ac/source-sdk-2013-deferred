@@ -190,11 +190,17 @@ PS_OUTPUT main( const PS_INPUT In )
 									-vecDelta, dist, worldRayInv,
 									litface, half_lambert, phong_exp );
 
-		vecDelta = mul3x3( vecDelta, matRotation );
+		float viewDot = 1.0f - abs( dot( vecDelta / dist, flNormal ) );
+		float3 worldPosLocal = worldPos + flNormal * ( viewDot * 2.0f + 1.0f );
+		float3 vecDeltaLocal = worldPosLocal - g_flMixedData[ iDataIndex ].xyz;
+		float distLocal = length( vecDeltaLocal );
+		vecDeltaLocal = mul3x3( vecDeltaLocal, matRotation );
 
 		localLight.y *= PerformDualParaboloidShadow( sMixedSampler[ iSamplerIndex ],
-			vecDelta, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			dist, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
+			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
+			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
+
+		vecDelta = mul3x3( vecDelta, matRotation );
 
 		flLight += DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
@@ -218,11 +224,15 @@ PS_OUTPUT main( const PS_INPUT In )
 									-vecDelta, dist, worldRayInv,
 									litface, half_lambert, phong_exp );
 
-		vecDelta = mul3x3( vecDelta, matRotation );
+		float viewDot = 1.0f - abs( dot( vecDelta / dist, flNormal ) );
+		float3 worldPosLocal = worldPos + flNormal * ( viewDot * 2.0f + 1.0f );
+		float3 vecDeltaLocal = worldPosLocal - g_flMixedData[ iDataIndex ].xyz;
+		float distLocal = length( vecDeltaLocal );
+		vecDeltaLocal = mul3x3( vecDeltaLocal, matRotation );
 
 		localLight.y *= PerformDualParaboloidShadow( sMixedSampler[ iSamplerIndex ],
-			vecDelta, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			dist, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
+			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
+			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
 
 		flLight += DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,

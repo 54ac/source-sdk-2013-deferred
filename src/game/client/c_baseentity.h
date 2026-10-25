@@ -58,6 +58,7 @@ class C_BaseCombatCharacter;
 class CEntityMapData;
 class ConVar;
 class CDmgAccumulator;
+struct def_light_t;
 class IHasAttributes;
 class IBrushRenderer;
 
@@ -1699,6 +1700,7 @@ protected:
 	void InstallBrushSurfaceRenderer( IBrushRenderer* );
 private:
 	bool m_bHasSpecialRenderer;
+	def_light_t *m_pDeferredLight;
 
 #ifdef TF_CLIENT_DLL
 	// TF prevents drawing of any entity attached to players that aren't items in the inventory of the player.

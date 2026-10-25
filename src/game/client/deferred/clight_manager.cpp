@@ -260,7 +260,10 @@ Vector CLightingManager::SanitizeLightOrigin( const Vector &vecOrigin, const Vec
 			static const Vector s_probeOffsets[] = {
 				Vector( 0, 0, 8 ), Vector( 0, 0, -8 ),
 				Vector( 8, 0, 0 ), Vector( -8, 0, 0 ),
-				Vector( 0, 8, 0 ), Vector( 0, -8, 0 )
+				Vector( 0, 8, 0 ), Vector( 0, -8, 0 ),
+				Vector( 16, 0, 0 ), Vector( -16, 0, 0 ),
+				Vector( 0, 16, 0 ), Vector( 0, -16, 0 ),
+				Vector( 0, 0, 16 ), Vector( 0, 0, -16 )
 			};
 			for ( int i = 0; i < ARRAYSIZE( s_probeOffsets ); ++i )
 			{
@@ -274,21 +277,51 @@ Vector CLightingManager::SanitizeLightOrigin( const Vector &vecOrigin, const Vec
 		}
 	}
 
-	static const Vector s_checkDirs[] = {
-		Vector( 0, 0, -1 ), Vector( 0, 0, 1 ),
-		Vector( 1, 0, 0 ), Vector( -1, 0, 0 ),
-		Vector( 0, 1, 0 ), Vector( 0, -1, 0 )
-	};
 	CTraceFilterWorldOnly worldFilter;
-	for ( int i = 0; i < ARRAYSIZE( s_checkDirs ); ++i )
+	const Vector hullMins( -flMinClearance, -flMinClearance, -flMinClearance );
+	const Vector hullMaxs( flMinClearance, flMinClearance, flMinClearance );
+	Vector prevNormal = vec3_origin;
+
+	for ( int i = 0; i < 3; ++i )
 	{
 		trace_t tr;
-		UTIL_TraceLine( safeOrigin, safeOrigin + s_checkDirs[i] * flMinClearance, MASK_SOLID_BRUSHONLY, &worldFilter, &tr );
-		if ( tr.fraction < 1.0f && !tr.startsolid )
+		UTIL_TraceHull( safeOrigin, safeOrigin, hullMins, hullMaxs, MASK_SOLID_BRUSHONLY, &worldFilter, &tr );
+		if ( !tr.startsolid && tr.fraction >= 1.0f )
+			break;
+
+		if ( tr.plane.normal.LengthSqr() < 0.001f )
 		{
-			float pushDist = ( 1.0f - tr.fraction ) * flMinClearance + 1.0f;
-			safeOrigin += tr.plane.normal * pushDist;
+			static const Vector s_checkDirs[] = {
+				Vector( 0, 0, -1 ), Vector( 0, 0, 1 ),
+				Vector( 1, 0, 0 ), Vector( -1, 0, 0 ),
+				Vector( 0, 1, 0 ), Vector( 0, -1, 0 )
+			};
+			for ( int j = 0; j < ARRAYSIZE( s_checkDirs ); ++j )
+			{
+				trace_t rayTr;
+				UTIL_TraceLine( safeOrigin, safeOrigin + s_checkDirs[j] * flMinClearance, MASK_SOLID_BRUSHONLY, &worldFilter, &rayTr );
+				if ( rayTr.fraction < 1.0f && !rayTr.startsolid && rayTr.plane.normal.LengthSqr() > 0.001f )
+				{
+					tr.plane.normal = rayTr.plane.normal;
+					tr.fraction = rayTr.fraction;
+					break;
+				}
+			}
+			if ( tr.plane.normal.LengthSqr() < 0.001f )
+				break;
 		}
+
+		const float pushDist = ( 1.0f - tr.fraction ) * flMinClearance + 1.0f;
+		const Vector vecPush = tr.plane.normal * pushDist;
+
+		if ( prevNormal.LengthSqr() > 0.001f && DotProduct( tr.plane.normal, prevNormal ) < -0.7f )
+		{
+			safeOrigin -= vecPush * 0.5f;
+			break;
+		}
+
+		safeOrigin += vecPush;
+		prevNormal = tr.plane.normal;
 	}
 
 	return safeOrigin;
@@ -426,6 +459,13 @@ ConVar r_deferred_shadow_dist_min(
 	"4096",
 	FCVAR_ARCHIVE,
 	"minimum distance for dynamic light shadow fade"
+);
+
+ConVar r_deferred_shadow_max(
+	"r_deferred_shadow_max",
+	"32",
+	FCVAR_ARCHIVE,
+	"maximum simultaneous dynamic shadow casters"
 );
 
 #if DEFCFG_USE_SSE
@@ -659,8 +699,10 @@ void CLightingManager::CullLights()
 		if ( r_deferred_light_distance_fade.GetBool() && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
 			continue;
 
-		const float flEffectiveShadowDist  = max( (float)l->iShadow_Dist, r_deferred_shadow_dist_min.GetFloat() );
-		const float flEffectiveShadowRange = max( (float)l->iShadow_Range, 1024.0f );
+		const float flEffectiveShadowDist  = ( r_deferred_shadow_dist_min.GetFloat() > 0.0f )
+			                                   ? r_deferred_shadow_dist_min.GetFloat()
+			                                   : (float)l->iShadow_Dist;
+		const float flEffectiveShadowRange = ( l->iShadow_Range > 0 ) ? (float)l->iShadow_Range : 1024.0f;
 
 		l->flDistance_ViewOrigin = veclightDelta.Length();
 		l->flShadowFade          = l->HasShadow()
@@ -701,6 +743,19 @@ inline fltx4 IsPointInBoundsX4( const Vector& point, fltx4 boundsMin[3], fltx4 b
 	);
 }
 
+int __cdecl CLightingManager::LightDistanceCompare( def_light_t* const* a, def_light_t* const* b )
+{
+	const def_light_t* lA = *a;
+	const def_light_t* lB = *b;
+
+	const float distA = lA->flDistance_ViewOrigin * ( lA->bWasShadowActive ? 0.85f : 1.0f );
+	const float distB = lB->flDistance_ViewOrigin * ( lB->bWasShadowActive ? 0.85f : 1.0f );
+
+	if ( distA < distB ) return -1;
+	if ( distA > distB ) return 1;
+	return 0;
+}
+
 void CLightingManager::SortLights()
 {
 #if DEBUG
@@ -718,12 +773,12 @@ void CLightingManager::SortLights()
 	const Vector camMaxs( m_vecViewOrigin + vecBloat );
 
 #if DEFCFG_USE_SSE
-	const fltx4& zNearX4 = ReplicateX4( zNear );
-
 	for ( uint i = 0; i < m_uiSortDataCount; i++ )
 	{
 		def_light_presortdatax4_t& s = m_pSortDataX4[i];
 
+#if DEFCFG_EXTRA_SORT
+		const fltx4& zNearX4 = ReplicateX4( zNear );
 		fltx4 adjustedMins[3] = {
 			SubSIMD( s.bounds_min_naive[0], zNearX4 ),
 			SubSIMD( s.bounds_min_naive[1], zNearX4 ),
@@ -762,7 +817,13 @@ void CLightingManager::SortLights()
 			}
 			else
 			{
-				if ( IS_NAN( SubFloat( needsFullscreen, j ) ) )
+				bool bNeedsFullscreen = IS_NAN( SubFloat( needsFullscreen, j ) );
+				if ( !bNeedsFullscreen && ( s.lights[j]->flDistance_ViewOrigin < ( s.lights[j]->flRadius + zNear + 32.0f ) ) )
+				{
+					bNeedsFullscreen = true;
+				}
+
+				if ( bNeedsFullscreen )
 				{
 					m_hPreSortedLights[LSORT_POINT_FULLSCREEN].AddToTail( s.lights[j] );
 				}
@@ -772,6 +833,19 @@ void CLightingManager::SortLights()
 				}
 			}
 		}
+#else
+		for ( uint j = 0; j < s.count; j++ )
+		{
+			if ( s.lights[j]->IsSpot() )
+			{
+				m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].AddToTail( s.lights[j] );
+			}
+			else
+			{
+				m_hPreSortedLights[LSORT_POINT_FULLSCREEN].AddToTail( s.lights[j] );
+			}
+		}
+#endif
 
 		const fltx4& volume = AndSIMD( s.hasVolumetrics, s.hasVolumetrics );
 
@@ -780,25 +854,35 @@ void CLightingManager::SortLights()
 #else
 	FOR_EACH_VEC_FAST( def_light_t*, m_hRenderLights, l )
 	{
+#if DEFCFG_EXTRA_SORT
 		bool bNeedsFullscreen = IsPointInBounds( m_vecViewOrigin,
 			l->bounds_min_naive - vecBloat,
 			l->bounds_max_naive + vecBloat );
+
+		if ( !bNeedsFullscreen && !l->IsSpot() && ( l->flDistance_ViewOrigin < ( l->flRadius + zNear + 32.0f ) ) )
+		{
+			bNeedsFullscreen = true;
+		}
 
 		if ( bNeedsFullscreen && l->IsSpot() )
 		{
 			bNeedsFullscreen = !l->spotFrustum.CullBox( camMins, camMaxs );
 		}
 
+		Assert( l->iLighttype * 2 + 1 < LSORT_COUNT );
+		m_hPreSortedLights[ l->iLighttype * 2 + (int)bNeedsFullscreen ].AddToTail( l );
+#else
+		m_hPreSortedLights[ l->iLighttype * 2 + 1 ].AddToTail( l );
+#endif
+
 		const bool bVolume = ( l->HasShadow() && l->HasVolumetrics() );
 
 		m_bDrawVolumetrics = m_bDrawVolumetrics || bVolume;
-
-		Assert( l->iLighttype * 2 + 1 < LSORT_COUNT );
-		m_hPreSortedLights[ l->iLighttype * 2 + (int)bNeedsFullscreen ].AddToTail( l );
 	}
 	FOR_EACH_VEC_FAST_END
 #endif
 
+#if DEFCFG_EXTRA_SORT
 	static CUtlVector<def_light_t*> hBatchFullscreen;
 
 	for ( int i = 0; i < 2; i++ )
@@ -814,14 +898,22 @@ void CLightingManager::SortLights()
 			const Vector& viewVec = l->boundsCenter - m_vecViewOrigin;
 			const float   flDot   = DotProduct( m_vecForward, viewVec.Normalized() );
 
-			const float flCoverageFactor = flSizeFactor * l->flRadius / l->flDistance_ViewOrigin * flDot;
+			float flCoverageFactor = 0.0f;
+			if ( l->flDistance_ViewOrigin < ( l->flRadius * 1.35f + zNear + 32.0f ) )
+			{
+				flCoverageFactor = 2.0f;
+			}
+			else if ( flDot > 0.0f )
+			{
+				flCoverageFactor = flSizeFactor * l->flRadius / l->flDistance_ViewOrigin * flDot;
+			}
 
 			if ( flCoverageFactor > 1 )
 				hBatchFullscreen.AddToTail( l );
 		}
 		FOR_EACH_VEC_FAST_END
 
-		if ( hBatchFullscreen.Count() > 1 )
+		if ( hBatchFullscreen.Count() > 0 )
 		{
 			FOR_EACH_VEC_FAST( def_light_t*, hBatchFullscreen, l )
 			{
@@ -837,6 +929,10 @@ void CLightingManager::SortLights()
 
 		hBatchFullscreen.RemoveAll();
 	}
+#endif
+
+	m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Sort( LightDistanceCompare );
+	m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Sort( LightDistanceCompare );
 }
 
 FORCEINLINE float CLightingManager::DoLightStyle( def_light_t* l )
@@ -902,12 +998,11 @@ FORCEINLINE float CLightingManager::DoLightStyle( def_light_t* l )
 						2 * 9				-- shadowed cookie
 	*/
 
-FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4 )
+FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4, int bShadow, int bCookie )
 {
-	const bool bShadow = l->ShouldRenderShadow();
-	const bool bCookie = l->HasCookie();
-
-	const bool bAdvanced = bShadow || bCookie;
+	const bool bShadowActual = ( bShadow >= 0 ) ? ( bShadow != 0 ) : l->ShouldRenderShadow();
+	const bool bCookieActual = ( bCookie >= 0 ) ? ( bCookie != 0 ) : ( l->HasCookie() && l->IsCookieReady() );
+	const bool bAdvanced = bShadowActual || bCookieActual;
 
 	int numConsts = 0;
 
@@ -1006,17 +1101,31 @@ FORCEINLINE bool SortLightsByComboType( const CUtlVector<def_light_t*>& hLights,
                                         CUtlVector<def_light_t*>& hLightsShadowedCookie,
                                         CUtlVector<def_light_t*>& hLightsShadowed,
                                         CUtlVector<def_light_t*>& hLightsCookied,
-                                        CUtlVector<def_light_t*>& hLightsSimple )
+                                        CUtlVector<def_light_t*>& hLightsSimple,
+                                        int nMaxShadows )
 {
 	hLightsShadowedCookie.RemoveAll();
 	hLightsShadowed.RemoveAll();
 	hLightsCookied.RemoveAll();
 	hLightsSimple.RemoveAll();
 
+	int nShadowsAssigned = 0;
+
 	FOR_EACH_VEC_FAST( def_light_t* const, hLights, l )
 	{
-		const bool bShadowed = l->ShouldRenderShadow();
-		const bool bCookie   = l->HasCookie() && l->IsCookieReady();
+		const bool bWantsShadow = l->ShouldRenderShadow();
+		const bool bShadowed    = bWantsShadow && ( nShadowsAssigned < nMaxShadows );
+		const bool bCookie      = l->HasCookie() && l->IsCookieReady();
+
+		if ( bShadowed )
+		{
+			nShadowsAssigned++;
+			l->bWasShadowActive = true;
+		}
+		else
+		{
+			l->bWasShadowActive = false;
+		}
 
 		if ( bShadowed && bCookie )
 			hLightsShadowedCookie.AddToTail( l );
@@ -1176,10 +1285,11 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 		def_light_t* pLight;
 	};
 
+	const int nMaxShadows = r_deferred_shadow_max.GetInt();
 	for ( int i = 0; i < iNumLightTypes; i++ )
 	{
 		if ( SortLightsByComboType( *( lightTypes[i].lightVecFullscreen ),
-		                            lightsShadowedCookied, lightsShadowed, lightsCookied, lightsSimple ) )
+		                            lightsShadowedCookied, lightsShadowed, lightsCookied, lightsSimple, nMaxShadows ) )
 		{
 			while ( lightsShadowedCookied.Count() > 0 || lightsShadowed.Count() > 0 ||
 				lightsCookied.Count() > 0 || lightsSimple.Count() > 0 )
@@ -1214,11 +1324,17 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 					float* pFlWriter = pFlLightDataBlock->pFlData;
 
-					FOR_EACH_VEC_FAST( def_light_t*, commitableLights, l )
-					{
-						pFlWriter += WriteLight( l, pFlWriter ) * 4;
-					}
-					FOR_EACH_VEC_FAST_END
+					for ( int k = 0; k < drawShadowedCookied; k++ )
+						pFlWriter += WriteLight( lightsShadowedCookied[k], pFlWriter, 1, 1 ) * 4;
+
+					for ( int k = 0; k < drawShadowed; k++ )
+						pFlWriter += WriteLight( lightsShadowed[k], pFlWriter, 1, 0 ) * 4;
+
+					for ( int k = 0; k < drawCookied; k++ )
+						pFlWriter += WriteLight( lightsCookied[k], pFlWriter, 0, 1 ) * 4;
+
+					for ( int k = 0; k < drawSimple; k++ )
+						pFlWriter += WriteLight( lightsSimple[k], pFlWriter, 0, 0 ) * 4;
 
 					Assert( pFlWriter - pFlLightDataBlock->pFlData == memToAlloc );
 
@@ -1256,8 +1372,8 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 					iDrawnSimple += drawSimple;
 
 					static CUtlVector<def_light_t*> cookiedLights;
-					cookiedLights.AddVectorToTail( lightsShadowedCookied );
-					cookiedLights.AddVectorToTail( lightsCookied );
+					cookiedLights.AddMultipleToTail( drawShadowedCookied, lightsShadowedCookied.Base() );
+					cookiedLights.AddMultipleToTail( drawCookied, lightsCookied.Base() );
 
 					for ( int iCookied = 0; iCookied < ( drawShadowedCookied + drawCookied ); iCookied++ )
 					{
@@ -1355,7 +1471,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			lightDataCommon_t *pFlLightDataBlock = new lightDataCommon_t( memToAlloc );
 
-			WriteLight( l, pFlLightDataBlock->pFlData );
+			WriteLight( l, pFlLightDataBlock->pFlData, 0, bCookie ? 1 : 0 );
 
 			pFlLightDataBlock->numRows = lightTypes[i].constCount_simple;
 			pFlLightDataBlock->numShadowedCookied = 0;
@@ -1401,7 +1517,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			lightDataCommon_t *pFlLightDataBlock = new lightDataCommon_t( memToAlloc );
 
-			WriteLight( l, pFlLightDataBlock->pFlData );
+			WriteLight( l, pFlLightDataBlock->pFlData, bShadow ? 1 : 0, bCookie ? 1 : 0 );
 
 			if ( bShadow )
 			{
@@ -1521,7 +1637,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			lightDataCommon_t* pFlLightDataBlock = new lightDataCommon_t( memToAlloc );
 
-			WriteLight( l, pFlLightDataBlock->pFlData );
+			WriteLight( l, pFlLightDataBlock->pFlData, bShadow ? 1 : 0, bCookie ? 1 : 0 );
 
 			if ( bShadow )
 			{
@@ -1631,33 +1747,37 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 		Assert( iNumLightTypes == 2 );
 
 		const char* pszFilterName = "UNKNOWN FILTER";
-		const char* pszProfile    = "HARDWARE";
+		const char* pszProfile    = "DEPTH STENCIL (Hardware PCF)";
 
 #if SHADOWMAPPING_USE_COLOR
-		pszProfile = "SOFTWARE";
+		pszProfile = "COLOR RT (R32F)";
 #endif
 
 		switch ( SHADOWMAPPING_METHOD )
 		{
 		case SHADOWMAPPING_DEPTH_COLOR__RAW:
+			pszFilterName = "RAW (R32F)";
+			break;
 		case SHADOWMAPPING_DEPTH_STENCIL__RAW:
-			pszFilterName = "RAW";
+			pszFilterName = "RAW (Hardware)";
 			break;
 		case SHADOWMAPPING_DEPTH_STENCIL__3X3_GAUSSIAN:
-			pszFilterName = "3x3 GAUSS";
+			pszFilterName = "3x3 GAUSS (Hardware PCF)";
 			break;
 		case SHADOWMAPPING_DEPTH_COLOR__4X4_SOFTWARE_BILINEAR_BOX:
-			pszFilterName = "4x4 BOX";
+			pszFilterName = "4x4 BOX (Shader Bilinear)";
 			break;
 		case SHADOWMAPPING_DEPTH_COLOR__4X4_SOFTWARE_BILINEAR_GAUSSIAN:
-			pszFilterName = "4x4 GAUSS";
+			pszFilterName = "4x4 GAUSS (Shader Bilinear)";
 			break;
 		case SHADOWMAPPING_DEPTH_COLOR__5X5_SOFTWARE_BILINEAR_GAUSSIAN:
+			pszFilterName = "5x5 GAUSS (Shader Bilinear)";
+			break;
 		case SHADOWMAPPING_DEPTH_STENCIL__5X5_GAUSSIAN:
-			pszFilterName = "5x5 GAUSS";
+			pszFilterName = "5x5 GAUSS (Hardware PCF)";
 			break;
 		case SHADOWMAPPING_DEPTH_COLOR__PCSS_4X4_PCF_4X4:
-			pszFilterName = "PCSS 4x4 PCF 4x4";
+			pszFilterName = "PCSS 4x4 + PCF 4x4";
 			break;
 		default:
 			Assert(0); // add filter name to this switch case

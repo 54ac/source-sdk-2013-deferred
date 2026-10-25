@@ -25,6 +25,7 @@ public:
 	void Spawn( void );
 	void DynamicLightThink( void );
 	bool KeyValue( const char *szKeyName, const char *szValue );
+	virtual int UpdateTransmitState() { return SetTransmitState( FL_EDICT_ALWAYS ); }
 
 	DECLARE_SERVERCLASS();
 	DECLARE_DATADESC();

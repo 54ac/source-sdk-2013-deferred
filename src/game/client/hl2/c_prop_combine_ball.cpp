@@ -90,7 +90,7 @@ void C_PropCombineBall::ClientThink( void )
 		flRadiusScale = clamp( flRadiusScale, 200.0f, 350.0f );
 
 		Vector fallbackPos = GetAbsOrigin();
-		GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, GetAbsOrigin(), Vector( 0.25f, 0.588f, 1.0f ) * flPulse, flRadiusScale * flPulse, 0, 3072.0f, &fallbackPos );
+		GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, GetAbsOrigin(), Vector( 0.25f, 0.588f, 1.0f ) * flPulse, flRadiusScale * flPulse, DEFLIGHT_SHADOW_ENABLED, 3072.0f, &fallbackPos );
 	}
 	else if ( m_pDefLight )
 	{
@@ -369,6 +369,7 @@ void CombineBallImpactCallback( const CEffectData &data )
 		dl->col_diffuse = Vector( 0.35f, 0.65f, 1.0f );
 		dl->flRadius = 260.0f;
 		dl->flFalloffPower = 2.0f;
+		dl->iFlags |= DEFLIGHT_SHADOW_ENABLED;
 		dl->MakeDirtyAll();
 		GetLightingManager()->AddTempLight( dl );
 	}
@@ -395,6 +396,7 @@ void CombineBallExplosionCallback( const CEffectData &data )
 		dl->col_diffuse = Vector( 0.40f, 0.70f, 1.0f );
 		dl->flRadius = 500.0f;
 		dl->flFalloffPower = 2.0f;
+		dl->iFlags |= DEFLIGHT_SHADOW_ENABLED;
 		dl->MakeDirtyAll();
 		GetLightingManager()->AddTempLight( dl );
 	}

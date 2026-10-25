@@ -42,7 +42,7 @@ public:
 	void UpdateTemplights(float deltaTime);
 
 	// Unified dynamic light helpers
-	static Vector SanitizeLightOrigin( const Vector &vecOrigin, const Vector *pFallback = NULL, float flMinClearance = 6.0f );
+	static Vector SanitizeLightOrigin( const Vector &vecOrigin, const Vector *pFallback = NULL, float flMinClearance = 14.0f );
 
 	def_light_t *AllocDynamicPointLight( const Vector &vecOrigin, const Vector &vecColor, float flRadius,
 		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL );
@@ -136,8 +136,9 @@ private:
 	float m_flzNear;
 	bool m_bDrawVolumetrics;
 
+	static int __cdecl LightDistanceCompare( def_light_t* const* a, def_light_t* const* b );
 	FORCEINLINE float DoLightStyle( def_light_t *l );
-	FORCEINLINE int WriteLight( def_light_t *l, float *pfl4 );
+	FORCEINLINE int WriteLight( def_light_t *l, float *pfl4, int bShadow = -1, int bCookie = -1 );
 	FORCEINLINE void DrawVolumePrepass( bool bDoModelTransform, const CViewSetup &view, def_light_t *l );
 
 #if DEBUG

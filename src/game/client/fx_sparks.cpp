@@ -535,6 +535,7 @@ void FX_ElectricSpark( const Vector &pos, int nMagnitude, int nTrailLength, cons
 		l->iVisible_Range = l->flRadius * 2.0f;
 		l->iShadow_Dist = l->flRadius;
 		l->iShadow_Range = l->flRadius;
+		l->iFlags |= DEFLIGHT_SHADOW_ENABLED;
 		l->MakeDirtyAll();
 		GetLightingManager()->AddTempLight( l );
 	}
