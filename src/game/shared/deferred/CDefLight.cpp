@@ -41,6 +41,18 @@ BEGIN_DATADESC( CDeferredLight )
 	DEFINE_KEYFIELD( m_iVolumeSamples, FIELD_INTEGER, GetLightParamName( LPARAM_VOLUME_SAMPLES ) ),
 #endif
 
+	DEFINE_KEYFIELD( m_flUberRoundness, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_ROUNDNESS ) ),
+	DEFINE_KEYFIELD( m_flUberWidth, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WIDTH ) ),
+	DEFINE_KEYFIELD( m_flUberHeight, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_HEIGHT ) ),
+	DEFINE_KEYFIELD( m_flUberWEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WEDGE ) ),
+	DEFINE_KEYFIELD( m_flUberHEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_HEDGE ) ),
+	DEFINE_KEYFIELD( m_flUberShearX, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_SHEAR_X ) ),
+	DEFINE_KEYFIELD( m_flUberShearY, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_SHEAR_Y ) ),
+	DEFINE_KEYFIELD( m_flUberCutOn, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_CUTON ) ),
+	DEFINE_KEYFIELD( m_flUberCutOff, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_CUTOFF ) ),
+	DEFINE_KEYFIELD( m_flUberNearEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_NEAREDGE ) ),
+	DEFINE_KEYFIELD( m_flUberFarEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_FAREDGE ) ),
+
 END_DATADESC()
 #endif
 
@@ -80,6 +92,17 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 #	if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	SendPropInt( SENDINFO( m_iVolumeSamples ) ),
 #	endif
+	SendPropFloat( SENDINFO( m_flUberRoundness ) ),
+	SendPropFloat( SENDINFO( m_flUberWidth ) ),
+	SendPropFloat( SENDINFO( m_flUberHeight ) ),
+	SendPropFloat( SENDINFO( m_flUberWEdge ) ),
+	SendPropFloat( SENDINFO( m_flUberHEdge ) ),
+	SendPropFloat( SENDINFO( m_flUberShearX ) ),
+	SendPropFloat( SENDINFO( m_flUberShearY ) ),
+	SendPropFloat( SENDINFO( m_flUberCutOn ) ),
+	SendPropFloat( SENDINFO( m_flUberCutOff ) ),
+	SendPropFloat( SENDINFO( m_flUberNearEdge ) ),
+	SendPropFloat( SENDINFO( m_flUberFarEdge ) ),
 #else
 	RecvPropVector( RECVINFO( m_vecColor_Diff ) ),
 	RecvPropVector( RECVINFO( m_vecColor_Ambient ) ),
@@ -114,6 +137,17 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 #	if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	RecvPropInt( RECVINFO( m_iVolumeSamples ) ),
 #	endif
+	RecvPropFloat( RECVINFO( m_flUberRoundness ) ),
+	RecvPropFloat( RECVINFO( m_flUberWidth ) ),
+	RecvPropFloat( RECVINFO( m_flUberHeight ) ),
+	RecvPropFloat( RECVINFO( m_flUberWEdge ) ),
+	RecvPropFloat( RECVINFO( m_flUberHEdge ) ),
+	RecvPropFloat( RECVINFO( m_flUberShearX ) ),
+	RecvPropFloat( RECVINFO( m_flUberShearY ) ),
+	RecvPropFloat( RECVINFO( m_flUberCutOn ) ),
+	RecvPropFloat( RECVINFO( m_flUberCutOff ) ),
+	RecvPropFloat( RECVINFO( m_flUberNearEdge ) ),
+	RecvPropFloat( RECVINFO( m_flUberFarEdge ) ),
 
 #endif
 
@@ -123,6 +157,17 @@ LINK_ENTITY_TO_CLASS( light_deferred, CDeferredLight );
 
 CDeferredLight::CDeferredLight()
 {
+	m_flUberRoundness = 1.0f;
+	m_flUberWidth = 0.5f;
+	m_flUberHeight = 0.5f;
+	m_flUberWEdge = 0.05f;
+	m_flUberHEdge = 0.05f;
+	m_flUberShearX = 0.0f;
+	m_flUberShearY = 0.0f;
+	m_flUberCutOn = 0.0f;
+	m_flUberCutOff = 0.0f;
+	m_flUberNearEdge = 10.0f;
+	m_flUberFarEdge = 100.0f;
 #ifdef GAME_DLL
 	m_bShouldTransmit = false;
 #else
@@ -249,6 +294,17 @@ void CDeferredLight::ApplyDataToLight()
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	m_pLight->iVolumeSamples = GetVolumeSamples();
 #endif
+	m_pLight->flUberRoundness = GetUberRoundness();
+	m_pLight->flUberWidth = GetUberWidth();
+	m_pLight->flUberHeight = GetUberHeight();
+	m_pLight->flUberWEdge = GetUberWEdge();
+	m_pLight->flUberHEdge = GetUberHEdge();
+	m_pLight->flUberShearX = GetUberShearX();
+	m_pLight->flUberShearY = GetUberShearY();
+	m_pLight->flUberCutOn = GetUberCutOn();
+	m_pLight->flUberCutOff = GetUberCutOff();
+	m_pLight->flUberNearEdge = GetUberNearEdge();
+	m_pLight->flUberFarEdge = GetUberFarEdge();
 }
 
 void CDeferredLight::PostDataUpdate( DataUpdateType_t t )

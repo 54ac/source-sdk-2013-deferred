@@ -65,6 +65,19 @@ public:
 	inline int GetVolumeSamples();
 #endif
 
+	inline float GetUberRoundness() { return m_flUberRoundness; }
+	inline float GetUberWidth() { return m_flUberWidth; }
+	inline float GetUberHeight() { return m_flUberHeight; }
+	inline float GetUberWEdge() { return m_flUberWEdge; }
+	inline float GetUberHEdge() { return m_flUberHEdge; }
+	inline float GetUberShearX() { return m_flUberShearX; }
+	inline float GetUberShearY() { return m_flUberShearY; }
+	inline float GetUberCutOn() { return m_flUberCutOn; }
+	inline float GetUberCutOff() { return m_flUberCutOff; }
+	inline float GetUberNearEdge() { return m_flUberNearEdge; }
+	inline float GetUberFarEdge() { return m_flUberFarEdge; }
+
+
 #ifdef GAME_DLL
 	void SetRadius( float r );
 #endif
@@ -118,6 +131,19 @@ private:
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	CNetworkVar( int, m_iVolumeSamples );
 #endif
+
+	CNetworkVar( float, m_flUberRoundness );
+	CNetworkVar( float, m_flUberWidth );
+	CNetworkVar( float, m_flUberHeight );
+	CNetworkVar( float, m_flUberWEdge );
+	CNetworkVar( float, m_flUberHEdge );
+	CNetworkVar( float, m_flUberShearX );
+	CNetworkVar( float, m_flUberShearY );
+	CNetworkVar( float, m_flUberCutOn );
+	CNetworkVar( float, m_flUberCutOff );
+	CNetworkVar( float, m_flUberNearEdge );
+	CNetworkVar( float, m_flUberFarEdge );
+
 };
 
 

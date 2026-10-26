@@ -68,6 +68,17 @@ struct def_light_t
 
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	int	iVolumeSamples;
+	float flUberRoundness;
+	float flUberWidth;
+	float flUberHeight;
+	float flUberWEdge;
+	float flUberHEdge;
+	float flUberShearX;
+	float flUberShearY;
+	float flUberCutOn;
+	float flUberCutOff;
+	float flUberNearEdge;
+	float flUberFarEdge;
 #endif
 
 	void BuildBox( IMesh *pMesh );
@@ -134,6 +145,11 @@ struct def_light_t
 	{
 		return ( iFlags & DEFLIGHT_VOLUMETRICS_ENABLED ) != 0;
 	};
+	FORCEINLINE bool HasUberlight()
+	{
+		return ( iFlags & DEFLIGHT_UBERLIGHT_ENABLED ) != 0;
+	};
+
 	FORCEINLINE bool HasLightstyle()
 	{
 		return ( iFlags & DEFLIGHT_LIGHTSTYLE_ENABLED ) != 0;

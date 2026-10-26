@@ -35,6 +35,18 @@ static const char *g_pszLightParamNames[ LPARAM_COUNT ] =
 	"ambient_low",
 	"ambient_high",
 
+	"uber_roundness",
+	"uber_width",
+	"uber_height",
+	"uber_wedge",
+	"uber_hedge",
+	"uber_shear_x",
+	"uber_shear_y",
+	"uber_cuton",
+	"uber_cutoff",
+	"uber_nearedge",
+	"uber_faredge",
+
 #if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
 	"volume_lod0_dist",
 	"volume_lod1_dist",

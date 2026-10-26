@@ -9,6 +9,7 @@
 		4 	: "Enable cookie" : 0
 		8 	: "Enable volumetrics" : 0
 		16	: "Enable lightstyle" : 0
+		32	: "Enable Uberlight shaping" : 0
 	]
 
 	light_type(Choices) : "Light type" : 0 : "Selects whether the light is omnidirectional point light or directional spotlight." =
@@ -40,6 +41,16 @@
 	style_random(float) : "Lightstyle random" : "0.5" : "Randomness ratio versus periodic wave."
 
 	volume_samples(integer) : "Volumetric Samples" : 50 : "Sample slice count for volumetric ray marching when volumetric spawnflag is enabled (default 50)."
+
+	uber_roundness(float) : "Uberlight roundness" : "1.0" : "Superellipse roundness (1.0 = round/ellipse, 0.0 = sharp rectangle)."
+	uber_width(float) : "Uberlight half-width" : "0.5" : "Horizontal beam half-width factor."
+	uber_height(float) : "Uberlight half-height" : "0.5" : "Vertical beam half-height factor."
+	uber_wedge(float) : "Uberlight horizontal softness" : "0.05" : "Softness falloff width at left/right edges."
+	uber_hedge(float) : "Uberlight vertical softness" : "0.05" : "Softness falloff width at top/bottom edges."
+	uber_shear_x(float) : "Uberlight shear X" : "0.0" : "Beam shear angle offset on horizontal axis."
+	uber_shear_y(float) : "Uberlight shear Y" : "0.0" : "Beam shear angle offset on vertical axis."
+	uber_cuton(float) : "Uberlight cut-on distance" : "0.0" : "Near distance gate where light begins."
+	uber_cutoff(float) : "Uberlight cut-off distance" : "0.0" : "Far distance gate where light ends (0 = disabled)."
 ]
 
 @PointClass base(Targetname, Angles) iconsprite("editor/light_env.vmt") = light_deferred_global : "Deferred directional sun/environment light with cascaded shadow maps."

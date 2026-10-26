@@ -1002,7 +1002,7 @@ FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4, int b
 {
 	const bool bShadowActual = ( bShadow >= 0 ) ? ( bShadow != 0 ) : l->ShouldRenderShadow();
 	const bool bCookieActual = ( bCookie >= 0 ) ? ( bCookie != 0 ) : ( l->HasCookie() && l->IsCookieReady() );
-	const bool bAdvanced = bShadowActual || bCookieActual;
+	const bool bAdvanced = bShadowActual || bCookieActual || l->HasUberlight();
 
 	int numConsts = 0;
 
@@ -1085,10 +1085,26 @@ FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4, int b
 
 			if ( bAdvanced )
 			{
-				*pfl4 = l->flShadowFade;
+				pfl4[0] = l->flShadowFade;
+				pfl4[1] = l->HasUberlight() ? 1.0f : 0.0f;
+				pfl4[2] = l->flUberRoundness;
+				pfl4[3] = 0.0f;
 				pfl4 += 4;
 
 				Q_memcpy( pfl4, l->spotWorldToTex.Base(), iFloatSize * 16 );
+				pfl4 += 16;
+
+				pfl4[0] = l->flUberWidth;
+				pfl4[1] = l->flUberHeight;
+				pfl4[2] = l->flUberWEdge;
+				pfl4[3] = l->flUberHEdge;
+				pfl4 += 4;
+
+				pfl4[0] = l->flUberShearX;
+				pfl4[1] = l->flUberShearY;
+				pfl4[2] = l->flUberCutOn;
+				pfl4[3] = l->flUberCutOff;
+				pfl4 += 4;
 			}
 		}
 		break;
@@ -1116,6 +1132,7 @@ FORCEINLINE bool SortLightsByComboType( const CUtlVector<def_light_t*>& hLights,
 		const bool bWantsShadow = l->ShouldRenderShadow();
 		const bool bShadowed    = bWantsShadow && ( nShadowsAssigned < nMaxShadows );
 		const bool bCookie      = l->HasCookie() && l->IsCookieReady();
+		const bool bUber        = l->HasUberlight();
 
 		if ( bShadowed )
 		{
@@ -1131,7 +1148,7 @@ FORCEINLINE bool SortLightsByComboType( const CUtlVector<def_light_t*>& hLights,
 			hLightsShadowedCookie.AddToTail( l );
 		else if ( bShadowed )
 			hLightsShadowed.AddToTail( l );
-		else if ( bCookie )
+		else if ( bCookie || bUber )
 			hLightsCookied.AddToTail( l );
 		else
 			hLightsSimple.AddToTail( l );
@@ -1506,9 +1523,10 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			const bool bShadow = l->ShouldRenderShadow();
 			const bool bCookie = l->HasCookie() && l->IsCookieReady();
+			const bool bUber = l->HasUberlight();
 			const bool bVolumetrics = l->HasVolumetrics() && bShadow;
 
-			const bool bAdvanced = ( bShadow || bCookie );
+			const bool bAdvanced = ( bShadow || bCookie || bUber );
 
 			int numRows = bAdvanced ? lightTypes[i].constCount_advanced : lightTypes[i].constCount_simple;
 			int memToAlloc = 4 * numRows;
@@ -1626,9 +1644,10 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			const bool bShadow      = l->ShouldRenderShadow();
 			const bool bCookie      = l->HasCookie() && l->IsCookieReady();
+			const bool bUber        = l->HasUberlight();
 			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
 
-			const bool bAdvanced = ( bShadow || bCookie );
+			const bool bAdvanced = ( bShadow || bCookie || bUber );
 
 			int numRows    = bAdvanced ? lightTypes[i].constCount_advanced : lightTypes[i].constCount_simple;
 			int memToAlloc = 4 * numRows;
@@ -1649,11 +1668,11 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			pFlLightDataBlock->numRows            = numRows;
 			pFlLightDataBlock->numShadowedCookied = ( bShadow && bCookie ) ? 1 : 0;
 			pFlLightDataBlock->numShadowed        = ( bShadow && !bCookie ) ? 1 : 0;
-			pFlLightDataBlock->numCookied         = ( !bShadow && bCookie ) ? 1 : 0;
+			pFlLightDataBlock->numCookied         = ( !bShadow && ( bCookie || bUber ) ) ? 1 : 0;
 			pFlLightDataBlock->numSimple          = bAdvanced ? 0 : 1;
 			QUEUE_FIRE( CommitLightData_Common, pFlLightDataBlock );
 
-			if ( bCookie )
+			if ( bCookie || ( !bShadow && bUber ) )
 			{
 				ITexture* pCookie = l->GetCookieForDraw();
 				Assert( pCookie != NULL );

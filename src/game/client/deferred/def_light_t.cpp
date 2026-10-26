@@ -46,6 +46,17 @@ BEGIN_DATADESC_NO_BASE( def_light_t )
 #endif
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	DEFINE_KEYFIELD( iVolumeSamples, FIELD_SHORT, GetLightParamName( LPARAM_VOLUME_SAMPLES ) ),
+	DEFINE_KEYFIELD( flUberRoundness, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_ROUNDNESS ) ),
+	DEFINE_KEYFIELD( flUberWidth, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WIDTH ) ),
+	DEFINE_KEYFIELD( flUberHeight, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_HEIGHT ) ),
+	DEFINE_KEYFIELD( flUberWEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WEDGE ) ),
+	DEFINE_KEYFIELD( flUberHEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_HEDGE ) ),
+	DEFINE_KEYFIELD( flUberShearX, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_SHEAR_X ) ),
+	DEFINE_KEYFIELD( flUberShearY, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_SHEAR_Y ) ),
+	DEFINE_KEYFIELD( flUberCutOn, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_CUTON ) ),
+	DEFINE_KEYFIELD( flUberCutOff, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_CUTOFF ) ),
+	DEFINE_KEYFIELD( flUberNearEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_NEAREDGE ) ),
+	DEFINE_KEYFIELD( flUberFarEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_FAREDGE ) ),
 #endif
 END_DATADESC()
 
@@ -99,6 +110,18 @@ def_light_t::def_light_t( bool bWorld )
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	iVolumeSamples= 50;
 #endif
+
+	flUberRoundness = 1.0f;
+	flUberWidth = 0.5f;
+	flUberHeight = 0.5f;
+	flUberWEdge = 0.05f;
+	flUberHEdge = 0.05f;
+	flUberShearX = 0.0f;
+	flUberShearY = 0.0f;
+	flUberCutOn = 0.0f;
+	flUberCutOff = 0.0f;
+	flUberNearEdge = 10.0f;
+	flUberFarEdge = 100.0f;
 
 	worldTransform.Identity();
 
@@ -345,15 +368,17 @@ void def_light_t::UpdateCookieTexture()
 
 bool def_light_t::IsCookieReady()
 {
-	return pCookie != NULL && pCookie->IsValid();
+	if ( pCookie != NULL )
+		return pCookie->IsValid();
+	return HasUberlight();
 }
 
 ITexture *def_light_t::GetCookieForDraw( const int iTargetIndex )
 {
-	Assert( pCookie != NULL );
+	Assert( pCookie != NULL || HasUberlight() );
 
-	pCookie->PreRender( iTargetIndex );
-	return pCookie->GetCookieTarget( iTargetIndex );
+	if ( pCookie != NULL ) pCookie->PreRender( iTargetIndex );
+	return ( pCookie != NULL ) ? pCookie->GetCookieTarget( iTargetIndex ) : materials->FindTexture( "white", TEXTURE_GROUP_OTHER );
 }
 
 void def_light_t::SetCookie( IDefCookie *pSetCookie )
