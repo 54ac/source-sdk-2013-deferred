@@ -195,6 +195,7 @@ void DrawPassLightPass( const lightPassParms &info, CBaseVSShader *pShader, IMat
 		{
 		case DEFLIGHTTYPE_POINT:
 				CommitShadowProjectionConstants_DPSM( pShaderAPI, 1 );
+				CommitPointLightingConstants( pShaderAPI, 7 );
 			break;
 		case DEFLIGHTTYPE_SPOT:
 				CommitShadowProjectionConstants_Proj( pShaderAPI, 1 );

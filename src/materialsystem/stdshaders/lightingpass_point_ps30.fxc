@@ -60,6 +60,7 @@ const float3 g_vecFrustumUp			: register( c5 );
 const float2 g_vecHalfScreenTexel		: register( c6 );
 #endif
 
+const float4 g_vecPointLightingTweaks		: register( c7 );
 
 sampler sMixedSampler[FREE_LIGHT_SAMPLERS]			: register( FIRST_LIGHT_SAMPLER_FXC );
 const float4 g_flMixedData[78]						: register( FIRST_SHARED_LIGHTDATA_CONSTANT_FXC ); // MAX_LIGHTDATA_CONSTANT_ROWS
@@ -101,7 +102,8 @@ float4 DoPointLightBasic( const int index, float3 normal,
 	float3 flLitNormal = lerp( normal, dot( normal, normalizedLightVec ) * normal, litface );
 
 	float viewFwdDot = dot( normalizedLightVec, flLitNormal );
-	float litDot = lerp( viewFwdDot, viewFwdDot * 0.5f + 0.5f, half_lambert );
+	float hlAmount = max( (float)half_lambert, g_vecPointLightingTweaks.x );
+	float litDot = lerp( viewFwdDot, viewFwdDot * 0.5f + 0.5f, hlAmount );
 
 	float lightAmount = saturate( litDot );
 

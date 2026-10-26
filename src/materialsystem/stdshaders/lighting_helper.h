@@ -114,6 +114,14 @@ FORCEINLINE void CommitCSMDistances( IShaderDynamicAPI *pShaderAPI, int iConstan
 	pShaderAPI->SetPixelShaderConstant( iConstantRegister, csmDist );
 }
 
+FORCEINLINE void CommitPointLightingConstants( IShaderDynamicAPI *pShaderAPI, int iConstantRegister )
+{
+	static ConVarRef r_deferred_point_light_half_lambert( "r_deferred_point_light_half_lambert" );
+	float flHalfLambert = r_deferred_point_light_half_lambert.IsValid() ? r_deferred_point_light_half_lambert.GetFloat() : 1.0f;
+	float tweaks[4] = { clamp( flHalfLambert, 0.0f, 1.0f ), 0.0f, 0.0f, 0.0f };
+	pShaderAPI->SetPixelShaderConstant( iConstantRegister, tweaks );
+}
+
 FORCEINLINE void CommitShadowProjectionConstants_DPSM( IShaderDynamicAPI *pShaderAPI,
 	int iFirstRegister )
 {
