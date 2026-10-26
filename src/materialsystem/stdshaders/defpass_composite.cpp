@@ -11,6 +11,7 @@ static CCommandBufferBuilder< CFixedCommandStorageBuffer< 512 > > tmpBuf;
 ConVar building_cubemaps( "building_cubemaps", "0" );
 static ConVar r_rimlight( "r_rimlight", "1", FCVAR_NONE );
 static ConVar mat_fullbright( "mat_fullbright", "0", FCVAR_CHEAT );
+static ConVar r_deferred_diffuse_ibl_scale( "r_deferred_diffuse_ibl_scale", "0.1", FCVAR_NONE, "Scale of diffuse ambient cubemap bounce" );
 
 void InitParmsComposite( const defParms_composite &info, CBaseVSShader *pShader, IMaterialVar **params )
 {
@@ -428,7 +429,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 			texW = viewport.m_nWidth;
 			texH = viewport.m_nHeight;
 		}
-		float fl1[4] = { texW > 0 ? ( 1.0f / (float)texW ) : 0.0f, texH > 0 ? ( 1.0f / (float)texH ) : 0.0f, 0.0f, 0.0f };
+		float fl1[4] = { texW > 0 ? ( 1.0f / (float)texW ) : 0.0f, texH > 0 ? ( 1.0f / (float)texH ) : 0.0f, r_deferred_diffuse_ibl_scale.GetFloat(), 0.0f };
 		pShaderAPI->SetPixelShaderConstant( 1, fl1 );
 	}
 

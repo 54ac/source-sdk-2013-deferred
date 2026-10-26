@@ -51,6 +51,7 @@
 #include "common_ps_fxc.h"
 #include "common_deferred_fxc.h"
 #include "common_vertexlitgeneric_dx9.h"
+#include "common_lighting_fxc.h"
 
 
 sampler sAlbedo							: register( s0 );
@@ -70,7 +71,8 @@ sampler sLightAccum						: register( s2 );
 sampler sBumpmap						: register( s8 );
 #endif
 
-const float2 g_vecFullScreenTexel		: register( c1 );
+const float4 g_vecFullScreenTexel		: register( c1 );
+#define g_flDiffuseIBLScale g_vecFullScreenTexel.z
 const float4 g_vecFogParams				: register( c2 );
 const float3 g_vecOrigin				: register( c3 );
 
@@ -189,13 +191,25 @@ PS_OUTPUT main( const PS_INPUT In )
 	float4 flLighting = ReadLighting( tex2D( sLightAccum, screenPos ) );
 
 #if READNORMAL
-	float3 worldNormal = tex2D( sNormals, screenPos ).xyz * 2.0f - 1.0f;
+	float4 flNormalCtrl = tex2D( sNormals, screenPos );
+	float3 worldNormal = flNormalCtrl.xyz * 2.0f - 1.0f;
+#endif
+
+#if PHONG || ENVMAP
+	float phong_exp = 0.0f;
+	bool half_lambert = false;
+	bool litface = false;
+#if READNORMAL
+	UnpackLightingControls( flNormalCtrl.a, phong_exp, half_lambert, litface );
+#endif
 #endif
 
 
-#if RIMLIGHT || PHONGFRESNEL || ENVMAPFRESNEL
+#if RIMLIGHT || PHONGFRESNEL || ENVMAPFRESNEL || ENVMAP
 	float3 worldToEye = normalize( In.worldToEye );
+#if READNORMAL
 	worldNormal = normalize( worldNormal );
+#endif
 #endif
 
 #if PHONGFRESNEL || ENVMAPFRESNEL
@@ -286,11 +300,25 @@ PS_OUTPUT main( const PS_INPUT In )
 	reflectVect = intersectPositionWS - cubemapPos;
 #endif
 
-	float3 flCubemap = ENV_MAP_SCALE * texCUBE( sEnvmap, reflectVect ).rgb;
+	float flLinearRoughness = 0.0f;
+#if PHONG
+	flLinearRoughness = PhongExpToLinearRoughness( phong_exp );
+#endif
+
+	float flLod = flLinearRoughness * 6.0f;
+	float3 flCubemap = ENV_MAP_SCALE * texCUBElod( sEnvmap, float4( reflectVect, flLod ) ).rgb;
 	flCubemap *= flSpecularFactor;
 	flCubemap *= g_flEnvmapTint;
 
-#if ENVMAPFRESNEL
+#if PHONG
+	float NoV = saturate( dot( worldNormal, worldToEye ) );
+	float2 AB = EnvBRDFApprox( flLinearRoughness, NoV );
+	float3 F0 = 0.04f;
+#if ENVMAPFRESNEL || PHONGFRESNEL
+	F0 = g_flFresnelRanges.x;
+#endif
+	flCubemap *= ( F0 * AB.x + AB.y );
+#elif ENVMAPFRESNEL
 	flCubemap *= flFresnel;
 #endif
 
@@ -300,6 +328,11 @@ PS_OUTPUT main( const PS_INPUT In )
 	flCubemap = lerp( greyScale, flCubemap, g_flEnvmapSaturationContrast.x );
 
 	flSpecularLighting += flCubemap;
+
+#if READNORMAL
+	float3 flDiffuseIBL = ENV_MAP_SCALE * texCUBElod( sEnvmap, float4( worldNormal, 6.0f ) ).rgb * g_flEnvmapTint;
+	flLighting.rgb += flDiffuseIBL * g_flDiffuseIBLScale;
+#endif
 #endif
 
 #if SELFILLUM

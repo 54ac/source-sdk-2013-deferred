@@ -105,14 +105,6 @@ float4 DoSpotLightBasic( const int index, float3 normal,
 	float3 normalizedLightVec = vecWorldToLight / lightToWorldDist;
 	float3 flLitNormal = lerp( normal, dot( normal, normalizedLightVec ) * normal, litface );
 
-#if DEFCFG_BLINN_PHONG
-	float flSpecular = saturate( dot( normalize( vecWorldRayInv + normalizedLightVec ), flLitNormal ) );
-	flSpecular = pow( flSpecular, phong_exp ) * dot( vecWorldRayInv, flLitNormal );
-#else
-	float flSpecular = dot( reflect( -normalizedLightVec, flLitNormal ), vecWorldRayInv );
-	flSpecular = pow( flSpecular, phong_exp );
-#endif
-
 	float viewFwdDot = dot( normalizedLightVec, flLitNormal );
 	float litDot = lerp( viewFwdDot, viewFwdDot * 0.5f + 0.5f, half_lambert );
 
@@ -125,6 +117,20 @@ float4 DoSpotLightBasic( const int index, float3 normal,
 	{
 		float spotDot = dot( g_flMixedData[ index + 3 ].xyz, normalizedLightVec );
 		fade *= smoothstep( g_flMixedData[ index + 2 ].w, g_flMixedData[ index + 3 ].w, spotDot );
+	}
+
+	float flSpecular = 0.0f;
+	if ( phong_exp > 0.0f && lightAmount > 0.0f )
+	{
+		float3 halfAngle = normalize( vecWorldRayInv + normalizedLightVec );
+		float cosLi = saturate( viewFwdDot );
+		float cosLo = saturate( dot( flLitNormal, vecWorldRayInv ) );
+		float cosLh = saturate( dot( flLitNormal, halfAngle ) );
+
+		float roughness = PhongExpToLinearRoughness( phong_exp );
+		float D = NdfGGX( cosLh, roughness );
+		float G = GaSchlickGGXRemapped( cosLi, cosLo, roughness );
+		flSpecular = ( D * G ) / max( 0.001f, 4.0f * cosLo );
 	}
 
 	return float4( litDot, lightAmount, flSpecular, fade );
@@ -178,10 +184,7 @@ PS_OUTPUT main( const PS_INPUT In )
 	UnpackLightingControls( flNormalCtrl.a, phong_exp, half_lambert, litface );
 #endif
 
-	float3 worldRayInv = -vecWorldRay;
-#if DEFCFG_BLINN_PHONG == 0
-		worldRayInv = normalize( worldRayInv );
-#endif
+	float3 worldRayInv = normalize( -vecWorldRay );
 
 	float4 flLight = 0;
 

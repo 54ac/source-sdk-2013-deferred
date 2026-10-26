@@ -2,6 +2,52 @@
 #ifndef COMMON_LIGHTING_H
 #define COMMON_LIGHTING_H
 
+float GaSchlickG1( float cosTheta, float k )
+{
+	return cosTheta / ( cosTheta * ( 1.0f - k ) + k );
+}
+
+float GaSchlickGGXRemapped( float cosLi, float cosLo, float roughness )
+{
+	float r = roughness + 1.0f;
+	float k = ( r * r ) / 8.0f;
+	return GaSchlickG1( cosLi, k ) * GaSchlickG1( cosLo, k );
+}
+
+float NdfGGX( float cosLh, float roughness )
+{
+	float alpha = roughness * roughness;
+	float alphaSq = alpha * alpha;
+
+	float denom = cosLh * ( cosLh * alphaSq - cosLh ) + 1.0f;
+	return alphaSq / ( 3.14159265f * denom * denom );
+}
+
+float3 FresnelSchlick( float3 F0, float cosTheta )
+{
+	return F0 + ( 1.0f - F0 ) * pow( 1.0f - cosTheta, 5.0f );
+}
+
+float3 FresnelSchlickRoughness( float3 F0, float cosTheta, float roughness )
+{
+	return F0 + max( 0.0f, ( 1.0f - roughness ) - F0 ) * pow( 1.0f - cosTheta, 5.0f );
+}
+
+float PhongExpToLinearRoughness( float phong_exp )
+{
+	return sqrt( 2.0f / ( max( phong_exp, 0.001f ) + 2.0f ) );
+}
+
+float2 EnvBRDFApprox( float Roughness, float NoV )
+{
+	const float4 c0 = { -1.0f, -0.0275f, -0.572f, 0.022f };
+	const float4 c1 = { 1.0f, 0.0425f, 1.04f, -0.04f };
+	float4 r = Roughness * c0 + c1;
+	float a004 = min( r.x * r.x, exp2( -9.28f * NoV ) ) * r.x + r.y;
+	float2 AB = float2( -1.04f, 1.04f ) * a004 + r.zw;
+	return AB;
+}
+
 static const float3 flWorldGridSize = float3(
 	RADIOSITY_BUFFER_GRID_STEP_SIZE_CLOSE * RADIOSITY_BUFFER_SAMPLES_XY,
 	RADIOSITY_BUFFER_GRID_STEP_SIZE_CLOSE * RADIOSITY_BUFFER_SAMPLES_XY,
