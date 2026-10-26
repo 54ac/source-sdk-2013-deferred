@@ -165,6 +165,7 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 			}
 			break;
 		case DEFERRED_SHADOW_MODE_PROJECTED:
+		case DEFERRED_SHADOW_MODE_TETRA:
 			{
 				CommitShadowcastingConstants_Proj( pShaderAPI,
 					pShaderAPI->GetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_INDEX ),

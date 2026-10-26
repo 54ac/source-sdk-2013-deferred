@@ -371,9 +371,12 @@ const ImageFormat fmt_gbuffer0 =
 
 	for ( int i = 0; i < MAX_SHADOW_DP; i++ )
 	{
-		int res_x = GetShadowResolution_Point();
-		int res_y = res_x * 2;
+		int res_point = GetShadowResolution_Point();
+		const bool bTetra = ( r_deferred_point_shadow_mode.GetInt() == POINT_SHADOW_TETRA );
+		int res_x = bTetra ? ( res_point * 2 ) : res_point;
+		int res_y = res_point * 2;
 
+		generalShadowData.iPointShadowMode = r_deferred_point_shadow_mode.GetInt();
 		generalShadowData.iDPSM_Res_x = res_x;
 		generalShadowData.iDPSM_Res_y = res_y;
 

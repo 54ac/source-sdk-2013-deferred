@@ -10,6 +10,7 @@ ConVar r_deferred_rt_shadowspot_lod1_res( "r_deferred_rt_shadowspot_lod1_res", "
 ConVar r_deferred_rt_shadowspot_lod2_res( "r_deferred_rt_shadowspot_lod2_res", "256", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );
 #endif
 ConVar r_deferred_rt_shadowpoint_res( "r_deferred_rt_shadowpoint_res", "1024", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );
+ConVar r_deferred_point_shadow_mode( "r_deferred_point_shadow_mode", "1", FCVAR_ARCHIVE | FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS, "Point light shadow mode: 0 = dual-paraboloid, 1 = tetrahedral" );
 #if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
 ConVar r_deferred_rt_shadowpoint_lod1_res( "r_deferred_rt_shadowpoint_lod1_res", "512", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );
 ConVar r_deferred_rt_shadowpoint_lod2_res( "r_deferred_rt_shadowpoint_lod2_res", "256", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );

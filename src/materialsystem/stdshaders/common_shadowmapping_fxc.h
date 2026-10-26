@@ -622,6 +622,77 @@ float PerformDualParaboloidShadow( sampler shadowSampler, float3 vecLightToGeome
 	return max( shadowMin, PerformShadowMapping( shadowSampler, uvw, offsets_0, offset_1 ) );
 }
 
+float PerformTetrahedralShadow( sampler shadowSampler, float3 vecLightToGeometry,
+	float4 offsets_0, float4 offset_1,
+	float lightToGeoDistance, float radius, float shadowMin )
+{
+	static const float3 sc_vTetraFwd[4] =
+	{
+		float3( -0.57735027f, -0.57735027f, -0.57735027f ), // Face 0
+		float3(  0.57735027f,  0.57735027f, -0.57735027f ), // Face 1
+		float3(  0.57735027f, -0.57735027f,  0.57735027f ), // Face 2
+		float3( -0.57735027f,  0.57735027f,  0.57735027f )  // Face 3
+	};
+
+	static const float3 sc_vTetraUp[4] =
+	{
+		float3( -0.40824829f, -0.40824829f,  0.81649658f ), // Face 0
+		float3(  0.40824829f,  0.40824829f,  0.81649658f ), // Face 1
+		float3(  0.40824829f, -0.40824829f, -0.81649658f ), // Face 2
+		float3( -0.40824829f,  0.40824829f, -0.81649658f )  // Face 3
+	};
+
+	static const float3 sc_vTetraRight[4] =
+	{
+		float3( -0.70710678f,  0.70710678f,  0.0f ), // Face 0
+		float3(  0.70710678f, -0.70710678f,  0.0f ), // Face 1
+		float3(  0.70710678f,  0.70710678f,  0.0f ), // Face 2
+		float3( -0.70710678f, -0.70710678f,  0.0f )  // Face 3
+	};
+
+	static const float2 sc_vAtlasOffset[4] =
+	{
+		float2( 0.0f, 0.0f ), // Face 0: Top-Left
+		float2( 0.5f, 0.0f ), // Face 1: Top-Right
+		float2( 0.0f, 0.5f ), // Face 2: Bottom-Left
+		float2( 0.5f, 0.5f )  // Face 3: Bottom-Right
+	};
+
+	float3 vLightToGeo = float3( vecLightToGeometry.z, vecLightToGeometry.x, -vecLightToGeometry.y );
+
+	float4 vDots = float4(
+		dot( vLightToGeo, sc_vTetraFwd[0] ),
+		dot( vLightToGeo, sc_vTetraFwd[1] ),
+		dot( vLightToGeo, sc_vTetraFwd[2] ),
+		dot( vLightToGeo, sc_vTetraFwd[3] )
+	);
+
+	float max01 = max( vDots.x, vDots.y );
+	float max23 = max( vDots.z, vDots.w );
+	float maxDot = max( max01, max23 );
+
+	int faceIndex = ( maxDot == vDots.y ) ? 1 : ( ( maxDot == vDots.z ) ? 2 : ( ( maxDot == vDots.w ) ? 3 : 0 ) );
+
+	float zCam = max( 0.001f, maxDot );
+	float xCam = dot( vLightToGeo, sc_vTetraRight[faceIndex] );
+	float yCam = dot( vLightToGeo, sc_vTetraUp[faceIndex] );
+
+	const float cProj = 0.3249197f;
+	float invZ = 1.0f / zCam;
+
+	float2 uvLocal;
+	uvLocal.x = ( xCam * cProj * invZ ) * 0.5f + 0.5f;
+	uvLocal.y = 0.5f - ( yCam * cProj * invZ ) * 0.5f;
+
+	float2 uvAtlas = sc_vAtlasOffset[faceIndex] + uvLocal * 0.5f;
+
+	lightToGeoDistance = min( 0.999f, lightToGeoDistance / radius );
+
+	float3 uvw = float3( uvAtlas, lightToGeoDistance );
+
+	return max( shadowMin, PerformShadowMapping( shadowSampler, uvw, offsets_0, offset_1 ) );
+}
+
 float PerformProjectedShadow( sampler shadowSampler, float3 uvw,
 	float4 offsets_0, float4 offset_1, float shadowMin )
 {

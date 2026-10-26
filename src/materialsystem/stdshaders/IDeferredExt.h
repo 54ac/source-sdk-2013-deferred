@@ -57,6 +57,7 @@ struct shadowData_general_t
 {
 	shadowData_general_t()
 	{
+		iPointShadowMode = POINT_SHADOW_TETRA;
 		iDPSM_Res_x = 256;
 		iDPSM_Res_y = 256;
 		iPROJ_Res = 256;
@@ -70,6 +71,7 @@ struct shadowData_general_t
 		iPROJ_Res_LOD2 = 64;
 #endif
 	};
+	int iPointShadowMode;
 	int iDPSM_Res_x;
 	int iDPSM_Res_y;
 

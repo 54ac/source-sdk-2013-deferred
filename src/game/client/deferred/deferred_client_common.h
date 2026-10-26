@@ -9,6 +9,7 @@
 
 extern ConVar r_deferred_rt_shadowspot_res;
 extern ConVar r_deferred_rt_shadowpoint_res;
+extern ConVar r_deferred_point_shadow_mode;
 
 #if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
 extern ConVar r_deferred_rt_shadowspot_lod1_res;

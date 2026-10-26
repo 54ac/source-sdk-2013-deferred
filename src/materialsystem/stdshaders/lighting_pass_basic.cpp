@@ -124,6 +124,8 @@ void DrawPassLightPass( const lightPassParms &info, CBaseVSShader *pShader, IMat
 		case DEFLIGHTTYPE_POINT:
 			{
 				DECLARE_DYNAMIC_PIXEL_SHADER( lightingpass_point_ps30 );
+				const bool bHasShadows = ( iNumShadowedCookied > 0 || iNumShadowed > 0 );
+				SET_DYNAMIC_PIXEL_SHADER_COMBO( POINT_SHADOW_MODE, bHasShadows ? pExt->GetShadowData_General().iPointShadowMode : 0 );
 				SET_DYNAMIC_PIXEL_SHADER_COMBO( NUM_SHADOWED_COOKIE, iNumShadowedCookied );
 				SET_DYNAMIC_PIXEL_SHADER_COMBO( NUM_SHADOWED, iNumShadowed );
 				SET_DYNAMIC_PIXEL_SHADER_COMBO( NUM_COOKIE, iNumCookied );

@@ -7,7 +7,7 @@
 // DYNAMIC:		"SKINNING"				"0..1"
 // DYNAMIC:		"MORPHING"				"0..1"
 
-// DYNAMIC:		"SHADOW_MODE"			"0..2"
+// DYNAMIC:		"SHADOW_MODE"			"0..3"
 // DYNAMIC:		"RADIOSITY"				"0..1"
 
 #include "common_vs_fxc.h"
@@ -197,6 +197,11 @@ VS_OUTPUT main( const VS_INPUT In )
 #elif SHADOW_MODE == DEFERRED_SHADOW_MODE_DPSM
 
 	Out.flDepth = dist;
+
+#elif SHADOW_MODE == DEFERRED_SHADOW_MODE_TETRA
+
+	float3 worldDelta = worldPos - g_vecOrigin;
+	Out.flDepth = length( worldDelta ) * PROJECTION_DEPTH;
 
 #else
 

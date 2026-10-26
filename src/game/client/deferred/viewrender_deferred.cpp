@@ -312,6 +312,41 @@ private:
 	def_light_t *m_pLight;
 };
 
+class CTetrahedralShadowView : public CBaseShadowView
+{
+	DECLARE_CLASS( CTetrahedralShadowView, CBaseShadowView );
+public:
+	CTetrahedralShadowView( CViewRender *pMainView, def_light_t *pLight, int index, int iFaceIndex )
+		: CBaseShadowView( pMainView )
+	{
+		m_pLight = pLight;
+		m_iIndex = index;
+		m_iFaceIndex = iFaceIndex;
+	}
+
+	virtual void PushView( float waterHeight )
+	{
+		BaseClass::PushView( waterHeight );
+	}
+	virtual void PopView()
+	{
+		BaseClass::PopView();
+	}
+
+	virtual void CalcShadowView();
+	virtual void CommitData();
+
+	virtual int GetShadowMode()
+	{
+		return DEFERRED_SHADOW_MODE_TETRA;
+	}
+
+private:
+	int m_iIndex;
+	int m_iFaceIndex;
+	def_light_t *m_pLight;
+};
+
 class CSpotLightShadowView : public CBaseShadowView
 {
 	DECLARE_CLASS( CSpotLightShadowView, CBaseShadowView );
@@ -1671,6 +1706,61 @@ void CDualParaboloidShadowView::CalcShadowView()
 	}
 }
 
+void CTetrahedralShadowView::CalcShadowView()
+{
+	static const Vector s_vecTetraForward[4] =
+	{
+		Vector( -0.57735027f, -0.57735027f, -0.57735027f ), // Face 0
+		Vector(  0.57735027f,  0.57735027f, -0.57735027f ), // Face 1
+		Vector(  0.57735027f, -0.57735027f,  0.57735027f ), // Face 2
+		Vector( -0.57735027f,  0.57735027f,  0.57735027f )  // Face 3
+	};
+
+	static const Vector s_vecTetraUp[4] =
+	{
+		Vector( -0.40824829f, -0.40824829f,  0.81649658f ), // Face 0
+		Vector(  0.40824829f,  0.40824829f,  0.81649658f ), // Face 1
+		Vector(  0.40824829f, -0.40824829f, -0.81649658f ), // Face 2
+		Vector( -0.40824829f,  0.40824829f, -0.81649658f )  // Face 3
+	};
+
+	Vector fwdWorld, upWorld;
+	VectorRotate( s_vecTetraForward[m_iFaceIndex], m_pLight->ang, fwdWorld );
+	VectorRotate( s_vecTetraUp[m_iFaceIndex], m_pLight->ang, upWorld );
+	VectorAngles( fwdWorld, upWorld, angles );
+
+	const int pointRes = GetShadowResolution_Point();
+
+	m_bOrtho = false;
+	fov = fovViewmodel = 144.0f;
+	m_flAspectRatio = 1.0f;
+
+	width = pointRes;
+	height = pointRes;
+
+	x = ( m_iFaceIndex % 2 ) * pointRes;
+	y = ( m_iFaceIndex / 2 ) * pointRes;
+
+	zNear = zNearViewmodel = 2.0f;
+	zFar = zFarViewmodel = m_pLight->flRadius;
+}
+
+void CTetrahedralShadowView::CommitData()
+{
+	Vector fwd;
+	AngleVectors( angles, &fwd );
+
+	shadowData_proj_t data;
+	data.vecForward.Init( fwd );
+	data.vecOrigin.Init( origin );
+	data.vecSlopeSettings.Init( 0.001f, 0.005f, 3.0f, 1.0f / m_pLight->flRadius );
+
+	QUEUE_FIRE( CommitShadowData_Proj, m_iIndex, data );
+
+	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_INDEX, m_iIndex );
+}
+
 void CSpotLightShadowView::CalcShadowView()
 {
 	float flRadius = m_pLight->flRadius;
@@ -2571,13 +2661,25 @@ void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesi
 		break;
 	case DEFLIGHTTYPE_POINT:
 		{
-			CRefPtr<CDualParaboloidShadowView> pDPView0 = new CDualParaboloidShadowView( this, l, false );
-			pDPView0->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
-			AddViewToScene( pDPView0 );
+			if ( r_deferred_point_shadow_mode.GetInt() == POINT_SHADOW_DPSM )
+			{
+				CRefPtr<CDualParaboloidShadowView> pDPView0 = new CDualParaboloidShadowView( this, l, false );
+				pDPView0->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
+				AddViewToScene( pDPView0 );
 
-			CRefPtr<CDualParaboloidShadowView> pDPView1 = new CDualParaboloidShadowView( this, l, true );
-			pDPView1->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
-			AddViewToScene( pDPView1 );
+				CRefPtr<CDualParaboloidShadowView> pDPView1 = new CDualParaboloidShadowView( this, l, true );
+				pDPView1->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
+				AddViewToScene( pDPView1 );
+			}
+			else
+			{
+				for ( int iFace = 0; iFace < 4; iFace++ )
+				{
+					CRefPtr<CTetrahedralShadowView> pTetraView = new CTetrahedralShadowView( this, l, iDesiredShadowmap, iFace );
+					pTetraView->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
+					AddViewToScene( pTetraView );
+				}
+			}
 		}
 		break;
 	case DEFLIGHTTYPE_SPOT:
