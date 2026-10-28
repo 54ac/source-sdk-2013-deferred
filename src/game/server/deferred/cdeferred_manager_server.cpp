@@ -39,45 +39,51 @@ void CDeferredManagerServer::Shutdown()
 {
 }
 
-#define LIGHT_MIN_LIGHT_VALUE 0.03f
+#define LIGHT_MIN_LIGHT_VALUE 0.08f
+#define LIGHT_RADIUS_SCALE 1.25f
+
 float ComputeLightRadius( float radius, float intensity, float constant_attn, float linear_attn, float quadratic_attn )
 {
 	float flLightRadius = radius;
 	if (flLightRadius == 0.0f)
 	{
-		// Compute the light range based on attenuation factors
+		const float ratio = constant_attn + 100.0f * linear_attn + 10000.0f * quadratic_attn;
+		const float effectiveRatio = ( ratio > 0.0f ) ? ratio : 1.0f;
+
 		if (quadratic_attn == 0.0f)
 		{
 			if (linear_attn == 0.0f)
 			{
-				// Infinite, but we're not going to draw it as such
-				flLightRadius = 2000;
+				flLightRadius = 2000.0f;
 			}
 			else
 			{
-				flLightRadius = (intensity / LIGHT_MIN_LIGHT_VALUE - constant_attn) / linear_attn;
+				flLightRadius = ((effectiveRatio / LIGHT_MIN_LIGHT_VALUE - constant_attn) / linear_attn) * LIGHT_RADIUS_SCALE;
+				if (flLightRadius < 0.0f)
+					flLightRadius = 0.0f;
 			}
 		}
 		else
 		{
 			const float a = quadratic_attn;
 			const float b = linear_attn;
-			const float c = constant_attn - intensity / LIGHT_MIN_LIGHT_VALUE;
-			const float discrim = b * b - 4 * a * c;
+			const float c = constant_attn - effectiveRatio / LIGHT_MIN_LIGHT_VALUE;
+			const float discrim = b * b - 4.0f * a * c;
 			if (discrim < 0.0f)
 			{
-				// Infinite, but we're not going to draw it as such
-				flLightRadius = 2000;
+				flLightRadius = 2000.0f;
 			}
 			else
 			{
 				flLightRadius = (-b + sqrtf(discrim)) / (2.0f * a);
-				if (flLightRadius < 0)
-					flLightRadius = 0;
+				if (flLightRadius < 0.0f)
+					flLightRadius = 0.0f;
+				else
+					flLightRadius *= LIGHT_RADIUS_SCALE;
 			}
 		}
 	}
-	return flLightRadius;
+	return clamp( flLightRadius, 128.0f, 4096.0f );
 }
 
 float ComputeLightRadius( const dworldlight_t &light )
@@ -85,46 +91,109 @@ float ComputeLightRadius( const dworldlight_t &light )
 	float flLightRadius = light.radius;
 	if (flLightRadius == 0.0f)
 	{
-		// Compute the light range based on attenuation factors
-		const float flIntensity = sqrtf( DotProduct( light.intensity, light.intensity ) );
+		const float ratio = light.constant_attn + 100.0f * light.linear_attn + 10000.0f * light.quadratic_attn;
+		const float effectiveRatio = ( ratio > 0.0f ) ? ratio : 1.0f;
+
 		if ( light.quadratic_attn == 0.0f )
 		{
 			if ( light.linear_attn == 0.0f )
 			{
-				// Infinite, but we're not going to draw it as such
-				flLightRadius = 2000;
+				flLightRadius = 2000.0f;
 			}
 			else
 			{
-				flLightRadius = (flIntensity / LIGHT_MIN_LIGHT_VALUE - light.constant_attn) / light.linear_attn;
+				flLightRadius = ((effectiveRatio / LIGHT_MIN_LIGHT_VALUE - light.constant_attn) / light.linear_attn) * LIGHT_RADIUS_SCALE;
+				if (flLightRadius < 0.0f)
+					flLightRadius = 0.0f;
 			}
 		}
 		else
 		{
 			const float a = light.quadratic_attn;
 			const float b = light.linear_attn;
-			const float c = light.constant_attn - flIntensity / LIGHT_MIN_LIGHT_VALUE;
-			const float discrim = b * b - 4 * a * c;
+			const float c = light.constant_attn - effectiveRatio / LIGHT_MIN_LIGHT_VALUE;
+			const float discrim = b * b - 4.0f * a * c;
 			if (discrim < 0.0f)
 			{
-				// Infinite, but we're not going to draw it as such
-				flLightRadius = 2000;
+				flLightRadius = 2000.0f;
 			}
 			else
 			{
 				flLightRadius = (-b + sqrtf(discrim)) / (2.0f * a);
-				if (flLightRadius < 0)
-					flLightRadius = 0;
+				if (flLightRadius < 0.0f)
+					flLightRadius = 0.0f;
+				else
+					flLightRadius *= LIGHT_RADIUS_SCALE;
 			}
 		}
 	}
 
-	return flLightRadius;
+	return clamp( flLightRadius, 128.0f, 4096.0f );
+}
+
+static float CalibrateFalloffPower( float flRadius, float flFiftyDist, float flZeroDist, float c, float l, float q )
+{
+	if ( flFiftyDist > 0.0f )
+	{
+		if ( flZeroDist <= flFiftyDist )
+			flZeroDist = 2.0f * flFiftyDist;
+
+		const float flRatio = 1.0f - ( flFiftyDist / flZeroDist );
+		if ( flRatio > 0.001f && flRatio < 0.999f )
+		{
+			const float p = -0.69314718f / logf( flRatio );
+			return clamp( p, 0.5f, 4.0f );
+		}
+		return 1.0f;
+	}
+
+	if ( flRadius > 0.0f )
+	{
+		const float dHalf = flRadius * 0.5f;
+		const float denomHalf = c + l * dHalf + q * dHalf * dHalf;
+
+		if ( denomHalf > 0.00001f )
+		{
+			if ( c > 0.0001f )
+			{
+				const float normAtten = c / denomHalf;
+				if ( normAtten > 0.0001f && normAtten < 0.9999f )
+				{
+					const float p = -logf( normAtten ) / 0.69314718f;
+					return clamp( p, 0.5f, 4.0f );
+				}
+				else if ( normAtten >= 0.9999f )
+				{
+					return 0.5f;
+				}
+				else
+				{
+					return 4.0f;
+				}
+			}
+			else
+			{
+				const float wl = l * dHalf;
+				const float wq = q * dHalf * dHalf;
+				if ( ( wl + wq ) > 0.00001f )
+				{
+					const float p = ( wl * 1.0f + wq * 2.0f ) / ( wl + wq );
+					return clamp( p, 0.5f, 4.0f );
+				}
+				else if ( q > 0.0f )
+				{
+					return 2.0f;
+				}
+			}
+		}
+	}
+
+	return 1.0f;
 }
 
 ConVar r_deferred_autoenvlight_ambient_intensity_low("r_deferred_autoenvlight_ambient_intensity_low", "0.1");
 ConVar r_deferred_autoenvlight_ambient_intensity_high("r_deferred_autoenvlight_ambient_intensity_high", "0.2");
-ConVar r_deferred_autoenvlight_diffuse_intensity("r_deferred_autoenvlight_diffuse_intensity", "1");
+ConVar r_deferred_autoenvlight_diffuse_intensity("r_deferred_autoenvlight_diffuse_intensity", "0.7");
 
 void CDeferredManagerServer::LevelInitPreEntity()
 {
@@ -332,6 +401,9 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		COPY_LIGHT_DATA( "_constant_attn" );
 		COPY_LIGHT_DATA( "_linear_attn" );
 		COPY_LIGHT_DATA( "_quadratic_attn" );
+		COPY_LIGHT_DATA( "_fifty_percent_distance" );
+		COPY_LIGHT_DATA( "_zero_percent_distance" );
+		COPY_LIGHT_DATA( "_distance" );
 		pair.spotlight->SetInt( "light_type", 5 );
 		pair.light->deleteThis();
 	}
@@ -361,8 +433,8 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		UTIL_StringToVector( pos.Base(), entity->GetString( "origin" ) );
 		if ( KeyValues* angle = entity->FindKey( "angles" ) ) {
 			UTIL_StringToVector( rot.Base(), angle->GetString() );
-			if (type == 1 && entity->GetInt("pitch") != 0)
-				rot.x = -entity->GetInt("pitch");
+			if ((type == 1 || type == 5) && entity->GetFloat("pitch") != 0.0f)
+				rot.x = -entity->GetFloat("pitch");
 
 		}
 		else
@@ -404,17 +476,32 @@ void CDeferredManagerServer::LevelInitPreEntity()
 			{
 				if ( light.type == emit_point )
 				{
+					if ( !entity->FindKey( "_constant_attn" ) )
+						entity->SetFloat( "_constant_attn", light.constant_attn );
+					if ( !entity->FindKey( "_linear_attn" ) )
+						entity->SetFloat( "_linear_attn", light.linear_attn );
+					if ( !entity->FindKey( "_quadratic_attn" ) )
+						entity->SetFloat( "_quadratic_attn", light.quadratic_attn );
+
 					entity->SetFloat( "_distance", ComputeLightRadius( light ) );
 					break;
 				}
 
-				QAngle ang;
-				VectorAngles( light.normal, ang );
-				if ( CloseEnough( -rot.x, ang.x, 2.f ) && CloseEnough( rot.y, ang.y, 2.f ) )
+				Vector fwdEnt;
+				AngleVectors( rot, &fwdEnt );
+				if ( DotProduct( fwdEnt, light.normal ) > 0.95f )
 				{
-					rot = ang;
+					VectorAngles( light.normal, rot );
 					entity->SetFloat( "_inner_cone", acos( clamp( light.stopdot, -1.f, 1.f ) ) * 180.f / M_PI_F );
 					entity->SetFloat( "_cone", acos( clamp( light.stopdot2, -1.f, 1.f ) ) * 180.f / M_PI_F );
+
+					if ( !entity->FindKey( "_constant_attn" ) )
+						entity->SetFloat( "_constant_attn", light.constant_attn );
+					if ( !entity->FindKey( "_linear_attn" ) )
+						entity->SetFloat( "_linear_attn", light.linear_attn );
+					if ( !entity->FindKey( "_quadratic_attn" ) )
+						entity->SetFloat( "_quadratic_attn", light.quadratic_attn );
+
 					entity->SetFloat( "_distance", ComputeLightRadius( light ) );
 					break;
 				}
@@ -426,42 +513,83 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		if ( !lightEntity )
 			break;
 
-		int color[4];
+		int color[4] = { 255, 255, 255, 255 };
 		UTIL_StringToIntArray( color, 4, entity->GetString( type == 2 ? "rendercolor" : "_light" ) );
-		if ( type == 5 )
+		if ( type == 5 || ( type != 2 && color[3] > 255 ) )
+			color[3] = 255;
+		if ( color[3] <= 0 )
 			color[3] = 255;
 
 		char string[256];
-			V_sprintf_safe( string, "%d %d %d %d", color[0], color[1], color[2], color[3] );
+		V_sprintf_safe( string, "%d %d %d %d", color[0], color[1], color[2], color[3] );
 		lightEntity->KeyValue( szParamDiffuse, string );
+
+		const float flFiftyDist = entity->GetFloat( "_fifty_percent_distance", 0.0f );
+		float flZeroDist = entity->GetFloat( "_zero_percent_distance", 0.0f );
+		float radius = 0.0f;
+
+		if ( type == 2 )
+		{
+			radius = entity->GetFloat( "spotlightlength" );
+		}
+		else if ( flFiftyDist > 0.0f )
+		{
+			if ( flZeroDist <= flFiftyDist )
+				flZeroDist = 2.0f * flFiftyDist;
+
+			radius = flZeroDist;
+		}
+		else
+		{
+			radius = ComputeLightRadius( entity->GetFloat( "_distance" ), color[3], entity->GetFloat( "_constant_attn" ), entity->GetFloat( "_linear_attn" ), entity->GetFloat( "_quadratic_attn" ) );
+		}
+
+		float flPower = 1.0f;
+		if ( type != 2 )
+		{
+			flPower = CalibrateFalloffPower(
+				radius,
+				flFiftyDist,
+				flZeroDist,
+				entity->GetFloat( "_constant_attn" ),
+				entity->GetFloat( "_linear_attn" ),
+				entity->GetFloat( "_quadratic_attn" )
+			);
+		}
 
 		lightEntity->KeyValue( "spawnflags", type == 2 || type == 5 ? "11" : "3" );
 		if ( type == 1 || type == 5 )
 		{
+			float flOuterCone = entity->GetFloat( "_cone" ) * 2.0f;
+			float flInnerCone = entity->GetFloat( "_inner_cone" ) * 2.0f;
+			if ( flOuterCone <= 0.0f )
+				flOuterCone = 90.0f;
+			flOuterCone = clamp( flOuterCone, 1.0f, 135.0f );
+			if ( flInnerCone <= 0.0f || flInnerCone > flOuterCone )
+				flInnerCone = flOuterCone;
+
 			lightEntity->KeyValue( szParamLightType, "1" );
-				lightEntity->KeyValue( szParamSpotConeInner, entity->GetFloat( "_inner_cone" ) );
-				lightEntity->KeyValue( szParamSpotConeOuter, entity->GetFloat( "_cone" ) );
-			lightEntity->KeyValue( szParamPower, entity->GetFloat( "_exponent", 1.f ) );
+			lightEntity->KeyValue( szParamSpotConeInner, flInnerCone );
+			lightEntity->KeyValue( szParamSpotConeOuter, flOuterCone );
+			lightEntity->KeyValue( szParamPower, flPower );
 			if ( type == 5 )
 				lightEntity->KeyValue( szParamVolumeSamples, 50 );
-			}
+		}
 		else if ( type == 2 )
 		{
 			lightEntity->KeyValue( szParamLightType, "1" );
 			const float width = entity->GetFloat( "spotlightwidth" );
 			lightEntity->KeyValue( szParamSpotConeInner, width );
 			lightEntity->KeyValue( szParamSpotConeOuter, width * 1.5f );
-			lightEntity->KeyValue( szParamPower, 1 );
+			lightEntity->KeyValue( szParamPower, 1.0f );
 			lightEntity->KeyValue( szParamVolumeSamples, 50 );
 		}
 		else
 		{
 			lightEntity->KeyValue( szParamLightType, "0" );
-			lightEntity->KeyValue( szParamPower, "1" );
+			lightEntity->KeyValue( szParamPower, flPower );
 		}
 
-		const float radius = type == 2 ? entity->GetFloat( "spotlightlength" ) :
-		ComputeLightRadius( entity->GetFloat( "_distance" ), color[3], entity->GetFloat( "_constant_attn" ), entity->GetFloat( "_linear_attn" ), entity->GetFloat( "_quadratic_attn" ) );
 		lightEntity->KeyValue( szParamRadius, radius );
 		lightEntity->KeyValue( szParamVisDist, max( 16384.0f, radius * 4.0f ) );
 		lightEntity->KeyValue( szParamVisRange, 1024.0f );

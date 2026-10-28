@@ -2173,9 +2173,9 @@ void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view, const CVi
 		UTIL_StringToVector( lightDataState.ambh.AsVector3D().Base(), r_deferred_light_global_override_ambient_high.GetString() );
 		UTIL_StringToVector( lightDataState.ambl.AsVector3D().Base(), r_deferred_light_global_override_ambient_low.GetString() );
 
-		lightDataState.bEnabled = ( lightDataState.diff.LengthSqr() > 0.01f ||
-			lightDataState.ambh.LengthSqr() > 0.01f ||
-			lightDataState.ambl.LengthSqr() > 0.01f );
+		lightDataState.bEnabled = ( lightDataState.diff.LengthSqr() > 0.000001f ||
+			lightDataState.ambh.LengthSqr() > 0.000001f ||
+			lightDataState.ambl.LengthSqr() > 0.000001f );
 	}
 
 	QUEUE_FIRE( CommitLightData_Global, lightDataState );
@@ -2248,9 +2248,9 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 			UTIL_StringToVector( lightDataState.ambh.AsVector3D().Base(), r_deferred_light_global_override_ambient_high.GetString() );
 			UTIL_StringToVector( lightDataState.ambl.AsVector3D().Base(), r_deferred_light_global_override_ambient_low.GetString() );
 
-			lightDataState.bEnabled = ( lightDataState.diff.LengthSqr() > 0.01f ||
-				lightDataState.ambh.LengthSqr() > 0.01f ||
-				lightDataState.ambl.LengthSqr() > 0.01f );
+			lightDataState.bEnabled = ( lightDataState.diff.LengthSqr() > 0.000001f ||
+				lightDataState.ambh.LengthSqr() > 0.000001f ||
+				lightDataState.ambl.LengthSqr() > 0.000001f );
 		}
 
 		QUEUE_FIRE( CommitLightData_Global, lightDataState );

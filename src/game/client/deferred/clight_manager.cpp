@@ -463,7 +463,7 @@ ConVar r_deferred_shadow_dist_min(
 
 ConVar r_deferred_shadow_max(
 	"r_deferred_shadow_max",
-	"32",
+	"64",
 	FCVAR_ARCHIVE,
 	"maximum simultaneous dynamic shadow casters"
 );
@@ -694,7 +694,7 @@ void CLightingManager::CullLights()
 		// 		continue;
 		// }
 
-		Vector veclightDelta = l->boundsCenter - m_vecViewOrigin;
+		Vector veclightDelta = l->pos - m_vecViewOrigin;
 
 		if ( r_deferred_light_distance_fade.GetBool() && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
 			continue;

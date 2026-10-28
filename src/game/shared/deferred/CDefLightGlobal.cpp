@@ -117,9 +117,9 @@ lightData_Global_t CDeferredLightGlobal::GetState()
 	data.vecLight.Init( -dir );
 
 	if ( IsEnabled() &&
-		( data.diff.LengthSqr() > 0.01f ||
-		data.ambh.LengthSqr() > 0.01f ||
-		data.ambl.LengthSqr() > 0.01f ) )
+		( data.diff.LengthSqr() > 0.000001f ||
+		data.ambh.LengthSqr() > 0.000001f ||
+		data.ambl.LengthSqr() > 0.000001f ) )
 	{
 		data.bEnabled = true;
 		data.bShadow = HasShadow();

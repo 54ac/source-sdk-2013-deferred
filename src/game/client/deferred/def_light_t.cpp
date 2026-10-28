@@ -581,6 +581,10 @@ void def_light_t::UpdateXForms()
 
 			CalcBoundaries( points, numPoints, bounds_min_naive, bounds_max_naive );
 
+			const Vector radVec( flRadius, flRadius, flRadius );
+			bounds_min_naive = VectorMax( bounds_min_naive, pos - radVec );
+			bounds_max_naive = VectorMin( bounds_max_naive, pos + radVec );
+
 			boundsCenter = bounds_min_naive + ( bounds_max_naive - bounds_min_naive ) * 0.5f;
 		}
 		break;
