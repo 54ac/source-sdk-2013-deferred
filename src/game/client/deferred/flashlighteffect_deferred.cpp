@@ -33,6 +33,7 @@ void CFlashlightEffectDeferred::UpdateLightProjection( FlashlightState_t &state 
 
 	m_pDefLight->pos = state.m_vecLightOrigin;
 	QuaternionAngles( state.m_quatOrientation, m_pDefLight->ang );
+	m_pDefLight->m_hIgnoreEntity = C_BaseEntity::Instance( m_nEntIndex );
 
 	m_pDefLight->col_diffuse.Init( state.m_Color[0],
 		state.m_Color[1],

@@ -3191,6 +3191,8 @@ int C_BaseAnimating::DrawModel( int flags )
 	if ( !m_bReadyToDraw )
 		return 0;
 
+	if ( ( flags & STUDIO_SHADOWDEPTHTEXTURE ) && IsEffectActive( EF_NOSHADOW ) )
+		return 0;
 	int drawn = 0;
 
 #ifdef TF_CLIENT_DLL

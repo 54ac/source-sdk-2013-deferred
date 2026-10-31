@@ -361,6 +361,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	if ( m_pKV_Def[ DEF_MAT_BLUR_G6_X ] != NULL )
 	{
 		m_pKV_Def[ DEF_MAT_BLUR_G6_X ]->SetString( "$BASETEXTURE", GetDefRT_VolumetricsBuffer( 0 )->GetName() );
+		m_pKV_Def[ DEF_MAT_BLUR_G6_X ]->SetFloat( "$BLURSIZE", 1.0f );
 		m_pKV_Def[ DEF_MAT_BLUR_G6_X ]->SaveToFile( filesystem, "materials/deferred/blurpass_vbuf_x.vmt", "MOD" );
 	}
 
@@ -369,6 +370,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	{
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetString( "$BASETEXTURE", GetDefRT_VolumetricsBuffer( 1 )->GetName() );
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetInt( "$ISVERTICAL", 1 );
+		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetFloat( "$BLURSIZE", 1.0f );
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SaveToFile( filesystem, "materials/deferred/blurpass_vbuf_y.vmt", "MOD" );
 	}
 
@@ -540,6 +542,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	if ( m_pKV_Def[ DEF_MAT_BLUR_G6_X ] != NULL )
 	{
 		m_pKV_Def[ DEF_MAT_BLUR_G6_X ]->SetString( "$BASETEXTURE", GetDefRT_VolumetricsBuffer( 0 )->GetName() );
+		m_pKV_Def[ DEF_MAT_BLUR_G6_X ]->SetFloat( "$BLURSIZE", 1.0f );
 		m_pMat_Def[ DEF_MAT_BLUR_G6_X ] = materials->CreateMaterial( "__blurpass_vbuf_x", m_pKV_Def[ DEF_MAT_BLUR_G6_X ] );
 	}
 
@@ -548,6 +551,7 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	{
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetString( "$BASETEXTURE", GetDefRT_VolumetricsBuffer( 1 )->GetName() );
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetInt( "$ISVERTICAL", 1 );
+		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetFloat( "$BLURSIZE", 1.0f );
 		m_pMat_Def[ DEF_MAT_BLUR_G6_Y ] = materials->CreateMaterial( "__blurpass_vbuf_y", m_pKV_Def[ DEF_MAT_BLUR_G6_Y ] );
 	}
 

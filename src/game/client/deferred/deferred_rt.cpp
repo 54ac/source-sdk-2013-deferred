@@ -24,6 +24,7 @@ static CTextureReference g_tex_ShadowRad_Albedo_Ortho[ MAX_SHADOW_ORTHO ];
 static CTextureReference g_tex_ShadowRad_Normal_Ortho[ MAX_SHADOW_ORTHO ];
 static CTextureReference g_tex_ShadowColor_Proj[ MAX_SHADOW_PROJ ];
 static CTextureReference g_tex_ShadowDepth_Proj[ MAX_SHADOW_PROJ ];
+static CTextureReference g_tex_ShadowColor_Static[ MAX_STATIC_SHADOW_ATLAS_SLOTS ];
 #if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
 static CTextureReference g_tex_ShadowColor_Proj_LOD1[ MAX_SHADOW_PROJ ];
 static CTextureReference g_tex_ShadowDepth_Proj_LOD1[ MAX_SHADOW_PROJ ];
@@ -412,6 +413,17 @@ const ImageFormat fmt_gbuffer0 =
 
 
 
+	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+	{
+		g_tex_ShadowColor_Static[i].Init( materials->CreateNamedRenderTargetTextureEx2(
+			VarArgs( "_rt_defShadowColor_Static_%03i", i ),
+			STATIC_SHADOW_TILE_RES, STATIC_SHADOW_TILE_RES,
+			RT_SIZE_NO_CHANGE,
+			fmt_depthColor,
+			MATERIAL_RT_DEPTH_NONE,
+			shadowColorFlags, 0 ) );
+	}
+
 	materials->EndRenderTargetAllocation();
 
 	GetDeferredExt()->CommitTexture_General( g_tex_Normals, g_tex_Depth,
@@ -580,6 +592,13 @@ ITexture *GetShadowDepthRT_Proj( int index )
 	Assert( index >= 0 && index < MAX_SHADOW_PROJ );
 	Assert( g_tex_ShadowDepth_Proj[ index ].IsValid() );
 	return g_tex_ShadowDepth_Proj[ index ];
+}
+
+ITexture *GetShadowColorRT_Static( int index )
+{
+	Assert( index >= 0 && index < MAX_STATIC_SHADOW_ATLAS_SLOTS );
+	Assert( g_tex_ShadowColor_Static[ index ].IsValid() );
+	return g_tex_ShadowColor_Static[ index ];
 }
 
 ITexture *GetShadowColorRT_DP( int index )

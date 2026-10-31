@@ -1,8 +1,11 @@
 #ifndef C_LIGHT_MANAGER_H
 #define C_LIGHT_MANAGER_H
 
+#include "deferred/def_light_t.h"
+
 class CViewSetup;
 class CDeferredViewRender;
+class C_BaseEntity;
 #if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t;
 #endif
@@ -45,21 +48,26 @@ public:
 	static Vector SanitizeLightOrigin( const Vector &vecOrigin, const Vector *pFallback = NULL, float flMinClearance = 14.0f );
 
 	def_light_t *AllocDynamicPointLight( const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL );
+		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL,
+		C_BaseEntity *pIgnoreEntity = NULL );
 
 	def_light_t *AllocDynamicSpotLight( const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
 		float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags = DEFLIGHT_SHADOW_ENABLED,
-		float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL );
+		float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL,
+		C_BaseEntity *pIgnoreEntity = NULL );
 
 	void UpdateDynamicLight( def_light_t *pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-		const QAngle *pAngles = NULL, bool bSanitizeOrigin = true, const Vector *pFallbackOrigin = NULL );
+		const QAngle *pAngles = NULL, bool bSanitizeOrigin = true, const Vector *pFallbackOrigin = NULL,
+		C_BaseEntity *pIgnoreEntity = NULL );
 
 	bool EnsureDynamicPointLight( def_light_t *&pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL );
+		int iFlags = DEFLIGHT_SHADOW_ENABLED, float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL,
+		C_BaseEntity *pIgnoreEntity = NULL );
 
 	bool EnsureDynamicSpotLight( def_light_t *&pLight, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
 		float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags = DEFLIGHT_SHADOW_ENABLED,
-		float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL );
+		float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL,
+		C_BaseEntity *pIgnoreEntity = NULL );
 
 	void FreeDynamicLight( def_light_t *&pLight );
 
@@ -67,6 +75,14 @@ public:
 	void AllocateSortDataBuffer();
 	void BuildLightSortDataBuffer();
 #endif
+
+	int AssignStaticAtlasSlot( def_light_t *l );
+	void FreeStaticAtlasSlot( def_light_t *l );
+	void CheckDynamicEntityIntersections();
+	void OnEntityRemoved( C_BaseEntity *pEnt );
+	bool DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt );
+	int GetStaticAtlasSlotCount() const;
+	void ReevaluateStaticAtlasSlots();
 
 	void ClearTmpLists();
 

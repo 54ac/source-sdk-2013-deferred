@@ -402,7 +402,15 @@ void C_EntityFlame::Simulate( void )
 		if ( pEnt )
 		{
 			vecTargetPos = pEnt->WorldSpaceCenter();
-			if ( !bIsNPC )
+			if ( bIsNPC )
+			{
+				vecTargetPos.z += 16.0f;
+			}
+			else if ( pEnt->CollisionProp() )
+			{
+				vecTargetPos.z += pEnt->CollisionProp()->OBBMaxs().z * 0.75f;
+			}
+			else
 			{
 				vecTargetPos.z += 16.0f;
 			}
@@ -417,10 +425,10 @@ void C_EntityFlame::Simulate( void )
 
 		float flFullRadius = bIsNPC ? 300.0f : 240.0f;
 		Vector vecFlameColor = Vector( 0.96f, 0.38f, 0.04f ) * ( 0.90f * flGrowth );
-		Vector fallbackPos = GetAbsOrigin();
+		Vector fallbackPos = vecTargetPos + Vector( 0, 0, 8.0f );
 
 		int iShadowFlags = r_deferred_fire_shadows.GetBool() ? DEFLIGHT_SHADOW_ENABLED : 0;
-		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, vecTargetPos, vecFlameColor, flFullRadius, iShadowFlags, 2048.0f, &fallbackPos );
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, vecTargetPos, vecFlameColor, flFullRadius, iShadowFlags, 2048.0f, &fallbackPos, pEnt );
 	}
 	else
 	{

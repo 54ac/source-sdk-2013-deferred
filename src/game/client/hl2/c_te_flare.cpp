@@ -307,7 +307,8 @@ void C_Flare::Update( float timeDelta )
 			}
 
 			Vector fallbackPos = GetAbsOrigin();
-			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, Vector( 1.0f, 0.25f, 0.15f ), flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 512.0f, flRadius * 3.5f ), &fallbackPos );
+			C_BaseEntity *pIgnore = GetMoveParent() ? GetMoveParent() : this;
+			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, Vector( 1.0f, 0.25f, 0.15f ), flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 512.0f, flRadius * 3.5f ), &fallbackPos, pIgnore );
 		}
 		else
 		{

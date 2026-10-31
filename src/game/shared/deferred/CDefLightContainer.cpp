@@ -228,6 +228,8 @@ void CDeferredLightContainer::ReadWorldLight( int index, def_light_t &l )
 	l.flSpotCone_Inner = tmp.y;
 	l.flSpotCone_Outer = tmp.z;
 
+	l.m_bIsStatic = true;
+	l.m_bShadowDirty = true;
 	ReadEncodedDataInt( index, l.iStyleSeed, l.iCookieIndex, l.iFlags, l.iLighttype );
 }
 

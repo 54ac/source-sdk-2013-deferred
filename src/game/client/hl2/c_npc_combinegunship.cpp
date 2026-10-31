@@ -341,7 +341,7 @@ int	C_GunshipFX::DrawModel( int )
 			float flScale = params[GUNSHIPFX_AFTERGLOW_COLOR].x;
 			if ( flScale > 0.01f )
 			{
-				GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, m_worldPosition, Vector( 0.157f, 0.235f, 1.0f ) * flScale, 250.0f * flScale, DEFLIGHT_SHADOW_ENABLED, 4096.0f, &m_worldPosition );
+				GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, m_worldPosition, Vector( 0.157f, 0.235f, 1.0f ) * flScale, 250.0f * flScale, DEFLIGHT_SHADOW_ENABLED, 4096.0f, &m_worldPosition, C_BaseEntity::Instance( m_entityIndex ) );
 			}
 			else if ( m_pDefLight )
 			{

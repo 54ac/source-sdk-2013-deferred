@@ -314,7 +314,8 @@ void C_VortigauntChargeToken::ClientThink( void )
 	{
 		Vector lightColor( 64.0f / 255.0f, 255.0f / 255.0f, 64.0f / 255.0f );
 		Vector fallbackPos = GetAbsOrigin();
-		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos );
+		C_BaseEntity *pOwner = GetOwnerEntity() ? GetOwnerEntity() : this;
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos, pOwner );
 	}
 	else if ( m_pDLight != NULL )
 	{
@@ -473,7 +474,8 @@ void C_VortigauntEffectDispel::ClientThink( void )
 	{
 		Vector lightColor( 64.0f / 255.0f, 255.0f / 255.0f, 64.0f / 255.0f );
 		Vector fallbackPos = GetAbsOrigin();
-		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos );
+		C_BaseEntity *pOwner = GetOwnerEntity() ? GetOwnerEntity() : this;
+		GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, DLIGHT_RADIUS, DEFLIGHT_SHADOW_ENABLED, 2048.0f, &fallbackPos, pOwner );
 	}
 	else if ( m_pDLight != NULL )
 	{

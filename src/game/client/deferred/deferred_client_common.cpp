@@ -10,6 +10,7 @@ ConVar r_deferred_rt_shadowspot_lod1_res( "r_deferred_rt_shadowspot_lod1_res", "
 ConVar r_deferred_rt_shadowspot_lod2_res( "r_deferred_rt_shadowspot_lod2_res", "256", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );
 #endif
 ConVar r_deferred_rt_shadowpoint_res( "r_deferred_rt_shadowpoint_res", "512", FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS );
+ConVar r_deferred_shadow_filter_scale( "r_deferred_shadow_filter_scale", "1.25", FCVAR_ARCHIVE, "Shadow filter sample spread scale" );
 ConVar r_deferred_point_light_half_lambert( "r_deferred_point_light_half_lambert", "1", FCVAR_ARCHIVE, "Point light diffuse wrap mode: 0 = pure Lambert, 1 = Half-Lambert" );
 ConVar r_deferred_point_shadow_mode( "r_deferred_point_shadow_mode", "1", FCVAR_ARCHIVE | FCVAR_RELOAD_TEXTURES | FCVAR_RELOAD_MATERIALS, "Point light shadow mode: 0 = dual-paraboloid, 1 = tetrahedral" );
 #if DEFCFG_ADAPTIVE_SHADOWMAP_LOD

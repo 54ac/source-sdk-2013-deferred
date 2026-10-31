@@ -6,6 +6,7 @@
 #include "bsptreedata.h"
 #include "collisionutils.h"
 #include "raytrace.h"
+#include "deferred/clight_manager.h"
 
 #include "tier0/memdbgon.h"
 
@@ -29,7 +30,7 @@ BEGIN_DATADESC_NO_BASE( def_light_t )
 	DEFINE_KEYFIELD( iShadow_Range, FIELD_SHORT, GetLightParamName( LPARAM_SHADOW_RANGE ) ),
 
 	DEFINE_KEYFIELD( iLighttype, FIELD_CHARACTER, GetLightParamName( LPARAM_LIGHTTYPE ) ),
-	DEFINE_KEYFIELD( iFlags, FIELD_CHARACTER, GetLightParamName( LPARAM_SPAWNFLAGS ) ),
+	DEFINE_KEYFIELD( iFlags, FIELD_SHORT, GetLightParamName( LPARAM_SPAWNFLAGS ) ),
 	DEFINE_KEYFIELD( iCookieIndex, FIELD_CHARACTER, GetLightParamName( LPARAM_COOKIETEX ) ),
 
 	DEFINE_KEYFIELD( flStyle_Amount, FIELD_FLOAT, GetLightParamName( LPARAM_STYLE_AMT ) ),
@@ -123,6 +124,17 @@ def_light_t::def_light_t( bool bWorld )
 	flUberNearEdge = 10.0f;
 	flUberFarEdge = 100.0f;
 
+	m_bIsStatic = false;
+	m_bShadowDirty = true;
+	m_nCachedAtlasSlot = -1;
+	m_bEntityInsideLastFrame = false;
+	m_hIgnoreEntity = NULL;
+
+	backDir.Init( 0, 0, -1 );
+	bounds_min_naive.Init( -flRadius, -flRadius, -flRadius );
+	bounds_max_naive.Init( flRadius, flRadius, flRadius );
+	Q_memset( &spotFrustum, 0, sizeof( spotFrustum ) );
+
 	worldTransform.Identity();
 
 #if DEBUG
@@ -137,6 +149,9 @@ def_light_t::def_light_t( bool bWorld )
 
 def_light_t::~def_light_t()
 {
+	if ( GetLightingManager() )
+		GetLightingManager()->FreeStaticAtlasSlot( this );
+
 	ClearCookie();
 
 	DestroyMeshes();
@@ -503,8 +518,9 @@ void def_light_t::UpdateXForms()
 
 			CalcBoundaries( list, numPoints, bounds_min, bounds_max );
 
-			bounds_min_naive = pos - _dirs[0] * flRadius;
-			bounds_max_naive = pos + _dirs[0] * flRadius;
+			const Vector radVec( flRadius, flRadius, flRadius );
+			bounds_min_naive = pos - radVec;
+			bounds_max_naive = pos + radVec;
 
 			boundsCenter = pos;
 		}

@@ -365,10 +365,12 @@ PS_OUTPUT main( const PS_INPUT In )
 	float fogAmt = CalcPixelFogFactor( PIXELFOGTYPE, g_vecFogParams, g_vecOrigin, In.vWorldPos, flDist );
 
 	Out.vColor_0.xyz = BlendPixelFog( Out.vColor_0.xyz, fogAmt, g_LinearFogColor.rgb, PIXELFOGTYPE );
+#if ( TRANSLUCENT == 0 )
 #if PIXELFOGTYPE == 1
 	Out.vColor_0.w = fogAmt;
 #else
 	Out.vColor_0.w = 1.0f;
+#endif
 #endif
 
 	return Out;

@@ -1,5 +1,7 @@
 #include "cbase.h"
 #include "viewrender_deferred.h"
+#include "deferred/deferred_rt.h"
+#include "deferred/clight_manager.h"
 #include "vprof.h"
 #include "c_rope.h"
 #include "rendertexture.h"
@@ -54,6 +56,11 @@ extern float GetSkyboxFogStart( void );
 extern float GetSkyboxFogEnd( void );
 extern float GetSkyboxFogMaxDensity( void );
 extern void FlushWorldLists();
+
+int g_nShadowViewsSkippedThisFrame = 0;
+int g_nShadowViewsRenderedThisFrame = 0;
+int g_nShadowViewsSkippedLastFrame = 0;
+int g_nShadowViewsRenderedLastFrame = 0;
 
 void DrawCube( CMeshBuilder &meshBuilder, Vector vecPos, float flRadius, float *pfl2Texcoords )
 {
@@ -222,10 +229,11 @@ class CBaseShadowView : public CBaseWorldViewDeferred
 {
 	DECLARE_CLASS( CBaseShadowView, CBaseWorldViewDeferred );
 public:
-	CBaseShadowView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView )
+	CBaseShadowView(CViewRender *pMainView, def_light_t *pLight = NULL) : CBaseWorldViewDeferred( pMainView )
 	{
 		m_bOutputRadiosity = false;
 		m_bHasReflectionView = false;
+		m_pLight = pLight;
 	};
 
 	void			Setup( const CViewSetup &view,
@@ -250,6 +258,7 @@ public:
 	virtual int		GetShadowMode() = 0;
 
 protected:
+	def_light_t		*m_pLight;
 	CViewSetup		m_CameraView;
 	bool			m_bHasReflectionView;
 	CViewSetup		m_ReflectionView;
@@ -293,9 +302,8 @@ public:
 	CDualParaboloidShadowView(CViewRender *pMainView,
 		def_light_t *pLight,
 		const bool &bSecondary)
-		: CBaseShadowView( pMainView )
+		: CBaseShadowView( pMainView, pLight )
 	{
-			m_pLight = pLight;
 			m_bSecondary = bSecondary;
 	}
 	virtual void	PushView( float waterHeight );
@@ -309,7 +317,6 @@ public:
 
 private:
 	bool m_bSecondary;
-	def_light_t *m_pLight;
 };
 
 class CTetrahedralShadowView : public CBaseShadowView
@@ -317,9 +324,8 @@ class CTetrahedralShadowView : public CBaseShadowView
 	DECLARE_CLASS( CTetrahedralShadowView, CBaseShadowView );
 public:
 	CTetrahedralShadowView( CViewRender *pMainView, def_light_t *pLight, int index, int iFaceIndex )
-		: CBaseShadowView( pMainView )
+		: CBaseShadowView( pMainView, pLight )
 	{
-		m_pLight = pLight;
 		m_iIndex = index;
 		m_iFaceIndex = iFaceIndex;
 	}
@@ -344,7 +350,6 @@ public:
 private:
 	int m_iIndex;
 	int m_iFaceIndex;
-	def_light_t *m_pLight;
 };
 
 class CSpotLightShadowView : public CBaseShadowView
@@ -353,9 +358,8 @@ class CSpotLightShadowView : public CBaseShadowView
 public:
 	CSpotLightShadowView(CViewRender *pMainView,
 		def_light_t *pLight, int index )
-		: CBaseShadowView( pMainView )
+		: CBaseShadowView( pMainView, pLight )
 	{
-			m_pLight = pLight;
 			m_iIndex = index;
 	}
 
@@ -367,7 +371,6 @@ public:
 	};
 
 private:
-	def_light_t *m_pLight;
 	int m_iIndex;
 };
 
@@ -1369,6 +1372,28 @@ void CBaseShadowView::SetupRadiosityTargets( ITexture *pAlbedoTexture, ITexture 
 
 void CBaseShadowView::Draw()
 {
+	C_BaseEntity *pIgnore = ( m_pLight && m_pLight->m_hIgnoreEntity.Get() ) ? m_pLight->m_hIgnoreEntity.Get() : NULL;
+	CUtlVectorFixed<C_BaseEntity*, 16> vecRestoredEntities;
+	if ( pIgnore )
+	{
+		if ( !pIgnore->IsEffectActive( EF_NOSHADOW ) )
+		{
+			pIgnore->AddEffects( EF_NOSHADOW );
+			vecRestoredEntities.AddToTail( pIgnore );
+		}
+		for ( C_BaseEntity *pChild = pIgnore->FirstMoveChild(); pChild != NULL; pChild = pChild->NextMovePeer() )
+		{
+			if ( !pChild->IsEffectActive( EF_NOSHADOW ) )
+			{
+				pChild->AddEffects( EF_NOSHADOW );
+				if ( vecRestoredEntities.Count() < vecRestoredEntities.NumAllocated() )
+				{
+					vecRestoredEntities.AddToTail( pChild );
+				}
+			}
+		}
+	}
+
 	const view_id_t oldViewID = g_CurrentViewID;
 	SetupCurrentView( origin, angles, VIEW_DEFERRED_SHADOW );
 
@@ -1392,6 +1417,14 @@ void CBaseShadowView::Draw()
 		DEFERRED_RENDER_STAGE_INVALID );
 
 	g_CurrentViewID = oldViewID;
+
+	for ( int i = 0; i < vecRestoredEntities.Count(); ++i )
+	{
+		if ( vecRestoredEntities[i] )
+		{
+			vecRestoredEntities[i]->RemoveEffects( EF_NOSHADOW );
+		}
+	}
 }
 
 bool CBaseShadowView::AdjustView( float waterHeight )
@@ -1765,7 +1798,9 @@ void CSpotLightShadowView::CalcShadowView()
 {
 	float flRadius = m_pLight->flRadius;
 
-	int spotRes = GetShadowResolution_Spot();
+	int spotRes = ( m_pLight && m_pLight->IsStatic() && m_pLight->HasValidAtlasSlot() )
+		? STATIC_SHADOW_TILE_RES
+		: GetShadowResolution_Spot();
 
 	width = spotRes;
 	height = spotRes;
@@ -2644,12 +2679,50 @@ void CDeferredViewRender::RenderCascadedShadows( const CViewSetup &view, const b
 
 void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesiredShadowmap, def_light_t *l )
 {
+	extern ConVar r_deferred_shadow_cache;
+	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() && l->HasValidAtlasSlot() )
+	{
+		if ( !l->IsShadowDirty() )
+		{
+			g_nShadowViewsSkippedThisFrame++;
+			return;
+		}
+
+		g_nShadowViewsRenderedThisFrame++;
+
+		const int slot = l->m_nCachedAtlasSlot;
+
+		CViewSetup setup;
+		setup.origin = l->pos;
+		setup.angles = l->ang;
+		setup.m_bOrtho = false;
+		setup.m_flAspectRatio = 1;
+		setup.x = 0;
+		setup.y = 0;
+		setup.width = STATIC_SHADOW_TILE_RES;
+		setup.height = STATIC_SHADOW_TILE_RES;
+
+		Vector origins[2] = { view.origin, l->pos };
+		render->ViewSetupVis( false, 2, origins );
+
+		CRefPtr<CSpotLightShadowView> pProjView = new CSpotLightShadowView( this, l, iDesiredShadowmap );
+		pProjView->Setup( setup, GetShadowDepthRT_Proj( iDesiredShadowmap ), GetShadowColorRT_Static( slot ) );
+		AddViewToScene( pProjView );
+
+		l->SetShadowDirty( false );
+		return;
+	}
+
+	g_nShadowViewsRenderedThisFrame++;
+
 	CViewSetup setup;
 	setup.origin = l->pos;
 	setup.angles = l->ang;
 	setup.m_bOrtho = false;
 	setup.m_flAspectRatio = 1;
 	setup.x = setup.y = 0;
+	setup.width = ( l->iLighttype == DEFLIGHTTYPE_SPOT ) ? GetShadowResolution_Spot() : GetShadowResolution_Point();
+	setup.height = setup.width;
 
 	Vector origins[2] = { view.origin, l->pos };
 	render->ViewSetupVis( false, 2, origins );
@@ -2840,6 +2913,11 @@ void CDeferredViewRender::DrawUnderwaterOverlay( void )
 
 void CDeferredViewRender::RenderView( const CViewSetup &view, int nClearFlags, int whatToDraw )
 {
+	g_nShadowViewsSkippedLastFrame = g_nShadowViewsSkippedThisFrame;
+	g_nShadowViewsRenderedLastFrame = g_nShadowViewsRenderedThisFrame;
+	g_nShadowViewsSkippedThisFrame = 0;
+	g_nShadowViewsRenderedThisFrame = 0;
+
 	m_UnderWaterOverlayMaterial.Shutdown();					// underwater view will set
 
 	CViewSetup worldView = view;

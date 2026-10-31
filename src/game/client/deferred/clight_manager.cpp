@@ -1,6 +1,14 @@
 #include "cbase.h"
+#include "c_physicsprop.h"
+#include "c_gib.h"
+#include "c_baseviewmodel.h"
+#include "c_prop_vehicle.h"
 #include "deferred/deferred_shared_common.h"
 #include "deferred/vgui/vgui_deferred.h"
+#include "deferred/deferred_rt.h"
+
+static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue );
+ConVar r_deferred_shadow_cache( "r_deferred_shadow_cache", "1", FCVAR_ARCHIVE, "Static shadow map caching for stationary world lights", OnDeferredShadowCacheChanged );
 #include "collisionutils.h"
 #include "materialsystem/imaterialvar.h"
 
@@ -14,6 +22,7 @@
 
 
 static CLightingManager __g_lightingMan;
+static bool s_bAtlasSlotUsed[ MAX_STATIC_SHADOW_ATLAS_SLOTS ];
 
 CLightingManager* GetLightingManager()
 {
@@ -38,6 +47,7 @@ CLightingManager::CLightingManager() : BaseClass( "LightingManagerSystem" )
 	m_vecViewOrigin.Init();
 	m_vecForward.Init();
 	m_flzNear          = 0;
+	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
 	m_bDrawVolumetrics = false;
 #if DEFCFG_USE_SSE
 	m_pSortDataX4     = NULL;
@@ -65,6 +75,7 @@ void CLightingManager::Shutdown()
 
 	Assert( m_hDeferredLights.Count() == 0 );
 	materials->RemoveReleaseFunc( LightingResourceRelease );
+	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
 
 #if DEFCFG_USE_SSE
 	if ( m_pSortDataX4 != NULL )
@@ -75,7 +86,25 @@ void CLightingManager::Shutdown()
 #endif
 }
 
-void CLightingManager::LevelInitPostEntity() {}
+void CLightingManager::LevelInitPostEntity()
+{
+	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
+
+	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+	{
+		def_light_t *l = m_hDeferredLights[i];
+		if ( !l )
+			continue;
+
+		l->m_nCachedAtlasSlot = -1;
+		if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() )
+		{
+			AssignStaticAtlasSlot( l );
+			l->SetShadowDirty( true );
+			l->m_bEntityInsideLastFrame = false;
+		}
+	}
+}
 
 void CLightingManager::LevelShutdownPostEntity()
 {
@@ -91,9 +120,241 @@ void CLightingManager::LevelShutdownPostEntity()
 
 	for ( int i = 0; i < LSORT_COUNT; i++ )
 		m_hPreSortedLights[i].Purge();
+
+	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+	{
+		if ( m_hDeferredLights[i] )
+			m_hDeferredLights[i]->m_nCachedAtlasSlot = -1;
+	}
+
+	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
 }
 
-void CLightingManager::Update( float ft ) {}
+int CLightingManager::AssignStaticAtlasSlot( def_light_t *l )
+{
+	if ( !l )
+		return -1;
+
+	FreeStaticAtlasSlot( l );
+
+	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+	{
+		if ( !s_bAtlasSlotUsed[i] )
+		{
+			s_bAtlasSlotUsed[i] = true;
+			l->m_nCachedAtlasSlot = i;
+			return i;
+		}
+	}
+
+	l->m_nCachedAtlasSlot = -1;
+	return -1;
+}
+
+void CLightingManager::FreeStaticAtlasSlot( def_light_t *l )
+{
+	if ( !l || !l->HasValidAtlasSlot() )
+		return;
+
+	if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_SHADOW_ATLAS_SLOTS )
+	{
+		s_bAtlasSlotUsed[ l->m_nCachedAtlasSlot ] = false;
+	}
+
+	l->m_nCachedAtlasSlot = -1;
+}
+
+int CLightingManager::GetStaticAtlasSlotCount() const
+{
+	int count = 0;
+	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+	{
+		if ( s_bAtlasSlotUsed[i] )
+			count++;
+	}
+	return count;
+}
+
+void CLightingManager::ReevaluateStaticAtlasSlots()
+{
+	if ( r_deferred_shadow_cache.GetBool() )
+	{
+		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+		{
+			def_light_t *l = m_hDeferredLights[i];
+			if ( l->IsStatic() && l->IsSpot() && !l->HasValidAtlasSlot() )
+			{
+				AssignStaticAtlasSlot( l );
+				l->SetShadowDirty( true );
+			}
+		}
+	}
+	else
+	{
+		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+		{
+			def_light_t *l = m_hDeferredLights[i];
+			if ( l->HasValidAtlasSlot() )
+			{
+				FreeStaticAtlasSlot( l );
+			}
+		}
+	}
+}
+
+static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue )
+{
+	if ( GetLightingManager() )
+	{
+		GetLightingManager()->ReevaluateStaticAtlasSlots();
+	}
+}
+
+class CAbsQueryScope {
+public:
+	CAbsQueryScope() : m_bPrev( C_BaseEntity::IsAbsQueriesValid() ) {
+		if ( !m_bPrev ) C_BaseEntity::SetAbsQueriesValid( true );
+	}
+	~CAbsQueryScope() {
+		if ( !m_bPrev ) C_BaseEntity::SetAbsQueriesValid( false );
+	}
+private:
+	bool m_bPrev;
+};
+
+bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt )
+{
+	if ( !l || !pEnt )
+		return false;
+
+	CAbsQueryScope scope;
+
+	Vector mins, maxs;
+	pEnt->GetRenderBoundsWorldspace( mins, maxs );
+
+	const Vector propCenter = pEnt->WorldSpaceCenter();
+	const float flPropRadius = pEnt->BoundingRadius();
+
+	const Vector vecToProp = propCenter - l->pos;
+	const float flDistSqr = vecToProp.LengthSqr();
+	const float flMaxDist = l->flRadius + flPropRadius;
+	if ( flDistSqr > ( flMaxDist * flMaxDist ) )
+		return false;
+
+	if ( l->IsSpot() )
+	{
+		const float flDist = FastSqrt( flDistSqr );
+		if ( flDist > 1e-3f )
+		{
+			const Vector dirToProp = vecToProp * ( 1.0f / flDist );
+			const float flDot = DotProduct( -l->backDir, dirToProp );
+			const float flAngularSlop = ( flDist > flPropRadius ) ? ( flPropRadius / flDist ) : 1.0f;
+			if ( flDot < ( l->flSpotCone_Outer - flAngularSlop ) )
+				return false;
+		}
+
+		if ( R_CullBox( mins, maxs, l->spotFrustum ) )
+			return false;
+	}
+	else
+	{
+		if ( !IsBoxIntersectingBox( mins, maxs, l->bounds_min_naive, l->bounds_max_naive ) )
+			return false;
+	}
+
+	return true;
+}
+
+void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
+{
+}
+
+static const float MIN_SHADOW_DIRTY_SPEED_SQR = 4.0f;
+static const float MIN_SHADOW_DIRTY_ANG_SPEED_SQR = 4.0f;
+
+void CLightingManager::CheckDynamicEntityIntersections()
+{
+	if ( !r_deferred_shadow_cache.GetBool() || !engine->IsInGame() || engine->IsLevelMainMenuBackground() )
+		return;
+
+	CAbsQueryScope scope;
+
+	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
+
+	CUtlVector<C_BaseEntity*> movingEnts;
+	const int maxEnts = cl_entitylist->GetHighestEntityIndex();
+	for ( int i = 1; i <= maxEnts; i++ )
+	{
+		C_BaseEntity *pEnt = cl_entitylist->GetBaseEntity( i );
+		if ( !pEnt || pEnt->IsDormant() )
+			continue;
+
+		if ( pEnt->IsPlayer() )
+			continue;
+
+		if ( dynamic_cast<C_BaseViewModel*>( pEnt ) != NULL )
+			continue;
+
+		if ( pEnt->IsBaseCombatWeapon() )
+			continue;
+
+		if ( pLocal )
+		{
+			if ( pEnt == pLocal || pEnt->GetOwnerEntity() == pLocal || pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal )
+				continue;
+		}
+
+		if ( pEnt->IsEffectActive( EF_NODRAW | EF_NOSHADOW ) )
+			continue;
+
+		if ( pEnt->ShadowCastType() == SHADOWS_NONE )
+			continue;
+
+		if ( !pEnt->GetModel() )
+			continue;
+
+		IPhysicsObject *pPhys = pEnt->VPhysicsGetObject();
+		if ( !pPhys || pPhys->IsAsleep() )
+			continue;
+
+		Vector vel;
+		pEnt->EstimateAbsVelocity( vel );
+		const float flSpeedSqr = vel.LengthSqr();
+		const float flAngSpeedSqr = pEnt->GetLocalAngularVelocity().LengthSqr();
+
+		if ( flSpeedSqr > MIN_SHADOW_DIRTY_SPEED_SQR || flAngSpeedSqr > MIN_SHADOW_DIRTY_ANG_SPEED_SQR )
+		{
+			movingEnts.AddToTail( pEnt );
+		}
+	}
+
+	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+	{
+		def_light_t *l = m_hDeferredLights[i];
+		if ( !l || !l->IsStatic() || !l->IsSpot() || !l->HasValidAtlasSlot() )
+			continue;
+
+		bool bEntityInside = false;
+		for ( int j = 0; j < movingEnts.Count(); j++ )
+		{
+			if ( DoesLightIntersectEntity( l, movingEnts[j] ) )
+			{
+				bEntityInside = true;
+				break;
+			}
+		}
+
+		if ( bEntityInside || l->m_bEntityInsideLastFrame )
+		{
+			l->SetShadowDirty( true );
+		}
+		l->m_bEntityInsideLastFrame = bEntityInside;
+	}
+}
+
+void CLightingManager::Update( float ft )
+{
+}
 
 void CLightingManager::SetRenderWorldLights( bool bRender )
 {
@@ -117,6 +378,11 @@ void CLightingManager::LightSetup( const CViewSetup& setup )
 	UpdateTemplights( gpGlobals->frametime );
 
 	PrepareLights();
+
+	if ( r_deferred_shadow_cache.GetBool() )
+	{
+		CheckDynamicEntityIntersections();
+	}
 
 #if DEBUG
 	m_bVolatileLists = true;
@@ -178,6 +444,13 @@ void CLightingManager::AddLight( def_light_t* l )
 
 	m_hDeferredLights.AddToTail( l );
 
+	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() && !l->HasValidAtlasSlot() )
+	{
+		AssignStaticAtlasSlot( l );
+		l->SetShadowDirty( true );
+		l->m_bEntityInsideLastFrame = false;
+	}
+
 #if DEFCFG_USE_SSE
 	m_bSortDataNeedsRealloc = true;
 #endif
@@ -185,6 +458,7 @@ void CLightingManager::AddLight( def_light_t* l )
 
 bool CLightingManager::RemoveLight( def_light_t* l )
 {
+	FreeStaticAtlasSlot( l );
 #if DEBUG
 	AssertMsg( m_bVolatileLists == false, "You MUST NOT remove lights while rendering." );
 #endif
@@ -328,7 +602,7 @@ Vector CLightingManager::SanitizeLightOrigin( const Vector &vecOrigin, const Vec
 }
 
 def_light_t *CLightingManager::AllocDynamicPointLight( const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin )
+	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
 {
 	Vector safeOrigin = SanitizeLightOrigin( vecOrigin, pFallbackOrigin );
 
@@ -344,6 +618,7 @@ def_light_t *CLightingManager::AllocDynamicPointLight( const Vector &vecOrigin, 
 	l->iVisible_Range = 512;
 	l->iShadow_Dist = l->iVisible_Dist;
 	l->iShadow_Range = l->iVisible_Range;
+	l->m_hIgnoreEntity = pIgnoreEntity;
 	l->MakeDirtyAll();
 
 	AddLight( l );
@@ -351,7 +626,8 @@ def_light_t *CLightingManager::AllocDynamicPointLight( const Vector &vecOrigin, 
 }
 
 def_light_t *CLightingManager::AllocDynamicSpotLight( const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
-	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin )
+	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin,
+	C_BaseEntity *pIgnoreEntity )
 {
 	Vector safeOrigin = SanitizeLightOrigin( vecOrigin, pFallbackOrigin );
 
@@ -370,6 +646,7 @@ def_light_t *CLightingManager::AllocDynamicSpotLight( const Vector &vecOrigin, c
 	l->iVisible_Range = 512;
 	l->iShadow_Dist = l->iVisible_Dist;
 	l->iShadow_Range = l->iVisible_Range;
+	l->m_hIgnoreEntity = pIgnoreEntity;
 	l->MakeDirtyAll();
 
 	AddLight( l );
@@ -377,7 +654,7 @@ def_light_t *CLightingManager::AllocDynamicSpotLight( const Vector &vecOrigin, c
 }
 
 void CLightingManager::UpdateDynamicLight( def_light_t *pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	const QAngle *pAngles, bool bSanitizeOrigin, const Vector *pFallbackOrigin )
+	const QAngle *pAngles, bool bSanitizeOrigin, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
 {
 	if ( !pLight )
 		return;
@@ -405,6 +682,11 @@ void CLightingManager::UpdateDynamicLight( def_light_t *pLight, const Vector &ve
 
 	pLight->col_diffuse = vecColor;
 
+	if ( pIgnoreEntity )
+	{
+		pLight->m_hIgnoreEntity = pIgnoreEntity;
+	}
+
 	if ( bDirtyXForms )
 	{
 		pLight->MakeDirtyXForms();
@@ -412,28 +694,29 @@ void CLightingManager::UpdateDynamicLight( def_light_t *pLight, const Vector &ve
 }
 
 bool CLightingManager::EnsureDynamicPointLight( def_light_t *&pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin )
+	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
 {
 	if ( !pLight )
 	{
-		pLight = AllocDynamicPointLight( vecOrigin, vecColor, flRadius, iFlags, flVisibleDist, pFallbackOrigin );
+		pLight = AllocDynamicPointLight( vecOrigin, vecColor, flRadius, iFlags, flVisibleDist, pFallbackOrigin, pIgnoreEntity );
 		return true;
 	}
 
-	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, NULL, true, pFallbackOrigin );
+	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, NULL, true, pFallbackOrigin, pIgnoreEntity );
 	return false;
 }
 
 bool CLightingManager::EnsureDynamicSpotLight( def_light_t *&pLight, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
-	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin )
+	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin,
+	C_BaseEntity *pIgnoreEntity )
 {
 	if ( !pLight )
 	{
-		pLight = AllocDynamicSpotLight( vecOrigin, vecAngles, vecColor, flRadius, flInnerConeDeg, flOuterConeDeg, iFlags, flVisibleDist, pFallbackOrigin );
+		pLight = AllocDynamicSpotLight( vecOrigin, vecAngles, vecColor, flRadius, flInnerConeDeg, flOuterConeDeg, iFlags, flVisibleDist, pFallbackOrigin, pIgnoreEntity );
 		return true;
 	}
 
-	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, &vecAngles, true, pFallbackOrigin );
+	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, &vecAngles, true, pFallbackOrigin, pIgnoreEntity );
 	return false;
 }
 
@@ -688,13 +971,9 @@ void CLightingManager::CullLights()
 		if ( engine->CullBox( l->bounds_min_naive, l->bounds_max_naive ) )
 			continue;
 
-		// if ( l->IsSpot() && l->HasShadow() )
-		// {
-		// 	if ( IntersectFrustumWithFrustum( m_matScreenToWorld, l->spotMVPInv ) )
-		// 		continue;
-		// }
-
-		Vector veclightDelta = l->pos - m_vecViewOrigin;
+		Vector vecClosest;
+		CalcClosestPointOnAABB( l->bounds_min_naive, l->bounds_max_naive, m_vecViewOrigin, vecClosest );
+		Vector veclightDelta = vecClosest - m_vecViewOrigin;
 
 		if ( r_deferred_light_distance_fade.GetBool() && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
 			continue;
@@ -797,22 +1076,36 @@ void CLightingManager::SortLights()
 		//Jack: this is terrible I know
 		for ( uint j = 0; j < s.count; j++ )
 		{
-			if ( s.lights[j]->IsSpot() )
+			def_light_t *pLight = s.lights[j];
+			const bool bHasVolumetrics = ( pLight->HasVolumetrics() && pLight->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
+			if ( bHasVolumetrics )
 			{
+				m_bDrawVolumetrics = true;
+			}
+
+			if ( pLight->IsSpot() )
+			{
+				bool bNeedsFullscreen = false;
 				if ( IS_NAN( SubFloat( needsFullscreen, j ) ) )
 				{
-					if ( !R_CullBox( camMins, camMaxs, s.lights[j]->spotFrustum ) )
-					{
-						m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].AddToTail( s.lights[j] );
-					}
-					else
-					{
-						m_hPreSortedLights[LSORT_SPOT_WORLD].AddToTail( s.lights[j] );
-					}
+					bNeedsFullscreen = true;
+				}
+				else if ( !bNeedsFullscreen && ( DotProduct( m_vecForward, pLight->pos - m_vecViewOrigin ) < 32.0f ) )
+				{
+					bNeedsFullscreen = true;
+				}
+				else if ( !bNeedsFullscreen && ( pLight->flDistance_ViewOrigin < ( pLight->flRadius + zNear + 32.0f ) ) )
+				{
+					bNeedsFullscreen = true;
+				}
+
+				if ( bNeedsFullscreen )
+				{
+					m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].AddToTail( pLight );
 				}
 				else
 				{
-					m_hPreSortedLights[LSORT_SPOT_WORLD].AddToTail( s.lights[j] );
+					m_hPreSortedLights[LSORT_SPOT_WORLD].AddToTail( pLight );
 				}
 			}
 			else
@@ -836,48 +1129,68 @@ void CLightingManager::SortLights()
 #else
 		for ( uint j = 0; j < s.count; j++ )
 		{
-			if ( s.lights[j]->IsSpot() )
+			def_light_t *pLight = s.lights[j];
+			const bool bHasVolumetrics = ( pLight->HasVolumetrics() && pLight->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
+			if ( bHasVolumetrics )
 			{
-				m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].AddToTail( s.lights[j] );
+				m_bDrawVolumetrics = true;
+			}
+
+			if ( pLight->IsSpot() )
+			{
+				const bool bNeedsFullscreen = !R_CullBox( camMins, camMaxs, pLight->spotFrustum );
+				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( pLight );
 			}
 			else
 			{
-				m_hPreSortedLights[LSORT_POINT_FULLSCREEN].AddToTail( s.lights[j] );
+				const float flPointDistSqr = ( pLight->pos - m_vecViewOrigin ).LengthSqr();
+				const float flPointNearDist = pLight->flRadius + zNear;
+				const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
+				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( pLight );
 			}
 		}
 #endif
-
-		const fltx4& volume = AndSIMD( s.hasVolumetrics, s.hasVolumetrics );
-
-		m_bDrawVolumetrics = m_bDrawVolumetrics || !IsAllZeros( volume );
 	}
 #else
 	FOR_EACH_VEC_FAST( def_light_t*, m_hRenderLights, l )
 	{
+		const bool bHasVolumetrics = ( l->HasVolumetrics() && l->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
+		if ( bHasVolumetrics )
+		{
+			m_bDrawVolumetrics = true;
+		}
+
 #if DEFCFG_EXTRA_SORT
 		bool bNeedsFullscreen = IsPointInBounds( m_vecViewOrigin,
 			l->bounds_min_naive - vecBloat,
 			l->bounds_max_naive + vecBloat );
 
-		if ( !bNeedsFullscreen && !l->IsSpot() && ( l->flDistance_ViewOrigin < ( l->flRadius + zNear + 32.0f ) ) )
+		if ( !bNeedsFullscreen && l->IsSpot() && ( DotProduct( m_vecForward, l->pos - m_vecViewOrigin ) < 32.0f ) )
 		{
 			bNeedsFullscreen = true;
 		}
 
-		if ( bNeedsFullscreen && l->IsSpot() )
+		if ( !bNeedsFullscreen && ( l->flDistance_ViewOrigin < ( l->flRadius + zNear + 32.0f ) ) )
 		{
-			bNeedsFullscreen = !l->spotFrustum.CullBox( camMins, camMaxs );
+			bNeedsFullscreen = true;
 		}
 
 		Assert( l->iLighttype * 2 + 1 < LSORT_COUNT );
 		m_hPreSortedLights[ l->iLighttype * 2 + (int)bNeedsFullscreen ].AddToTail( l );
 #else
-		m_hPreSortedLights[ l->iLighttype * 2 + 1 ].AddToTail( l );
+		if ( l->IsSpot() )
+		{
+			const bool bNeedsFullscreen = !R_CullBox( camMins, camMaxs, l->spotFrustum );
+			m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( l );
+		}
+		else
+		{
+			const float flPointDistSqr = ( l->pos - m_vecViewOrigin ).LengthSqr();
+			const float flPointNearDist = l->flRadius + zNear;
+			const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
+			m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( l );
+		}
 #endif
-
-		const bool bVolume = ( l->HasShadow() && l->HasVolumetrics() );
-
-		m_bDrawVolumetrics = m_bDrawVolumetrics || bVolume;
 	}
 	FOR_EACH_VEC_FAST_END
 #endif
@@ -889,9 +1202,6 @@ void CLightingManager::SortLights()
 	{
 		FOR_EACH_VEC_FAST( def_light_t*, m_hPreSortedLights[ i * 2 ], l )
 		{
-			if ( l->HasVolumetrics() )
-				continue;
-
 			const bool  bSpot        = l->IsSpot();
 			const float flSizeFactor = bSpot ? 1.5f : 2.25f;
 
@@ -1366,6 +1676,15 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 						def_light_t* pLight = commitableLights[iShadowed];
 						pCaller->DrawLightShadowView( view, iShadowed, pLight );
 
+						if ( pLight->IsSpot() && pLight->IsStatic() && pLight->HasValidAtlasSlot() )
+						{
+							QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Static( pLight->m_nCachedAtlasSlot ) );
+						}
+						else
+						{
+							QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Proj( iShadowed ) );
+						}
+
 						if ( pLight->HasVolumetrics() && r_deferred_volumetric_intensity.GetFloat() > 0.0f )
 						{
 							const int iDataOffset	 = iShadowed * lightTypes[i].constCount_advanced * 4;
@@ -1524,7 +1843,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			const bool bShadow = l->ShouldRenderShadow();
 			const bool bCookie = l->HasCookie() && l->IsCookieReady();
 			const bool bUber = l->HasUberlight();
-			const bool bVolumetrics = l->HasVolumetrics() && bShadow;
 
 			const bool bAdvanced = ( bShadow || bCookie || bUber );
 
@@ -1540,6 +1858,18 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			if ( bShadow )
 			{
 				pCaller->DrawLightShadowView( view, 0, l );
+
+				if ( l->IsSpot() )
+				{
+					if ( l->IsStatic() && l->HasValidAtlasSlot() )
+					{
+						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Static( l->m_nCachedAtlasSlot ) );
+					}
+					else
+					{
+						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Proj( 0 ) );
+					}
+				}
 
 				iDrawnShadowed++;
 			}
@@ -1579,40 +1909,17 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			l->pMesh_World->Draw();
 
+			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
 			if ( bVolumetrics )
 			{
 				Assert( m_bDrawVolumetrics );
 				Assert( l->pMesh_Volumetrics != NULL );
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-				const float flCameraLightDelta = (view.origin).DistTo(l->pos);
-				int iVolumeLOD = 4;
-				if( flCameraLightDelta < l->flVolumeLOD0Dist )
-				{
-					iVolumeLOD = 0;
-				}
-				else if( flCameraLightDelta < l->flVolumeLOD1Dist )
-				{
-					iVolumeLOD = 1;
-				}
-				else if( flCameraLightDelta < l->flVolumeLOD2Dist )
-				{
-					iVolumeLOD = 2;
-				}
-				else if( flCameraLightDelta < l->flVolumeLOD3Dist )
-				{
-					iVolumeLOD = 3;
-				}
-#endif
-
 				volumeData_t data;
-				data.iDataOffset = 0;
+				data.iDataOffset    = 0;
 				data.iSamplerOffset = 0;
-				data.iNumRows = lightTypes[i].constCount_advanced;
-				data.bHasCookie = bCookie;
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-				data.iLOD = iVolumeLOD;
-#endif
+				data.iNumRows       = lightTypes[i].constCount_advanced;
+				data.bHasCookie     = bCookie;
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 				data.iSamples = l->iVolumeSamples;
 #endif
@@ -1645,7 +1952,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			const bool bShadow      = l->ShouldRenderShadow();
 			const bool bCookie      = l->HasCookie() && l->IsCookieReady();
 			const bool bUber        = l->HasUberlight();
-			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
 
 			const bool bAdvanced = ( bShadow || bCookie || bUber );
 
@@ -1661,6 +1967,18 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			if ( bShadow )
 			{
 				pCaller->DrawLightShadowView( view, 0, l );
+
+				if ( l->IsSpot() )
+				{
+					if ( l->IsStatic() && l->HasValidAtlasSlot() )
+					{
+						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Static( l->m_nCachedAtlasSlot ) );
+					}
+					else
+					{
+						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Proj( 0 ) );
+					}
+				}
 
 				iDrawnShadowed++;
 			}
@@ -1701,44 +2019,20 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 			l->pMesh_World->Draw();
 
+			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
 			if ( bVolumetrics )
 			{
 				Assert( m_bDrawVolumetrics );
 				Assert( l->pMesh_Volumetrics != NULL );
-
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-			const float flCameraLightDelta = (view.origin).DistTo(l->pos);
-			int iVolumeLOD = 4;
-			if( flCameraLightDelta < l->flVolumeLOD0Dist )
-			{
-				iVolumeLOD = 0;
-			}
-			else if( flCameraLightDelta < l->flVolumeLOD1Dist )
-			{
-				iVolumeLOD = 1;
-			}
-			else if( flCameraLightDelta < l->flVolumeLOD2Dist )
-			{
-				iVolumeLOD = 2;
-			}
-			else if( flCameraLightDelta < l->flVolumeLOD3Dist )
-			{
-				iVolumeLOD = 3;
-			}
-#endif
 
 				volumeData_t data;
 				data.iDataOffset    = 0;
 				data.iSamplerOffset = 0;
 				data.iNumRows       = lightTypes[i].constCount_advanced;
 				data.bHasCookie     = bCookie;
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-			data.iLOD = iVolumeLOD;
-#endif
 #if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 				data.iSamples = l->iVolumeSamples;
 #endif
-				#pragma warning(suppress: 4456)
 				QUEUE_FIRE( CommitVolumeData, data );
 
 				DrawVolumePrepass( false, view, l );
@@ -1838,9 +2132,21 @@ void CLightingManager::RenderVolumetrics( const CViewSetup& view )
 
 		if ( pMatBlurX != NULL && pMatBlurY != NULL )
 		{
-			const int iPasses = Clamp( RoundFloatToInt( flBlur ), 1, 5 );
+			bool bFoundX = false, bFoundY = false;
+			IMaterialVar* pBlurSizeX = pMatBlurX->FindVar( "$BLURSIZE", &bFoundX, true );
+			IMaterialVar* pBlurSizeY = pMatBlurY->FindVar( "$BLURSIZE", &bFoundY, true );
+
+			const int iPasses = Clamp( RoundFloatToInt( flBlur * 3.0f ), 2, 4 );
+			static const float flPassScale[4] = { 1.5f, 3.5f, 7.0f, 12.0f };
+
 			for ( int p = 0; p < iPasses; p++ )
 			{
+				const float flStep = flPassScale[p] * flBlur;
+				if ( pBlurSizeX != NULL )
+					pBlurSizeX->SetFloatValue( flStep );
+				if ( pBlurSizeY != NULL )
+					pBlurSizeY->SetFloatValue( flStep );
+
 				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer1, 0, 0, view.width / 4, view.height / 4 );
 				pRenderContext->DrawScreenSpaceRectangle( pMatBlurX,
 				                                          0, 0, view.width / 4, view.height / 4,
@@ -1890,13 +2196,20 @@ void CLightingManager::DoSceneDebug()
 	}
 #endif
 
+	extern int g_nShadowViewsSkippedLastFrame;
+	extern int g_nShadowViewsRenderedLastFrame;
+
+	int nSlotsAssigned = GetStaticAtlasSlotCount();
+
 	engine->Con_NPrintf( 10, "Total deferred lights: %i", m_hDeferredLights.Count() );
-	engine->Con_NPrintf( 11, "lights rendered: %i", m_hRenderLights.Count() );
-	engine->Con_NPrintf( 13, "STATS - SORTING" );
-	engine->Con_NPrintf( 14, "lights point - world: %i, fullscreen: %i",
+	engine->Con_NPrintf( 11, "lights on screen: %i", m_hRenderLights.Count() );
+	engine->Con_NPrintf( 12, "r_deferred_shadow_cache %i", r_deferred_shadow_cache.GetInt() );
+	engine->Con_NPrintf( 13, "  atlas slots assigned: %i / %i", nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS );
+	engine->Con_NPrintf( 14, "  shadow views: %i skipped (cached), %i rendered", g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
+	engine->Con_NPrintf( 15, "  lights point - world: %i, fullscreen: %i",
 	                     m_hPreSortedLights[LSORT_POINT_WORLD].Count(),
 	                     m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Count() );
-	engine->Con_NPrintf( 15, "lights spot - world: %i, fullscreen: %i",
+	engine->Con_NPrintf( 16, "  lights spot - world: %i, fullscreen: %i",
 	                     m_hPreSortedLights[LSORT_SPOT_WORLD].Count(), m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Count() );
 }
 

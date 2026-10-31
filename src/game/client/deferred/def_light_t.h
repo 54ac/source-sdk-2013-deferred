@@ -1,8 +1,13 @@
 #ifndef DEF_LIGHT_H
 #define DEF_LIGHT_H
 
+#include "ehandle.h"
+
 class CMeshBuilder;
 class IDefCookie;
+
+#define MAX_STATIC_SHADOW_ATLAS_SLOTS 128
+#define STATIC_SHADOW_TILE_RES        1024
 
 #if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t
@@ -160,6 +165,23 @@ struct def_light_t
 		return HasShadow() && flShadowFade < 1;
 	};
 
+	FORCEINLINE bool IsStatic() const
+	{
+		return m_bIsStatic || bWorldLight;
+	};
+	FORCEINLINE bool IsShadowDirty() const
+	{
+		return m_bShadowDirty;
+	};
+	FORCEINLINE void SetShadowDirty( bool bDirty )
+	{
+		m_bShadowDirty = bDirty;
+	};
+	FORCEINLINE bool HasValidAtlasSlot() const
+	{
+		return m_nCachedAtlasSlot >= 0;
+	};
+
 	bool IsCookieReady();
 	ITexture *GetCookieForDraw( const int iTargetIndex = 0 );
 	void ClearCookie();
@@ -232,6 +254,13 @@ private:
 
 	float flLastRandomTime;
 	float flLastRandomValue;
+
+public:
+	bool m_bIsStatic;
+	bool m_bShadowDirty;
+	int16 m_nCachedAtlasSlot;
+	bool m_bEntityInsideLastFrame;
+	EHANDLE m_hIgnoreEntity;
 };
 
 struct def_light_temp_t : public def_light_t

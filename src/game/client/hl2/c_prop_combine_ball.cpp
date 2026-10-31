@@ -90,7 +90,7 @@ void C_PropCombineBall::ClientThink( void )
 		flRadiusScale = clamp( flRadiusScale, 200.0f, 350.0f );
 
 		Vector fallbackPos = GetAbsOrigin();
-		GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, GetAbsOrigin(), Vector( 0.25f, 0.588f, 1.0f ) * flPulse, flRadiusScale * flPulse, DEFLIGHT_SHADOW_ENABLED, 3072.0f, &fallbackPos );
+		GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, GetAbsOrigin(), Vector( 0.25f, 0.588f, 1.0f ) * flPulse, flRadiusScale * flPulse, DEFLIGHT_SHADOW_ENABLED, 3072.0f, &fallbackPos, this );
 	}
 	else if ( m_pDefLight )
 	{

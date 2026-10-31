@@ -3084,7 +3084,7 @@ void C_BaseEntity::CreateLightEffects( void )
 				lightOrigin.z += 16.0f;
 
 			Vector fallbackPos = lightOrigin;
-			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, lightColor, flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 1024.0f, flRadius * 3.0f ), &fallbackPos );
+			GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, lightOrigin, lightColor, flRadius, DEFLIGHT_SHADOW_ENABLED, Max( 1024.0f, flRadius * 3.0f ), &fallbackPos, this );
 		}
 		else if ( m_pDeferredLight )
 		{

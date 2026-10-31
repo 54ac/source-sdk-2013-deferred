@@ -171,14 +171,15 @@ void C_DynamicLight::ClientThink(void)
 			float flVisibleDist = 16384.0f;
 			Vector fallbackPos = GetAbsOrigin();
 
+			C_BaseEntity *pParent = GetMoveParent();
 			const bool bIsSpot = ( m_OuterAngle > 0.0f );
 			if ( bIsSpot )
 			{
-				GetLightingManager()->EnsureDynamicSpotLight( m_pDeferredLight, GetAbsOrigin(), GetAbsAngles(), lightColor, m_Radius, m_InnerAngle, m_OuterAngle, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos );
+				GetLightingManager()->EnsureDynamicSpotLight( m_pDeferredLight, GetAbsOrigin(), GetAbsAngles(), lightColor, m_Radius, m_InnerAngle, m_OuterAngle, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos, pParent );
 			}
 			else
 			{
-				GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, m_Radius, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos );
+				GetLightingManager()->EnsureDynamicPointLight( m_pDeferredLight, GetAbsOrigin(), lightColor, m_Radius, DEFLIGHT_SHADOW_ENABLED, flVisibleDist, &fallbackPos, pParent );
 			}
 		}
 	}

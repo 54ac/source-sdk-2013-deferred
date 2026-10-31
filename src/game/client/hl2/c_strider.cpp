@@ -610,7 +610,7 @@ int	C_StriderFX::DrawModel( int )
 		{
 			if ( bright > 0.01f )
 			{
-				GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, m_worldPosition, Vector( 0.157f, 0.235f, 1.0f ) * bright, bright * 250.0f, DEFLIGHT_SHADOW_ENABLED, 4096.0f, &m_worldPosition );
+				GetLightingManager()->EnsureDynamicPointLight( m_pDefLight, m_worldPosition, Vector( 0.157f, 0.235f, 1.0f ) * bright, bright * 250.0f, DEFLIGHT_SHADOW_ENABLED, 4096.0f, &m_worldPosition, C_BaseEntity::Instance( m_entityIndex ) );
 			}
 			else if ( m_pDefLight )
 			{

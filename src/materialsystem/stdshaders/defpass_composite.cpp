@@ -82,7 +82,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 	const bool bAlbedo2 = !bModel && bAlbedo && PARM_TEX( info.iAlbedo2 );
 
 	const bool bAlphatest = IS_FLAG_SET( MATERIAL_VAR_ALPHATEST ) && bAlbedo;
-	const bool bTranslucent = IS_FLAG_SET( MATERIAL_VAR_TRANSLUCENT ) && bAlbedo && !bAlphatest;
+	const bool bTranslucent = ( IS_FLAG_SET( MATERIAL_VAR_TRANSLUCENT ) || bIsDecal ) && bAlbedo && !bAlphatest;
 
 	const bool bNoCull = IS_FLAG_SET( MATERIAL_VAR_NOCULL );
 
@@ -129,6 +129,11 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		if ( bNoCull )
 		{
 			pShaderShadow->EnableCulling( false );
+		}
+
+		if ( bIsDecal )
+		{
+			pShaderShadow->EnablePolyOffset( SHADER_POLYOFFSET_DECAL );
 		}
 
 		int iVFmtFlags = VERTEX_POSITION;

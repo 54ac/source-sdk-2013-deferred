@@ -49,10 +49,13 @@ FORCEINLINE void CommitGlobalLightForward( IShaderDynamicAPI *pShaderAPI,
 
 FORCEINLINE void MakeShadowProjectionConstants( float *pFl0, float *pFl1, int resx, int resy )
 {
-	pFl0[0] = 1.0f / resx;
-	pFl0[1] = 1.0f / resy;
-	pFl0[2] = 2.0f / resx;
-	pFl0[3] = 2.0f / resy;
+	static ConVarRef r_deferred_shadow_filter_scale( "r_deferred_shadow_filter_scale" );
+	const float flScale = r_deferred_shadow_filter_scale.IsValid() ? r_deferred_shadow_filter_scale.GetFloat() : 1.6f;
+
+	pFl0[0] = flScale / resx;
+	pFl0[1] = flScale / resy;
+	pFl0[2] = ( flScale * 2.0f ) / resx;
+	pFl0[3] = ( flScale * 2.0f ) / resy;
 
 	pFl1[0] = resx;
 	pFl1[1] = resy;

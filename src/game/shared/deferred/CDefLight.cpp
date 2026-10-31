@@ -319,6 +319,11 @@ void CDeferredLight::PostDataUpdate( DataUpdateType_t t )
 
 		ApplyDataToLight();
 
+		if ( GetMoveParent() == NULL )
+		{
+			m_pLight->m_bIsStatic = true;
+			m_pLight->SetShadowDirty( true );
+		}
 		GetLightingManager()->AddLight( m_pLight );
 
 		SetNextClientThink( CLIENT_THINK_ALWAYS );
@@ -351,11 +356,16 @@ void CDeferredLight::ClientThink()
 	Vector curOrig = GetRenderOrigin();
 	QAngle curAng = GetRenderAngles();
 
-	if ( VectorCompare( curOrig.Base(), m_pLight->pos.Base() ) == 0 ||
-		VectorCompare( curAng.Base(), m_pLight->ang.Base() ) == 0 )
+	Vector diffPos = curOrig - m_pLight->pos;
+	QAngle diffAng = curAng - m_pLight->ang;
+	if ( diffPos.LengthSqr() > 0.01f || diffAng.LengthSqr() > 0.01f )
 	{
 		ApplyDataToLight();
 
+		if ( m_pLight->IsStatic() )
+		{
+			m_pLight->SetShadowDirty( true );
+		}
 		if ( m_pLight->flSpotCone_Outer != GetSpotCone_Outer() )
 			m_pLight->MakeDirtyAll();
 		else

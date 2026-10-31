@@ -591,7 +591,7 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		}
 
 		lightEntity->KeyValue( szParamRadius, radius );
-		lightEntity->KeyValue( szParamVisDist, max( 16384.0f, radius * 4.0f ) );
+		lightEntity->KeyValue( szParamVisDist, max( 4096.0f, radius * 3.0f ) );
 		lightEntity->KeyValue( szParamVisRange, 1024.0f );
 		lightEntity->KeyValue( szParamShadowDist, max( 4096.0f, radius * 3.0f ) );
 		lightEntity->KeyValue( szParamShadowRange, 1024.0f );
