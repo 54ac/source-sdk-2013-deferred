@@ -217,6 +217,8 @@ $Project
 				$File	"deferred\cascade_t.cpp"
 				$File	"deferred\cdeferred_manager_client.cpp"
 				$File	"deferred\cdeferred_manager_client.h"
+				$File	"deferred\cvolume_culler.cpp"
+				$File	"deferred\cvolume_culler.h"
 				$File	"deferred\clight_editor.cpp"
 				$File	"deferred\clight_editor.h"
 				$File	"deferred\clight_manager.cpp"

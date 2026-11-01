@@ -6,6 +6,7 @@
 #include "deferred/deferred_shared_common.h"
 #include "deferred/vgui/vgui_deferred.h"
 #include "deferred/deferred_rt.h"
+#include "deferred/cvolume_culler.h"
 #include "physics_shared.h"
 
 static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue );
@@ -2319,8 +2320,10 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 #endif
 	}
 
+	static bool s_bHadLightStats = false;
 	if ( r_deferred_light_stats.GetBool() )
 	{
+		s_bHadLightStats = true;
 		Assert( iNumLightTypes == 2 );
 
 		const char* pszFilterName = "UNKNOWN FILTER";
@@ -2360,15 +2363,69 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			Assert(0); // add filter name to this switch case
 		}
 
-		engine->Con_NPrintf( 17, "STATS - RENDERING" );
-		engine->Con_NPrintf( 18, "Fullscreen passes - point: %i, spot: %i, total: %i",
+		extern int g_nShadowViewsSkippedLastFrame;
+		extern int g_nShadowViewsRenderedLastFrame;
+		const int nSlotsAssigned = GetStaticAtlasSlotCount();
+		const int nPointSlotsAssigned = GetStaticPointAtlasSlotCount();
+
+		engine->Con_NPrintf( 10, "=== DEFERRED LIGHTING ===" );
+		engine->Con_NPrintf( 11, "Lights: %i in map, %i visible | Drawn: %i simple, %i shadow, %i cookie",
+		                     m_hDeferredLights.Count(), m_hRenderLights.Count(),
+		                     iDrawnSimple, iDrawnShadowed, iDrawnCookied );
+		engine->Con_NPrintf( 12, "  Point - world: %i, fullscreen: %i | Spot - world: %i, fullscreen: %i",
+		                     m_hPreSortedLights[LSORT_POINT_WORLD].Count(),
+		                     m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Count(),
+		                     m_hPreSortedLights[LSORT_SPOT_WORLD].Count(),
+		                     m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Count() );
+
+		engine->Con_NPrintf( 13, "=== SHADOWING & CULLING ===" );
+		engine->Con_NPrintf( 14, "Filter: %s - %s", pszProfile, pszFilterName );
+
+		if ( r_deferred_csm_cull_convex.GetBool() )
+		{
+			const int nTotalTested = g_CSMCullStats.nTested[0] + g_CSMCullStats.nTested[1];
+			const int nTotalCulled = g_CSMCullStats.nCulled[0] + g_CSMCullStats.nCulled[1];
+			const float flPct = ( nTotalTested > 0 ) ? ( nTotalCulled * 100.0f / (float)nTotalTested ) : 0.0f;
+			const float flPct0 = ( g_CSMCullStats.nTested[0] > 0 ) ? ( g_CSMCullStats.nCulled[0] * 100.0f / (float)g_CSMCullStats.nTested[0] ) : 0.0f;
+			const float flPct1 = ( g_CSMCullStats.nTested[1] > 0 ) ? ( g_CSMCullStats.nCulled[1] * 100.0f / (float)g_CSMCullStats.nTested[1] ) : 0.0f;
+
+			engine->Con_NPrintf( 15, "CSM Convex Culling: ON - Culled: %i / %i (%.1f%%)",
+			                     nTotalCulled, nTotalTested, flPct );
+			engine->Con_NPrintf( 16, "  Cascade 0: %i / %i (%.1f%%) | Cascade 1: %i / %i (%.1f%%)",
+			                     g_CSMCullStats.nCulled[0], g_CSMCullStats.nTested[0], flPct0,
+			                     g_CSMCullStats.nCulled[1], g_CSMCullStats.nTested[1], flPct1 );
+		}
+		else
+		{
+			engine->Con_NPrintf( 15, "CSM Convex Culling: OFF" );
+			engine->Con_NPrintf( 16, "" );
+		}
+
+		engine->Con_NPrintf( 17, "Shadow Cache: %s | Views: %i cached (skipped), %i rendered",
+		                     r_deferred_shadow_cache.GetBool() ? "ON" : "OFF",
+		                     g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
+		engine->Con_NPrintf( 18, "  Atlas slots: %i / %i (spot) | %i / %i (point)",
+		                     nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS,
+		                     nPointSlotsAssigned, MAX_STATIC_POINT_SHADOW_SLOTS );
+
+		engine->Con_NPrintf( 19, "=== RENDER PASSES ===" );
+		engine->Con_NPrintf( 20, "Fullscreen passes - point: %i, spot: %i (total: %i)",
 		                     iPassesDrawnFullscreen[0], iPassesDrawnFullscreen[1],
 		                     iPassesDrawnFullscreen[0] + iPassesDrawnFullscreen[1] );
-		engine->Con_NPrintf( 19, "Volumetric passes - world: %i, fullscreen: %i",
+		engine->Con_NPrintf( 21, "Volumetric passes - world: %i, fullscreen: %i",
 		                     iPassesVolumetrics[0], iPassesVolumetrics[1] );
-		engine->Con_NPrintf( 20, "Stats drawn - simple: %i, shadows: %i, cookies: %i", iDrawnSimple, iDrawnShadowed,
-		                     iDrawnCookied );
-		engine->Con_NPrintf( 22, "Shadow mapping filter profile: %s - %s", pszProfile, pszFilterName );
+
+		engine->Con_NPrintf( 22, "" );
+		engine->Con_NPrintf( 23, "" );
+		engine->Con_NPrintf( 24, "" );
+	}
+	else if ( s_bHadLightStats )
+	{
+		s_bHadLightStats = false;
+		for ( int i = 10; i <= 24; ++i )
+		{
+			engine->Con_NPrintf( i, "" );
+		}
 	}
 }
 
@@ -2460,24 +2517,7 @@ void CLightingManager::DoSceneDebug()
 	}
 #endif
 
-	extern int g_nShadowViewsSkippedLastFrame;
-	extern int g_nShadowViewsRenderedLastFrame;
 
-	int nSlotsAssigned = GetStaticAtlasSlotCount();
-	int nPointSlotsAssigned = GetStaticPointAtlasSlotCount();
-
-	engine->Con_NPrintf( 10, "Total deferred lights: %i", m_hDeferredLights.Count() );
-	engine->Con_NPrintf( 11, "lights on screen: %i", m_hRenderLights.Count() );
-	engine->Con_NPrintf( 12, "r_deferred_shadow_cache %i", r_deferred_shadow_cache.GetInt() );
-	engine->Con_NPrintf( 13, "  atlas slots assigned: %i / %i (spot) | %i / %i (point)",
-		nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS,
-		nPointSlotsAssigned, MAX_STATIC_POINT_SHADOW_SLOTS );
-	engine->Con_NPrintf( 14, "  shadow views: %i skipped (cached), %i rendered", g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
-	engine->Con_NPrintf( 15, "  lights point - world: %i, fullscreen: %i",
-	                     m_hPreSortedLights[LSORT_POINT_WORLD].Count(),
-	                     m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Count() );
-	engine->Con_NPrintf( 16, "  lights spot - world: %i, fullscreen: %i",
-	                     m_hPreSortedLights[LSORT_SPOT_WORLD].Count(), m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Count() );
 }
 
 void CLightingManager::DebugLights_Draw_Boundingboxes()

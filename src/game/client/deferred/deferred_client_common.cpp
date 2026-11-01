@@ -27,6 +27,8 @@ ConVar r_deferred_light_global_override_ambient_low( "r_deferred_light_global_ov
 
 ConVar r_deferred_csm_max_dist( "r_deferred_csm_max_dist", "4096", FCVAR_ARCHIVE, "Maximum view distance for directional cascaded shadow maps" );
 ConVar r_deferred_csm_split_dist( "r_deferred_csm_split_dist", "1024", FCVAR_ARCHIVE, "Split distance between cascades" );
+ConVar r_deferred_csm_cull_convex( "r_deferred_csm_cull_convex", "1", FCVAR_ARCHIVE, "Convex hull caster culling for CSM" );
+ConVar r_deferred_csm_cull_debug( "r_deferred_csm_cull_debug", "0", 0, "Visualize convex hull culling volumes" );
 
 ConVar r_deferred_radiosity( "r_deferred_radiosity", "0", 0, "Enable radiosity for diffused lighting simulation - buggy" );
 ConVar r_deferred_radiosity_propagate_count( "r_deferred_radiosity_propagate_count", "1" ); // 1

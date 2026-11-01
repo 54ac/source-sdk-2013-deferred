@@ -2,6 +2,8 @@
 #include "viewrender_deferred.h"
 #include "deferred/deferred_rt.h"
 #include "deferred/clight_manager.h"
+#include "deferred/cvolume_culler.h"
+#include "clientleafsystem.h"
 #include "vprof.h"
 #include "c_rope.h"
 #include "rendertexture.h"
@@ -115,7 +117,7 @@ protected:
 
 	virtual bool	AdjustView( float waterHeight );
 
-	void			DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
+	virtual void	DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
 	void			DrawExecute( float waterHeight, view_id_t viewID, float waterZAdjust, bool bShadowDepth = false );
 
 	virtual void	PushView( float waterHeight );
@@ -247,7 +249,7 @@ public:
 	void SetRadiosityOutputEnabled( bool bEnabled );
 
 	void			Draw();
-	void			DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
+	virtual void	DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
 	virtual bool	AdjustView( float waterHeight );
 	virtual void	PushView( float waterHeight );
 	virtual void	PopView();
@@ -286,6 +288,7 @@ public:
 
 	virtual void	CalcShadowView();
 	virtual void	CommitData();
+	virtual void	DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf = -1, bool bShadowDepth = false );
 
 	virtual int		GetShadowMode(){
 		return DEFERRED_SHADOW_MODE_ORTHO;
@@ -293,6 +296,8 @@ public:
 
 private:
 	int iCascadeIndex;
+	CCascadeCuller m_CascadeCuller;
+	void PruneShadowCasters();
 };
 
 class CTetrahedralShadowView : public CBaseShadowView
@@ -1612,6 +1617,44 @@ void COrthoShadowView::CalcShadowView()
 	if ( zFar < m_data.flFarZ )
 		zFar = zFarViewmodel = m_data.flFarZ;
 
+	const float flCasterExtrudeDist = MAX( m_data.flOriginOffset, flMaxDist );
+	m_CascadeCuller.Init( frustumCorners, viewFwd, flCasterExtrudeDist, m_bHasReflectionView ? &frustumCorners[8] : NULL );
+
+	if ( r_deferred_csm_cull_debug.GetBool() )
+	{
+		Vector debugCorners[8];
+		float flNearDebug = ( iCascadeIndex == 0 ) ? 16.0f : flSplitDist;
+		ComputeFrustumCorners( m_CameraView, flNearDebug, flSplitFar, debugCorners );
+
+		Vector vDirToLight = -viewFwd;
+		Vector vExtruded[16];
+		for ( int i = 0; i < 8; ++i )
+		{
+			vExtruded[i] = debugCorners[i];
+			vExtruded[i + 8] = debugCorners[i] + vDirToLight * flCasterExtrudeDist;
+		}
+
+		static const int lines[32][2] = {
+			{0,1}, {1,3}, {3,2}, {2,0},
+			{4,5}, {5,7}, {7,6}, {6,4},
+			{0,4}, {1,5}, {2,6}, {3,7},
+			{0,8}, {1,9}, {2,10}, {3,11},
+			{4,12}, {5,13}, {6,14}, {7,15},
+			{8,9}, {9,11}, {11,10}, {10,8},
+			{12,13}, {13,15}, {15,14}, {14,12},
+			{8,12}, {9,13}, {10,14}, {11,15}
+		};
+
+		int r = ( iCascadeIndex == 0 ) ? 0 : 255;
+		int g = ( iCascadeIndex == 0 ) ? 255 : 200;
+		int b = ( iCascadeIndex == 0 ) ? 255 : 0;
+
+		for ( int i = 0; i < 32; ++i )
+		{
+			debugoverlay->AddLineOverlay( vExtruded[lines[i][0]], vExtruded[lines[i][1]], r, g, b, true, -1.0f );
+		}
+	}
+
 	m_flAspectRatio = 1.0f;
 
 #if CSM_USE_COMPOSITED_TARGET
@@ -1677,6 +1720,61 @@ void COrthoShadowView::CommitData()
 
 	CMatRenderContextPtr pRenderContext( materials );
 	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_INDEX, iCascadeIndex );
+}
+
+void COrthoShadowView::DrawSetup( float waterHeight, int nSetupFlags, float waterZAdjust, int iForceViewLeaf, bool bShadowDepth )
+{
+	BaseClass::DrawSetup( waterHeight, nSetupFlags, waterZAdjust, iForceViewLeaf, bShadowDepth );
+
+	if ( r_deferred_csm_cull_convex.GetBool() )
+	{
+		PruneShadowCasters();
+	}
+}
+
+void COrthoShadowView::PruneShadowCasters()
+{
+	if ( !m_pRenderablesList )
+		return;
+
+	m_CascadeCuller.ResetStats();
+
+	for ( int group = 0; group < RENDER_GROUP_COUNT; ++group )
+	{
+		int nCount = m_pRenderablesList->m_RenderGroupCounts[group];
+		if ( nCount <= 0 )
+			continue;
+
+		CClientRenderablesList::CEntry *pEntries = m_pRenderablesList->m_RenderGroups[group];
+		int nKept = 0;
+
+		for ( int i = 0; i < nCount; ++i )
+		{
+			IClientRenderable *pRenderable = pEntries[i].m_pRenderable;
+			if ( !pRenderable )
+			{
+				pEntries[nKept++] = pEntries[i];
+				continue;
+			}
+
+			Vector absMins, absMaxs;
+			pRenderable->GetRenderBoundsWorldspace( absMins, absMaxs );
+
+			if ( m_CascadeCuller.CheckBox( absMins, absMaxs ) )
+			{
+				pEntries[nKept++] = pEntries[i];
+			}
+		}
+
+		m_pRenderablesList->m_RenderGroupCounts[group] = nKept;
+	}
+
+	if ( iCascadeIndex >= 0 && iCascadeIndex < 2 )
+	{
+		CVolumeCuller::Stats_t stats = m_CascadeCuller.GetStats();
+		g_CSMCullStats.nTested[iCascadeIndex] = stats.nTotalTested;
+		g_CSMCullStats.nCulled[iCascadeIndex] = stats.nCulled;
+	}
 }
 
 void CTetrahedralShadowView::CalcShadowView()
@@ -2594,6 +2692,12 @@ void CDeferredViewRender::RenderCascadedShadows( const CViewSetup &view, const b
 {
 	for ( int i = 0; i < SHADOW_NUM_CASCADES; i++ )
 	{
+		if ( i == 0 )
+		{
+			g_CSMCullStats.nTested[0] = 0; g_CSMCullStats.nTested[1] = 0;
+			g_CSMCullStats.nCulled[0] = 0; g_CSMCullStats.nCulled[1] = 0;
+		}
+
 		const cascade_t &cascade = GetCascadeInfo(i);
 		const bool bDoRadiosity = bEnableRadiosity && cascade.bOutputRadiosityData;
 		const int iRadTarget = cascade.iRadiosityCascadeTarget;

@@ -28,6 +28,8 @@ extern ConVar r_deferred_light_global_override_ambient_low;
 
 extern ConVar r_deferred_csm_max_dist;
 extern ConVar r_deferred_csm_split_dist;
+extern ConVar r_deferred_csm_cull_convex;
+extern ConVar r_deferred_csm_cull_debug;
 
 extern ConVar r_deferred_radiosity;
 extern ConVar r_deferred_radiosity_propagate_count;
