@@ -206,10 +206,20 @@ bool CLightingManager::EnsureDynamicSpotLight( def_light_t *&pLight, const Vecto
 	return false;
 }
 
-void CLightingManager::FreeDynamicLight( def_light_t *&pLight )
+void CLightingManager::FreeDynamicLight( def_light_t *&pLight, float flDecayTime )
 {
 	if ( pLight )
 	{
+		if ( flDecayTime > 0.0f )
+		{
+			def_light_temp_t *pTemp = new def_light_temp_t( flDecayTime );
+			pTemp->pos = pLight->pos;
+			pTemp->col_diffuse = pLight->col_diffuse;
+			pTemp->flRadius = pLight->flRadius;
+			pTemp->MakeDirtyAll();
+			AddTempLight( pTemp );
+		}
+
 		RemoveLight( pLight );
 		delete pLight;
 		pLight = NULL;

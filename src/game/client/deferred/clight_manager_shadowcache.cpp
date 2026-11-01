@@ -241,30 +241,36 @@ void CLightingManager::OnEntityDeleted( C_BaseEntity *pEnt )
 	OnEntityRemoved( pEnt );
 }
 
+void CLightingManager::DirtyStaticLightsInBox( const Vector &vecCenter, float flRadius )
+{
+	if ( !r_deferred_shadow_cache.GetBool() )
+		return;
+
+	const Vector mins = vecCenter - Vector( flRadius, flRadius, flRadius );
+	const Vector maxs = vecCenter + Vector( flRadius, flRadius, flRadius );
+
+	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+	{
+		def_light_t *l = m_hDeferredLights[i];
+		if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
+		{
+			if ( DoesLightIntersectBox( l, vecCenter, flRadius, mins, maxs ) )
+			{
+				l->SetShadowDirty( true );
+			}
+		}
+	}
+}
+
 void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
 {
 	if ( !r_deferred_shadow_cache.GetBool() || !pEnt )
 		return;
 
-	const int entIdx = pEnt->entindex();
+	const int entIdx = pEnt->GetRefEHandle().GetEntryIndex();
 	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates && m_pCachedPropStates[entIdx].bActive )
 	{
-		const Vector oldCenter = m_pCachedPropStates[entIdx].vecCenter;
-		const float flRad = m_pCachedPropStates[entIdx].flRadius;
-		const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
-		const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
-
-		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-		{
-			def_light_t *l = m_hDeferredLights[i];
-			if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
-			{
-				if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
-				{
-					l->SetShadowDirty( true );
-				}
-			}
-		}
+		DirtyStaticLightsInBox( m_pCachedPropStates[entIdx].vecCenter, m_pCachedPropStates[entIdx].flRadius );
 		m_pCachedPropStates[entIdx].bActive = false;
 		return;
 	}
@@ -300,31 +306,20 @@ void CLightingManager::CheckDynamicEntityIntersections()
 
 	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
 
-	const int maxEnts = cl_entitylist->GetHighestEntityIndex();
-	for ( int i = 1; i <= maxEnts; i++ )
+	for ( C_BaseEntity *pEnt = cl_entitylist->FirstBaseEntity(); pEnt != NULL; pEnt = cl_entitylist->NextBaseEntity( pEnt ) )
 	{
-		C_BaseEntity *pEnt = cl_entitylist->GetBaseEntity( i );
-		if ( !pEnt || pEnt->IsDormant() )
-		{
-			if ( i < NUM_ENT_ENTRIES && m_pCachedPropStates[i].bActive )
-			{
-				const Vector oldCenter = m_pCachedPropStates[i].vecCenter;
-				const float flRad = m_pCachedPropStates[i].flRadius;
-				const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
-				const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
+		const int entIdx = pEnt->GetRefEHandle().GetEntryIndex();
+		if ( entIdx < 0 || entIdx >= NUM_ENT_ENTRIES )
+			continue;
 
-				for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
-				{
-					def_light_t *l = m_hDeferredLights[lIdx];
-					if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
-					{
-						if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
-						{
-							l->SetShadowDirty( true );
-						}
-					}
-				}
-				m_pCachedPropStates[i].bActive = false;
+		CachedPropState_t &state = m_pCachedPropStates[entIdx];
+
+		if ( pEnt->IsDormant() )
+		{
+			if ( state.bActive )
+			{
+				DirtyStaticLightsInBox( state.vecCenter, state.flRadius );
+				state.bActive = false;
 			}
 			continue;
 		}
@@ -352,12 +347,6 @@ void CLightingManager::CheckDynamicEntityIntersections()
 
 		if ( !pEnt->GetModel() )
 			continue;
-
-		const int entIdx = pEnt->entindex();
-		if ( entIdx < 0 || entIdx >= NUM_ENT_ENTRIES )
-			continue;
-
-		CachedPropState_t &state = m_pCachedPropStates[entIdx];
 
 		const Vector curOrigin = pEnt->GetAbsOrigin();
 		const QAngle curAngles = pEnt->GetAbsAngles();

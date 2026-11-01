@@ -74,7 +74,7 @@ public:
 		float flVisibleDist = 16384.0f, const Vector *pFallbackOrigin = NULL,
 		C_BaseEntity *pIgnoreEntity = NULL );
 
-	void FreeDynamicLight( def_light_t *&pLight );
+	void FreeDynamicLight( def_light_t *&pLight, float flDecayTime = 0.0f );
 
 #if DEFCFG_USE_SSE
 	void AllocateSortDataBuffer();
@@ -88,6 +88,7 @@ public:
 	virtual void OnEntityCreated( C_BaseEntity *pEntity ) OVERRIDE;
 	virtual void OnEntityDeleted( C_BaseEntity *pEntity ) OVERRIDE;
 	void OnEntityRemoved( C_BaseEntity *pEnt );
+	void DirtyStaticLightsInBox( const Vector &vecCenter, float flRadius );
 	bool DoesLightIntersectBox( def_light_t *l, const Vector &vecCenter, float flPropRadius, const Vector &mins, const Vector &maxs );
 	bool DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt );
 	int GetStaticAtlasSlotCount() const;
