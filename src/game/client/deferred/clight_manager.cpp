@@ -9,8 +9,6 @@
 #include "deferred/cvolume_culler.h"
 #include "physics_shared.h"
 
-static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue );
-ConVar r_deferred_shadow_cache( "r_deferred_shadow_cache", "1", FCVAR_ARCHIVE, "Static shadow map caching for stationary world lights", OnDeferredShadowCacheChanged );
 #include "collisionutils.h"
 #include "materialsystem/imaterialvar.h"
 
@@ -24,8 +22,6 @@ ConVar r_deferred_shadow_cache( "r_deferred_shadow_cache", "1", FCVAR_ARCHIVE, "
 
 
 static CLightingManager __g_lightingMan;
-static bool s_bAtlasSlotUsed[ MAX_STATIC_SHADOW_ATLAS_SLOTS ];
-static bool s_bAtlasSlotUsed_Point[ MAX_STATIC_POINT_SHADOW_SLOTS ];
 
 CLightingManager* GetLightingManager()
 {
@@ -51,8 +47,7 @@ CLightingManager::CLightingManager() : BaseClass( "LightingManagerSystem" )
 	m_vecForward.Init();
 	m_flzNear          = 0;
 	m_pCachedPropStates = NULL;
-	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
-	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	GetLightingManager()->ResetStaticAtlasSlots();
 	m_bDrawVolumetrics = false;
 #if DEFCFG_USE_SSE
 	m_pSortDataX4     = NULL;
@@ -96,8 +91,7 @@ void CLightingManager::Shutdown()
 
 	Assert( m_hDeferredLights.Count() == 0 );
 	materials->RemoveReleaseFunc( LightingResourceRelease );
-	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
-	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	ResetStaticAtlasSlots();
 
 #if DEFCFG_USE_SSE
 	if ( m_pSortDataX4 != NULL )
@@ -110,8 +104,7 @@ void CLightingManager::Shutdown()
 
 void CLightingManager::LevelInitPostEntity()
 {
-	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
-	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	ResetStaticAtlasSlots();
 	if ( m_pCachedPropStates )
 	{
 		Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
@@ -153,422 +146,13 @@ void CLightingManager::LevelShutdownPostEntity()
 			m_hDeferredLights[i]->m_nCachedAtlasSlot = -1;
 	}
 
-	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
-	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	ResetStaticAtlasSlots();
 	if ( m_pCachedPropStates )
 	{
 		Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
 	}
 }
 
-int CLightingManager::AssignStaticAtlasSlot( def_light_t *l )
-{
-	if ( !l )
-		return -1;
-
-	FreeStaticAtlasSlot( l );
-
-	if ( l->IsPoint() )
-	{
-		for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
-		{
-			if ( !s_bAtlasSlotUsed_Point[i] )
-			{
-				s_bAtlasSlotUsed_Point[i] = true;
-				l->m_nCachedAtlasSlot = i;
-				return i;
-			}
-		}
-	}
-	else if ( l->IsSpot() )
-	{
-		for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
-		{
-			if ( !s_bAtlasSlotUsed[i] )
-			{
-				s_bAtlasSlotUsed[i] = true;
-				l->m_nCachedAtlasSlot = i;
-				return i;
-			}
-		}
-	}
-
-	l->m_nCachedAtlasSlot = -1;
-	return -1;
-}
-
-void CLightingManager::FreeStaticAtlasSlot( def_light_t *l )
-{
-	if ( !l || !l->HasValidAtlasSlot() )
-		return;
-
-	if ( l->IsPoint() )
-	{
-		if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_POINT_SHADOW_SLOTS )
-		{
-			s_bAtlasSlotUsed_Point[ l->m_nCachedAtlasSlot ] = false;
-		}
-	}
-	else if ( l->IsSpot() )
-	{
-		if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_SHADOW_ATLAS_SLOTS )
-		{
-			s_bAtlasSlotUsed[ l->m_nCachedAtlasSlot ] = false;
-		}
-	}
-
-	l->m_nCachedAtlasSlot = -1;
-}
-
-int CLightingManager::GetStaticAtlasSlotCount() const
-{
-	int count = 0;
-	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
-	{
-		if ( s_bAtlasSlotUsed[i] )
-			count++;
-	}
-	return count;
-}
-
-int CLightingManager::GetStaticPointAtlasSlotCount() const
-{
-	int count = 0;
-	for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
-	{
-		if ( s_bAtlasSlotUsed_Point[i] )
-			count++;
-	}
-	return count;
-}
-
-void CLightingManager::ReevaluateStaticAtlasSlots()
-{
-	if ( r_deferred_shadow_cache.GetBool() )
-	{
-		if ( m_pCachedPropStates )
-		{
-			Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
-		}
-		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-		{
-			def_light_t *l = m_hDeferredLights[i];
-			if ( l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && !l->HasValidAtlasSlot() )
-			{
-				AssignStaticAtlasSlot( l );
-				l->SetShadowDirty( true );
-			}
-		}
-	}
-	else
-	{
-		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-		{
-			def_light_t *l = m_hDeferredLights[i];
-			if ( l->HasValidAtlasSlot() )
-			{
-				FreeStaticAtlasSlot( l );
-			}
-		}
-	}
-}
-
-static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue )
-{
-	if ( GetLightingManager() )
-	{
-		GetLightingManager()->ReevaluateStaticAtlasSlots();
-	}
-}
-
-class CAbsQueryScope {
-public:
-	CAbsQueryScope() : m_bPrev( C_BaseEntity::IsAbsQueriesValid() ) {
-		if ( !m_bPrev ) C_BaseEntity::SetAbsQueriesValid( true );
-	}
-	~CAbsQueryScope() {
-		if ( !m_bPrev ) C_BaseEntity::SetAbsQueriesValid( false );
-	}
-private:
-	bool m_bPrev;
-};
-
-bool CLightingManager::DoesLightIntersectBox( def_light_t *l, const Vector &vecCenter, float flPropRadius, const Vector &mins, const Vector &maxs )
-{
-	if ( !l )
-		return false;
-
-	const Vector vecToProp = vecCenter - l->pos;
-	const float flDistSqr = vecToProp.LengthSqr();
-	const float flMaxDist = l->flRadius + flPropRadius;
-	if ( flDistSqr > ( flMaxDist * flMaxDist ) )
-		return false;
-
-	if ( l->IsSpot() )
-	{
-		const float flDist = FastSqrt( flDistSqr );
-		if ( flDist > 1e-3f )
-		{
-			const Vector dirToProp = vecToProp * ( 1.0f / flDist );
-			const float flDot = DotProduct( -l->backDir, dirToProp );
-			const float flAngularSlop = ( flDist > flPropRadius ) ? ( flPropRadius / flDist ) : 1.0f;
-			if ( flDot < ( l->flSpotCone_Outer - flAngularSlop ) )
-				return false;
-		}
-
-		if ( R_CullBox( mins, maxs, l->spotFrustum ) )
-			return false;
-	}
-	else
-	{
-		if ( !IsBoxIntersectingBox( mins, maxs, l->bounds_min_naive, l->bounds_max_naive ) )
-			return false;
-	}
-
-	CTraceFilterWorldOnly filter;
-	trace_t tr;
-	UTIL_TraceLine( l->pos, vecCenter, MASK_OPAQUE, &filter, &tr );
-	if ( tr.fraction >= 1.0f || tr.startsolid )
-		return true;
-
-	const Vector testPoints[4] = {
-		Vector( mins.x, mins.y, maxs.z ),
-		Vector( maxs.x, maxs.y, maxs.z ),
-		Vector( mins.x, maxs.y, mins.z ),
-		Vector( maxs.x, mins.y, mins.z )
-	};
-	for ( int p = 0; p < 4; p++ )
-	{
-		UTIL_TraceLine( l->pos, testPoints[p], MASK_OPAQUE, &filter, &tr );
-		if ( tr.fraction >= 1.0f )
-			return true;
-	}
-
-	return false;
-}
-
-bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt )
-{
-	if ( !l || !pEnt )
-		return false;
-
-	CAbsQueryScope scope;
-
-	Vector mins, maxs;
-	pEnt->GetRenderBoundsWorldspace( mins, maxs );
-
-	const Vector propCenter = pEnt->WorldSpaceCenter();
-	const float flPropRadius = pEnt->BoundingRadius();
-
-	return DoesLightIntersectBox( l, propCenter, flPropRadius, mins, maxs );
-}
-
-void CLightingManager::OnEntityCreated( C_BaseEntity *pEntity )
-{
-	if ( !pEntity )
-		return;
-
-	const int entIdx = pEntity->entindex();
-	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates )
-	{
-		m_pCachedPropStates[entIdx].bActive = false;
-	}
-}
-
-void CLightingManager::OnEntityDeleted( C_BaseEntity *pEnt )
-{
-	OnEntityRemoved( pEnt );
-}
-
-void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
-{
-	if ( !r_deferred_shadow_cache.GetBool() || !pEnt )
-		return;
-
-	const int entIdx = pEnt->entindex();
-	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates && m_pCachedPropStates[entIdx].bActive )
-	{
-		const Vector oldCenter = m_pCachedPropStates[entIdx].vecCenter;
-		const float flRad = m_pCachedPropStates[entIdx].flRadius;
-		const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
-		const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
-
-		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-		{
-			def_light_t *l = m_hDeferredLights[i];
-			if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
-			{
-				if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
-				{
-					l->SetShadowDirty( true );
-				}
-			}
-		}
-		m_pCachedPropStates[entIdx].bActive = false;
-		return;
-	}
-
-	if ( pEnt->IsPlayer() || dynamic_cast<C_BaseViewModel*>( pEnt ) != NULL || pEnt->IsBaseCombatWeapon() )
-		return;
-
-	if ( !pEnt->GetModel() )
-		return;
-
-	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-	{
-		def_light_t *l = m_hDeferredLights[i];
-		if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
-		{
-			if ( DoesLightIntersectEntity( l, pEnt ) )
-			{
-				l->SetShadowDirty( true );
-			}
-		}
-	}
-}
-
-void CLightingManager::CheckDynamicEntityIntersections()
-{
-	if ( !r_deferred_shadow_cache.GetBool() || !engine->IsInGame() || engine->IsLevelMainMenuBackground() )
-		return;
-
-	if ( !m_pCachedPropStates )
-		return;
-
-	CAbsQueryScope scope;
-
-	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
-
-	const int maxEnts = cl_entitylist->GetHighestEntityIndex();
-	for ( int i = 1; i <= maxEnts; i++ )
-	{
-		C_BaseEntity *pEnt = cl_entitylist->GetBaseEntity( i );
-		if ( !pEnt || pEnt->IsDormant() )
-		{
-			if ( i < NUM_ENT_ENTRIES && m_pCachedPropStates[i].bActive )
-			{
-				const Vector oldCenter = m_pCachedPropStates[i].vecCenter;
-				const float flRad = m_pCachedPropStates[i].flRadius;
-				const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
-				const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
-
-				for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
-				{
-					def_light_t *l = m_hDeferredLights[lIdx];
-					if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
-					{
-						if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
-						{
-							l->SetShadowDirty( true );
-						}
-					}
-				}
-				m_pCachedPropStates[i].bActive = false;
-			}
-			continue;
-		}
-
-		if ( pEnt->IsPlayer() )
-			continue;
-
-		if ( dynamic_cast<C_BaseViewModel*>( pEnt ) != NULL )
-			continue;
-
-		if ( pEnt->IsBaseCombatWeapon() )
-			continue;
-
-		if ( pLocal )
-		{
-			if ( pEnt == pLocal || pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal )
-				continue;
-		}
-
-		if ( pEnt->IsEffectActive( EF_NODRAW | EF_NOSHADOW ) )
-			continue;
-
-		if ( pEnt->ShadowCastType() == SHADOWS_NONE )
-			continue;
-
-		if ( !pEnt->GetModel() )
-			continue;
-
-		const int entIdx = pEnt->entindex();
-		if ( entIdx < 0 || entIdx >= NUM_ENT_ENTRIES )
-			continue;
-
-		CachedPropState_t &state = m_pCachedPropStates[entIdx];
-
-		const Vector curOrigin = pEnt->GetAbsOrigin();
-		const QAngle curAngles = pEnt->GetAbsAngles();
-
-		IPhysicsObject *pPhys = pEnt->VPhysicsGetObject();
-		const bool bHeld = ( pPhys && ( pPhys->GetGameFlags() & FVPHYSICS_PLAYER_HELD ) != 0 ) ||
-			( pEnt->GetOwnerEntity() && pEnt->GetOwnerEntity()->IsPlayer() );
-
-		bool bPoseChanged = false;
-		if ( !state.bActive )
-		{
-			bPoseChanged = true;
-		}
-		else
-		{
-			const float flDistSqr = ( curOrigin - state.vecOrigin ).LengthSqr();
-			const float flAngDiff = ( curAngles[0] - state.angAngles[0] ) * ( curAngles[0] - state.angAngles[0] ) +
-			                        ( curAngles[1] - state.angAngles[1] ) * ( curAngles[1] - state.angAngles[1] ) +
-			                        ( curAngles[2] - state.angAngles[2] ) * ( curAngles[2] - state.angAngles[2] );
-			if ( bHeld || flDistSqr > 0.25f || flAngDiff > 0.25f )
-			{
-				bPoseChanged = true;
-			}
-		}
-
-		if ( bPoseChanged )
-		{
-			Vector mins, maxs;
-			pEnt->GetRenderBoundsWorldspace( mins, maxs );
-			const Vector propCenter = pEnt->WorldSpaceCenter();
-			const float flCurRadius = ( maxs - mins ).Length() * 0.5f;
-			if ( flCurRadius < 1.0f )
-				continue;
-
-			const Vector oldCenter = state.vecCenter;
-			const float flOldRad = state.flRadius;
-			const Vector oldMins = oldCenter - Vector( flOldRad, flOldRad, flOldRad );
-			const Vector oldMaxs = oldCenter + Vector( flOldRad, flOldRad, flOldRad );
-
-			for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
-			{
-				def_light_t *l = m_hDeferredLights[lIdx];
-				if ( !l || !l->IsStatic() || ( !l->IsSpot() && !l->IsPoint() ) || !l->HasValidAtlasSlot() )
-					continue;
-
-				if ( state.bActive && l->IsShadowDirty() )
-					continue;
-
-				bool bHit = DoesLightIntersectBox( l, propCenter, flCurRadius, mins, maxs );
-
-				if ( !bHit && state.bActive )
-				{
-					if ( DoesLightIntersectBox( l, oldCenter, flOldRad, oldMins, oldMaxs ) )
-					{
-						bHit = true;
-					}
-				}
-
-				if ( bHit )
-				{
-					l->SetShadowDirty( true );
-				}
-			}
-
-			state.vecOrigin = curOrigin;
-			state.vecCenter = propCenter;
-			state.angAngles = curAngles;
-			state.flRadius  = flCurRadius;
-			state.bActive   = true;
-		}
-	}
-}
 
 void CLightingManager::Update( float ft )
 {
@@ -740,216 +324,6 @@ void CLightingManager::UpdateTemplights( float deltaTime )
 	}
 }
 
-Vector CLightingManager::SanitizeLightOrigin( const Vector &vecOrigin, const Vector *pFallback, float flMinClearance )
-{
-	Vector safeOrigin = vecOrigin;
-
-	if ( ( enginetrace->GetPointContents( safeOrigin ) & MASK_SOLID ) != 0 )
-	{
-		if ( pFallback && ( ( enginetrace->GetPointContents( *pFallback ) & MASK_SOLID ) == 0 ) )
-		{
-			safeOrigin = *pFallback;
-		}
-		else
-		{
-			static const Vector s_probeOffsets[] = {
-				Vector( 0, 0, 8 ), Vector( 0, 0, -8 ),
-				Vector( 8, 0, 0 ), Vector( -8, 0, 0 ),
-				Vector( 0, 8, 0 ), Vector( 0, -8, 0 ),
-				Vector( 16, 0, 0 ), Vector( -16, 0, 0 ),
-				Vector( 0, 16, 0 ), Vector( 0, -16, 0 ),
-				Vector( 0, 0, 16 ), Vector( 0, 0, -16 )
-			};
-			for ( int i = 0; i < ARRAYSIZE( s_probeOffsets ); ++i )
-			{
-				Vector testPos = vecOrigin + s_probeOffsets[i];
-				if ( ( enginetrace->GetPointContents( testPos ) & MASK_SOLID ) == 0 )
-				{
-					safeOrigin = testPos;
-					break;
-				}
-			}
-		}
-	}
-
-	CTraceFilterWorldOnly worldFilter;
-	const Vector hullMins( -flMinClearance, -flMinClearance, -flMinClearance );
-	const Vector hullMaxs( flMinClearance, flMinClearance, flMinClearance );
-	Vector prevNormal = vec3_origin;
-
-	for ( int i = 0; i < 3; ++i )
-	{
-		trace_t tr;
-		UTIL_TraceHull( safeOrigin, safeOrigin, hullMins, hullMaxs, MASK_SOLID_BRUSHONLY, &worldFilter, &tr );
-		if ( !tr.startsolid && tr.fraction >= 1.0f )
-			break;
-
-		if ( tr.plane.normal.LengthSqr() < 0.001f )
-		{
-			static const Vector s_checkDirs[] = {
-				Vector( 0, 0, -1 ), Vector( 0, 0, 1 ),
-				Vector( 1, 0, 0 ), Vector( -1, 0, 0 ),
-				Vector( 0, 1, 0 ), Vector( 0, -1, 0 )
-			};
-			for ( int j = 0; j < ARRAYSIZE( s_checkDirs ); ++j )
-			{
-				trace_t rayTr;
-				UTIL_TraceLine( safeOrigin, safeOrigin + s_checkDirs[j] * flMinClearance, MASK_SOLID_BRUSHONLY, &worldFilter, &rayTr );
-				if ( rayTr.fraction < 1.0f && !rayTr.startsolid && rayTr.plane.normal.LengthSqr() > 0.001f )
-				{
-					tr.plane.normal = rayTr.plane.normal;
-					tr.fraction = rayTr.fraction;
-					break;
-				}
-			}
-			if ( tr.plane.normal.LengthSqr() < 0.001f )
-				break;
-		}
-
-		const float pushDist = ( 1.0f - tr.fraction ) * flMinClearance + 1.0f;
-		const Vector vecPush = tr.plane.normal * pushDist;
-
-		if ( prevNormal.LengthSqr() > 0.001f && DotProduct( tr.plane.normal, prevNormal ) < -0.7f )
-		{
-			safeOrigin -= vecPush * 0.5f;
-			break;
-		}
-
-		safeOrigin += vecPush;
-		prevNormal = tr.plane.normal;
-	}
-
-	return safeOrigin;
-}
-
-def_light_t *CLightingManager::AllocDynamicPointLight( const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
-{
-	Vector safeOrigin = SanitizeLightOrigin( vecOrigin, pFallbackOrigin );
-
-	def_light_t *l = new def_light_t();
-	l->iLighttype = DEFLIGHTTYPE_POINT;
-	l->pos = safeOrigin;
-	l->ang = vec3_angle;
-	l->flRadius = flRadius;
-	l->col_diffuse = vecColor;
-	l->flFalloffPower = 1.0f;
-	l->iFlags |= iFlags;
-	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 32768.0f );
-	l->iVisible_Range = 512;
-	l->iShadow_Dist = l->iVisible_Dist;
-	l->iShadow_Range = l->iVisible_Range;
-	l->m_hIgnoreEntity = pIgnoreEntity;
-	l->MakeDirtyAll();
-
-	AddLight( l );
-	return l;
-}
-
-def_light_t *CLightingManager::AllocDynamicSpotLight( const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
-	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin,
-	C_BaseEntity *pIgnoreEntity )
-{
-	Vector safeOrigin = SanitizeLightOrigin( vecOrigin, pFallbackOrigin );
-
-	def_light_t *l = new def_light_t();
-	l->iLighttype = DEFLIGHTTYPE_SPOT;
-	l->pos = safeOrigin;
-	l->ang = vecAngles;
-	l->flRadius = flRadius;
-	l->col_diffuse = vecColor;
-	l->flSpotCone_Outer = SPOT_DEGREE_TO_RAD( flOuterConeDeg );
-	l->flSpotCone_Inner = ( flInnerConeDeg > 0.0f && flInnerConeDeg <= flOuterConeDeg ) ? SPOT_DEGREE_TO_RAD( flInnerConeDeg ) : l->flSpotCone_Outer;
-	l->flFOV = flOuterConeDeg * 2.0f;
-	l->flFalloffPower = 1.0f;
-	l->iFlags |= iFlags;
-	l->iVisible_Dist = (uint16)clamp( flVisibleDist, 256.0f, 32768.0f );
-	l->iVisible_Range = 512;
-	l->iShadow_Dist = l->iVisible_Dist;
-	l->iShadow_Range = l->iVisible_Range;
-	l->m_hIgnoreEntity = pIgnoreEntity;
-	l->MakeDirtyAll();
-
-	AddLight( l );
-	return l;
-}
-
-void CLightingManager::UpdateDynamicLight( def_light_t *pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	const QAngle *pAngles, bool bSanitizeOrigin, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
-{
-	if ( !pLight )
-		return;
-
-	Vector safeOrigin = bSanitizeOrigin ? SanitizeLightOrigin( vecOrigin, pFallbackOrigin ) : vecOrigin;
-
-	bool bDirtyXForms = false;
-	if ( ( pLight->pos - safeOrigin ).LengthSqr() > 0.01f )
-	{
-		pLight->pos = safeOrigin;
-		bDirtyXForms = true;
-	}
-
-	if ( pAngles && ( pLight->ang != *pAngles ) )
-	{
-		pLight->ang = *pAngles;
-		bDirtyXForms = true;
-	}
-
-	if ( pLight->flRadius != flRadius )
-	{
-		pLight->flRadius = flRadius;
-		bDirtyXForms = true;
-	}
-
-	pLight->col_diffuse = vecColor;
-
-	if ( pIgnoreEntity )
-	{
-		pLight->m_hIgnoreEntity = pIgnoreEntity;
-	}
-
-	if ( bDirtyXForms )
-	{
-		pLight->MakeDirtyXForms();
-	}
-}
-
-bool CLightingManager::EnsureDynamicPointLight( def_light_t *&pLight, const Vector &vecOrigin, const Vector &vecColor, float flRadius,
-	int iFlags, float flVisibleDist, const Vector *pFallbackOrigin, C_BaseEntity *pIgnoreEntity )
-{
-	if ( !pLight )
-	{
-		pLight = AllocDynamicPointLight( vecOrigin, vecColor, flRadius, iFlags, flVisibleDist, pFallbackOrigin, pIgnoreEntity );
-		return true;
-	}
-
-	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, NULL, true, pFallbackOrigin, pIgnoreEntity );
-	return false;
-}
-
-bool CLightingManager::EnsureDynamicSpotLight( def_light_t *&pLight, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecColor,
-	float flRadius, float flInnerConeDeg, float flOuterConeDeg, int iFlags, float flVisibleDist, const Vector *pFallbackOrigin,
-	C_BaseEntity *pIgnoreEntity )
-{
-	if ( !pLight )
-	{
-		pLight = AllocDynamicSpotLight( vecOrigin, vecAngles, vecColor, flRadius, flInnerConeDeg, flOuterConeDeg, iFlags, flVisibleDist, pFallbackOrigin, pIgnoreEntity );
-		return true;
-	}
-
-	UpdateDynamicLight( pLight, vecOrigin, vecColor, flRadius, &vecAngles, true, pFallbackOrigin, pIgnoreEntity );
-	return false;
-}
-
-void CLightingManager::FreeDynamicLight( def_light_t *&pLight )
-{
-	if ( pLight )
-	{
-		RemoveLight( pLight );
-		delete pLight;
-		pLight = NULL;
-	}
-}
 
 ConVar r_deferred_light_distance_fade(
 	"r_deferred_light_distance_fade",
@@ -971,176 +345,6 @@ ConVar r_deferred_shadow_max(
 	FCVAR_ARCHIVE,
 	"maximum simultaneous dynamic shadow casters"
 );
-
-#if DEFCFG_USE_SSE
-void CLightingManager::AllocateSortDataBuffer()
-{
-	const int count = m_hDeferredLights.Count();
-	if ( count == 0 )
-		return;
-
-	const int iSortBufferDataSize = count % 4 == 0
-		                                ? count / 4
-		                                : ( ( count - ( count % 4 ) ) / 4 ) + 1;
-
-	if ( m_SortBufferDataSize >= iSortBufferDataSize )
-		return;
-
-	m_SortBufferDataSize = iSortBufferDataSize;
-	m_pSortDataX4        = reinterpret_cast<def_light_presortdatax4_t*>(
-		MemAlloc_ReallocAligned( m_pSortDataX4, iSortBufferDataSize * sizeof( def_light_presortdatax4_t ),
-		                         sizeof( fltx4 ) * 4 ) );
-}
-
-void CLightingManager::BuildLightSortDataBuffer()
-{
-	const int iPartiallyFullSortDataElementCount = m_hRenderLights.Count() % 4;
-	m_uiSortDataCount                            = ( m_hRenderLights.Count() - iPartiallyFullSortDataElementCount ) / 4;
-
-	for ( uint i = 0, baseLightIdx = 0; i < m_uiSortDataCount; i++, baseLightIdx += 4 )
-	{
-		def_light_presortdatax4_t& sortData = m_pSortDataX4[i];
-
-		sortData.count = 4;
-
-		def_light_t* lights[4] =
-		{
-			m_hRenderLights[baseLightIdx],
-			m_hRenderLights[baseLightIdx + 1],
-			m_hRenderLights[baseLightIdx + 2],
-			m_hRenderLights[baseLightIdx + 3]
-		};
-
-		sortData.lights[0] = lights[0];
-		sortData.lights[1] = lights[1];
-		sortData.lights[2] = lights[2];
-		sortData.lights[3] = lights[3];
-
-		float boundsMinX[4] =
-		{
-			lights[0]->bounds_min_naive.x,
-			lights[1]->bounds_min_naive.x,
-			lights[2]->bounds_min_naive.x,
-			lights[3]->bounds_min_naive.x
-		};
-		sortData.bounds_min_naive[0] = LoadUnalignedSIMD( boundsMinX );
-
-		float boundsMinY[4] =
-		{
-			lights[0]->bounds_min_naive.y,
-			lights[1]->bounds_min_naive.y,
-			lights[2]->bounds_min_naive.y,
-			lights[3]->bounds_min_naive.y
-		};
-		sortData.bounds_min_naive[1] = LoadUnalignedSIMD( boundsMinY );
-
-		float boundsMinZ[4] =
-		{
-			lights[0]->bounds_min_naive.z,
-			lights[1]->bounds_min_naive.z,
-			lights[2]->bounds_min_naive.z,
-			lights[3]->bounds_min_naive.z
-		};
-		sortData.bounds_min_naive[2] = LoadUnalignedSIMD( boundsMinZ );
-
-		float boundsMaxX[4] =
-		{
-			lights[0]->bounds_max_naive.x,
-			lights[1]->bounds_max_naive.x,
-			lights[2]->bounds_max_naive.x,
-			lights[3]->bounds_max_naive.x
-		};
-		sortData.bounds_max_naive[0] = LoadUnalignedSIMD( boundsMaxX );
-
-		float boundsMaxY[4] =
-		{
-			lights[0]->bounds_max_naive.y,
-			lights[1]->bounds_max_naive.y,
-			lights[2]->bounds_max_naive.y,
-			lights[3]->bounds_max_naive.y
-		};
-		sortData.bounds_max_naive[1] = LoadUnalignedSIMD( boundsMaxY );
-
-		float boundsMaxZ[4] =
-		{
-			lights[0]->bounds_max_naive.z,
-			lights[1]->bounds_max_naive.z,
-			lights[2]->bounds_max_naive.z,
-			lights[3]->bounds_max_naive.z
-		};
-		sortData.bounds_max_naive[2] = LoadUnalignedSIMD( boundsMaxZ );
-
-		int hasShadowX4[4] =
-		{
-			lights[0]->HasShadow() ? 1 : 0,
-			lights[1]->HasShadow() ? 1 : 0,
-			lights[2]->HasShadow() ? 1 : 0,
-			lights[3]->HasShadow() ? 1 : 0
-		};
-		sortData.hasShadow = LoadUnalignedIntSIMD( hasShadowX4 );
-
-		int hasVolumetricsX4[4] =
-		{
-			lights[0]->HasVolumetrics() ? 1 : 0,
-			lights[1]->HasVolumetrics() ? 1 : 0,
-			lights[2]->HasVolumetrics() ? 1 : 0,
-			lights[3]->HasVolumetrics() ? 1 : 0
-		};
-		sortData.hasVolumetrics = LoadUnalignedIntSIMD( hasVolumetricsX4 );
-	}
-
-	if ( iPartiallyFullSortDataElementCount != 0 )
-	{
-		def_light_presortdatax4_t& sortData = m_pSortDataX4[m_uiSortDataCount];
-
-		sortData.count = iPartiallyFullSortDataElementCount;
-
-		float boundsMinX[4]       = { 0 };
-		float boundsMinY[4]       = { 0 };
-		float boundsMinZ[4]       = { 0 };
-		float boundsMaxX[4]       = { 0 };
-		float boundsMaxY[4]       = { 0 };
-		float boundsMaxZ[4]       = { 0 };
-		int   hasShadowX4[4]      = { 0 };
-		int   hasVolumetricsX4[4] = { 0 };
-
-		int iBaseLightIndex = m_uiSortDataCount * 4;
-
-		for ( int i = 0; i < iPartiallyFullSortDataElementCount; i++ )
-		{
-			def_light_t* l = m_hRenderLights[iBaseLightIndex + i];
-
-			sortData.lights[i] = l;
-
-			boundsMinX[i] = l->bounds_min_naive.x;
-			boundsMinY[i] = l->bounds_min_naive.y;
-			boundsMinZ[i] = l->bounds_min_naive.z;
-
-			boundsMaxX[i] = l->bounds_max_naive.x;
-			boundsMaxY[i] = l->bounds_max_naive.y;
-			boundsMaxZ[i] = l->bounds_max_naive.z;
-
-			hasShadowX4[i] = l->HasShadow() ? 1 : 0;
-
-			hasVolumetricsX4[i] = l->HasVolumetrics() ? 1 : 0;
-		}
-
-		sortData.bounds_min_naive[0] = LoadUnalignedSIMD( boundsMinX );
-		sortData.bounds_min_naive[1] = LoadUnalignedSIMD( boundsMinY );
-		sortData.bounds_min_naive[2] = LoadUnalignedSIMD( boundsMinZ );
-
-		sortData.bounds_max_naive[0] = LoadUnalignedSIMD( boundsMaxX );
-		sortData.bounds_max_naive[1] = LoadUnalignedSIMD( boundsMaxY );
-		sortData.bounds_max_naive[2] = LoadUnalignedSIMD( boundsMaxZ );
-
-		sortData.hasShadow = LoadUnalignedIntSIMD( hasShadowX4 );
-
-		sortData.hasVolumetrics = LoadUnalignedIntSIMD( hasVolumetricsX4 );
-
-		m_uiSortDataCount++;
-	}
-}
-#endif
 
 void CLightingManager::ClearTmpLists()
 {
@@ -1212,266 +416,6 @@ void CLightingManager::CullLights()
 		m_hRenderLights.AddToTail( l );
 	}
 	FOR_EACH_VEC_FAST_END
-}
-
-inline fltx4 IsPointInBoundsX4( const Vector& point, fltx4 boundsMin[3], fltx4 boundsMax[3] )
-{
-	const fltx4& pointX = ReplicateX4( point.x );
-	const fltx4& pointY = ReplicateX4( point.y );
-	const fltx4& pointZ = ReplicateX4( point.z );
-
-	return AndSIMD
-	(
-		AndSIMD
-		(
-			AndSIMD
-			(
-				CmpGeSIMD( pointX, boundsMin[0] ),
-				CmpLeSIMD( pointX, boundsMax[0] )
-			),
-			AndSIMD
-			(
-				CmpGeSIMD( pointY, boundsMin[1] ),
-				CmpLeSIMD( pointY, boundsMax[1] )
-			)
-		),
-		AndSIMD
-		(
-			CmpGeSIMD( pointZ, boundsMin[2] ),
-			CmpLeSIMD( pointZ, boundsMax[2] )
-		)
-	);
-}
-
-int __cdecl CLightingManager::LightDistanceCompare( def_light_t* const* a, def_light_t* const* b )
-{
-	const def_light_t* lA = *a;
-	const def_light_t* lB = *b;
-
-	const float distA = lA->flDistance_ViewOrigin * ( lA->bWasShadowActive ? 0.85f : 1.0f );
-	const float distB = lB->flDistance_ViewOrigin * ( lB->bWasShadowActive ? 0.85f : 1.0f );
-
-	if ( distA < distB ) return -1;
-	if ( distA > distB ) return 1;
-	return 0;
-}
-
-void CLightingManager::SortLights()
-{
-#if DEBUG
-	for ( int i = 0; i < LSORT_COUNT; i++ )
-		Assert( m_hPreSortedLights[ i ].Count() == 0 );
-#endif
-
-	m_bDrawVolumetrics = false;
-
-	const float zNear = m_flzNear + 2;
-
-	const Vector vecBloat( zNear, zNear, zNear );
-
-	const Vector camMins( m_vecViewOrigin - vecBloat );
-	const Vector camMaxs( m_vecViewOrigin + vecBloat );
-
-#if DEFCFG_USE_SSE
-	for ( uint i = 0; i < m_uiSortDataCount; i++ )
-	{
-		def_light_presortdatax4_t& s = m_pSortDataX4[i];
-
-#if DEFCFG_EXTRA_SORT
-		const fltx4& zNearX4 = ReplicateX4( zNear );
-		fltx4 adjustedMins[3] = {
-			SubSIMD( s.bounds_min_naive[0], zNearX4 ),
-			SubSIMD( s.bounds_min_naive[1], zNearX4 ),
-			SubSIMD( s.bounds_min_naive[2], zNearX4 )
-		};
-
-		fltx4 adjustedMaxs[3] = {
-			AddSIMD( s.bounds_max_naive[0], zNearX4 ),
-			AddSIMD( s.bounds_max_naive[1], zNearX4 ),
-			AddSIMD( s.bounds_max_naive[2], zNearX4 )
-		};
-
-		fltx4 needsFullscreen = IsPointInBoundsX4( m_vecViewOrigin,
-		                                           adjustedMins, adjustedMaxs );
-
-		//Jack: this is terrible I know
-		for ( uint j = 0; j < s.count; j++ )
-		{
-			def_light_t *pLight = s.lights[j];
-			const bool bHasVolumetrics = ( pLight->HasVolumetrics() && pLight->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
-			if ( bHasVolumetrics )
-			{
-				m_bDrawVolumetrics = true;
-			}
-
-			if ( pLight->IsSpot() )
-			{
-				bool bNeedsFullscreen = false;
-				if ( IS_NAN( SubFloat( needsFullscreen, j ) ) )
-				{
-					bNeedsFullscreen = true;
-				}
-				else if ( !bNeedsFullscreen && ( DotProduct( m_vecForward, pLight->pos - m_vecViewOrigin ) < 32.0f ) )
-				{
-					bNeedsFullscreen = true;
-				}
-				else if ( !bNeedsFullscreen && ( pLight->flDistance_ViewOrigin < ( pLight->flRadius + zNear + 32.0f ) ) )
-				{
-					bNeedsFullscreen = true;
-				}
-
-				if ( bNeedsFullscreen )
-				{
-					m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].AddToTail( pLight );
-				}
-				else
-				{
-					m_hPreSortedLights[LSORT_SPOT_WORLD].AddToTail( pLight );
-				}
-			}
-			else
-			{
-				bool bNeedsFullscreen = IS_NAN( SubFloat( needsFullscreen, j ) );
-				if ( ( s.lights[j]->HasShadow() && !s.lights[j]->IsStatic() ) || ( !bNeedsFullscreen && ( s.lights[j]->flDistance_ViewOrigin < ( s.lights[j]->flRadius * 1.05f + zNear + 48.0f ) ) ) )
-				{
-					bNeedsFullscreen = true;
-				}
-				s.lights[j]->bWasFullscreen = bNeedsFullscreen;
-
-				if ( bNeedsFullscreen )
-				{
-					m_hPreSortedLights[LSORT_POINT_FULLSCREEN].AddToTail( s.lights[j] );
-				}
-				else
-				{
-					m_hPreSortedLights[LSORT_POINT_WORLD].AddToTail( s.lights[j] );
-				}
-			}
-		}
-#else
-		for ( uint j = 0; j < s.count; j++ )
-		{
-			def_light_t *pLight = s.lights[j];
-			const bool bHasVolumetrics = ( pLight->HasVolumetrics() && pLight->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
-			if ( bHasVolumetrics )
-			{
-				m_bDrawVolumetrics = true;
-			}
-
-			if ( pLight->IsSpot() )
-			{
-				const bool bNeedsFullscreen = !R_CullBox( camMins, camMaxs, pLight->spotFrustum );
-				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( pLight );
-			}
-			else
-			{
-				const float flPointDistSqr = ( pLight->pos - m_vecViewOrigin ).LengthSqr();
-				const float flBaseThreshold = pLight->flRadius * 1.05f + zNear + 48.0f;
-				const float flHysteresis = ( pLight->bWasFullscreen ? 32.0f : 0.0f );
-				const float flPointNearDist = flBaseThreshold + flHysteresis;
-				const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
-				pLight->bWasFullscreen = bNeedsFullscreen;
-				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( pLight );
-			}
-		}
-#endif
-	}
-#else
-	FOR_EACH_VEC_FAST( def_light_t*, m_hRenderLights, l )
-	{
-		const bool bHasVolumetrics = ( l->HasVolumetrics() && l->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
-		if ( bHasVolumetrics )
-		{
-			m_bDrawVolumetrics = true;
-		}
-
-#if DEFCFG_EXTRA_SORT
-		bool bNeedsFullscreen = IsPointInBounds( m_vecViewOrigin,
-			l->bounds_min_naive - vecBloat,
-			l->bounds_max_naive + vecBloat );
-
-		if ( !bNeedsFullscreen && l->IsSpot() && ( DotProduct( m_vecForward, l->pos - m_vecViewOrigin ) < 32.0f ) )
-		{
-			bNeedsFullscreen = true;
-		}
-
-		if ( !bNeedsFullscreen && ( l->flDistance_ViewOrigin < ( l->flRadius * 1.05f + zNear + 48.0f ) ) )
-		{
-			bNeedsFullscreen = true;
-		}
-		l->bWasFullscreen = bNeedsFullscreen;
-
-		Assert( l->iLighttype * 2 + 1 < LSORT_COUNT );
-		m_hPreSortedLights[ l->iLighttype * 2 + (int)bNeedsFullscreen ].AddToTail( l );
-#else
-		if ( l->IsSpot() )
-		{
-			const bool bNeedsFullscreen = !R_CullBox( camMins, camMaxs, l->spotFrustum );
-			m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( l );
-		}
-		else
-		{
-			const float flPointDistSqr = ( l->pos - m_vecViewOrigin ).LengthSqr();
-			const float flBaseThreshold = l->flRadius * 1.05f + zNear + 48.0f;
-			const float flHysteresis = ( l->bWasFullscreen ? 32.0f : 0.0f );
-			const float flPointNearDist = flBaseThreshold + flHysteresis;
-			const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
-			l->bWasFullscreen = bNeedsFullscreen;
-			m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( l );
-		}
-#endif
-	}
-	FOR_EACH_VEC_FAST_END
-#endif
-
-#if DEFCFG_EXTRA_SORT
-	static CUtlVector<def_light_t*> hBatchFullscreen;
-
-	for ( int i = 0; i < 2; i++ )
-	{
-		FOR_EACH_VEC_FAST( def_light_t*, m_hPreSortedLights[ i * 2 ], l )
-		{
-			const bool  bSpot        = l->IsSpot();
-			const float flSizeFactor = bSpot ? 1.5f : 2.25f;
-
-			const Vector& viewVec = l->boundsCenter - m_vecViewOrigin;
-			const float   flDot   = DotProduct( m_vecForward, viewVec.Normalized() );
-
-			float flCoverageFactor = 0.0f;
-			if ( l->flDistance_ViewOrigin < ( l->flRadius * 1.35f + zNear + 32.0f ) )
-			{
-				flCoverageFactor = 2.0f;
-			}
-			else if ( flDot > 0.0f )
-			{
-				flCoverageFactor = flSizeFactor * l->flRadius / l->flDistance_ViewOrigin * flDot;
-			}
-
-			if ( flCoverageFactor > 1 )
-				hBatchFullscreen.AddToTail( l );
-		}
-		FOR_EACH_VEC_FAST_END
-
-		if ( hBatchFullscreen.Count() > 0 )
-		{
-			FOR_EACH_VEC_FAST( def_light_t*, hBatchFullscreen, l )
-			{
-#if DEBUG
-				Assert( m_hPreSortedLights[ i * 2 ].FindAndRemove( l ) );
-#else
-				m_hPreSortedLights[i * 2].FindAndRemove( l );
-#endif
-				m_hPreSortedLights[i * 2 + 1].AddToTail( l );
-			}
-			FOR_EACH_VEC_FAST_END
-		}
-
-		hBatchFullscreen.RemoveAll();
-	}
-#endif
-
-	m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Sort( LightDistanceCompare );
-	m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Sort( LightDistanceCompare );
 }
 
 FORCEINLINE float CLightingManager::DoLightStyle( def_light_t* l )
@@ -2320,10 +1264,8 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 #endif
 	}
 
-	static bool s_bHadLightStats = false;
-	if ( r_deferred_light_stats.GetBool() )
+	if ( r_deferred_light_stats.GetBool() && debugoverlay )
 	{
-		s_bHadLightStats = true;
 		Assert( iNumLightTypes == 2 );
 
 		const char* pszFilterName = "UNKNOWN FILTER";
@@ -2368,18 +1310,30 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 		const int nSlotsAssigned = GetStaticAtlasSlotCount();
 		const int nPointSlotsAssigned = GetStaticPointAtlasSlotCount();
 
-		engine->Con_NPrintf( 10, "=== DEFERRED LIGHTING ===" );
-		engine->Con_NPrintf( 11, "Lights: %i in map, %i visible | Drawn: %i simple, %i shadow, %i cookie",
-		                     m_hDeferredLights.Count(), m_hRenderLights.Count(),
-		                     iDrawnSimple, iDrawnShadowed, iDrawnCookied );
-		engine->Con_NPrintf( 12, "  Point - world: %i, fullscreen: %i | Spot - world: %i, fullscreen: %i",
-		                     m_hPreSortedLights[LSORT_POINT_WORLD].Count(),
-		                     m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Count(),
-		                     m_hPreSortedLights[LSORT_SPOT_WORLD].Count(),
-		                     m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Count() );
+		int nLine = 0;
+		auto PrintStatLine = [&]( const char *pFormat, ... )
+		{
+			char szText[256];
+			va_list args;
+			va_start( args, pFormat );
+			V_vsnprintf( szText, sizeof( szText ), pFormat, args );
+			va_end( args );
 
-		engine->Con_NPrintf( 13, "=== SHADOWING & CULLING ===" );
-		engine->Con_NPrintf( 14, "Filter: %s - %s", pszProfile, pszFilterName );
+			debugoverlay->AddScreenTextOverlay( 0.70f, 0.35f, nLine++, 0.0f, 255, 255, 255, 255, szText );
+		};
+
+		PrintStatLine( "=== DEFERRED LIGHTING ===" );
+		PrintStatLine( "Lights: %i in map, %i visible | Drawn: %i simple, %i shadow, %i cookie",
+		               m_hDeferredLights.Count(), m_hRenderLights.Count(),
+		               iDrawnSimple, iDrawnShadowed, iDrawnCookied );
+		PrintStatLine( "  Point - world: %i, fullscreen: %i | Spot - world: %i, fullscreen: %i",
+		               m_hPreSortedLights[LSORT_POINT_WORLD].Count(),
+		               m_hPreSortedLights[LSORT_POINT_FULLSCREEN].Count(),
+		               m_hPreSortedLights[LSORT_SPOT_WORLD].Count(),
+		               m_hPreSortedLights[LSORT_SPOT_FULLSCREEN].Count() );
+
+		PrintStatLine( "=== SHADOWING & CULLING ===" );
+		PrintStatLine( "Filter: %s - %s", pszProfile, pszFilterName );
 
 		if ( r_deferred_csm_cull_convex.GetBool() )
 		{
@@ -2389,117 +1343,31 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			const float flPct0 = ( g_CSMCullStats.nTested[0] > 0 ) ? ( g_CSMCullStats.nCulled[0] * 100.0f / (float)g_CSMCullStats.nTested[0] ) : 0.0f;
 			const float flPct1 = ( g_CSMCullStats.nTested[1] > 0 ) ? ( g_CSMCullStats.nCulled[1] * 100.0f / (float)g_CSMCullStats.nTested[1] ) : 0.0f;
 
-			engine->Con_NPrintf( 15, "CSM Convex Culling: ON - Culled: %i / %i (%.1f%%)",
-			                     nTotalCulled, nTotalTested, flPct );
-			engine->Con_NPrintf( 16, "  Cascade 0: %i / %i (%.1f%%) | Cascade 1: %i / %i (%.1f%%)",
-			                     g_CSMCullStats.nCulled[0], g_CSMCullStats.nTested[0], flPct0,
-			                     g_CSMCullStats.nCulled[1], g_CSMCullStats.nTested[1], flPct1 );
+			PrintStatLine( "CSM Convex Culling: ON - Culled: %i / %i (%.1f%%)",
+			               nTotalCulled, nTotalTested, flPct );
+			PrintStatLine( "  Cascade 0: %i / %i (%.1f%%) | Cascade 1: %i / %i (%.1f%%)",
+			               g_CSMCullStats.nCulled[0], g_CSMCullStats.nTested[0], flPct0,
+			               g_CSMCullStats.nCulled[1], g_CSMCullStats.nTested[1], flPct1 );
 		}
 		else
 		{
-			engine->Con_NPrintf( 15, "CSM Convex Culling: OFF" );
-			engine->Con_NPrintf( 16, "" );
+			PrintStatLine( "CSM Convex Culling: OFF" );
 		}
 
-		engine->Con_NPrintf( 17, "Shadow Cache: %s | Views: %i cached (skipped), %i rendered",
-		                     r_deferred_shadow_cache.GetBool() ? "ON" : "OFF",
-		                     g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
-		engine->Con_NPrintf( 18, "  Atlas slots: %i / %i (spot) | %i / %i (point)",
-		                     nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS,
-		                     nPointSlotsAssigned, MAX_STATIC_POINT_SHADOW_SLOTS );
+		PrintStatLine( "Shadow Cache: %s | Views: %i cached (skipped), %i rendered",
+		               r_deferred_shadow_cache.GetBool() ? "ON" : "OFF",
+		               g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
+		PrintStatLine( "  Atlas slots: %i / %i (spot) | %i / %i (point)",
+		               nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS,
+		               nPointSlotsAssigned, MAX_STATIC_POINT_SHADOW_SLOTS );
 
-		engine->Con_NPrintf( 19, "=== RENDER PASSES ===" );
-		engine->Con_NPrintf( 20, "Fullscreen passes - point: %i, spot: %i (total: %i)",
-		                     iPassesDrawnFullscreen[0], iPassesDrawnFullscreen[1],
-		                     iPassesDrawnFullscreen[0] + iPassesDrawnFullscreen[1] );
-		engine->Con_NPrintf( 21, "Volumetric passes - world: %i, fullscreen: %i",
-		                     iPassesVolumetrics[0], iPassesVolumetrics[1] );
-
-		engine->Con_NPrintf( 22, "" );
-		engine->Con_NPrintf( 23, "" );
-		engine->Con_NPrintf( 24, "" );
+		PrintStatLine( "=== RENDER PASSES ===" );
+		PrintStatLine( "Fullscreen passes - point: %i, spot: %i (total: %i)",
+		               iPassesDrawnFullscreen[0], iPassesDrawnFullscreen[1],
+		               iPassesDrawnFullscreen[0] + iPassesDrawnFullscreen[1] );
+		PrintStatLine( "Volumetric passes - world: %i, fullscreen: %i",
+		               iPassesVolumetrics[0], iPassesVolumetrics[1] );
 	}
-	else if ( s_bHadLightStats )
-	{
-		s_bHadLightStats = false;
-		for ( int i = 10; i <= 24; ++i )
-		{
-			engine->Con_NPrintf( i, "" );
-		}
-	}
-}
-
-void CLightingManager::RenderVolumetrics( const CViewSetup& view )
-{
-	if ( !m_bDrawVolumetrics )
-		return;
-
-	const float flIntensity = r_deferred_volumetric_intensity.GetFloat();
-	if ( flIntensity <= 0.0f )
-		return;
-
-	ITexture* pVolumBuffer0 = GetDefRT_VolumetricsBuffer( 0 );
-	ITexture* pVolumBuffer1 = GetDefRT_VolumetricsBuffer( 1 );
-	const int rtW = pVolumBuffer0 ? pVolumBuffer0->GetActualWidth() : ( view.width / 4 );
-	const int rtH = pVolumBuffer0 ? pVolumBuffer0->GetActualHeight() : ( view.height / 4 );
-
-	CMatRenderContextPtr pRenderContext( materials );
-
-	const float flBlur = r_deferred_volumetric_blur.GetFloat();
-	if ( flBlur > 0.0f )
-	{
-		IMaterial* pMatBlurX = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_X );
-		IMaterial* pMatBlurY = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_BLUR_G6_Y );
-
-		if ( pMatBlurX != NULL && pMatBlurY != NULL )
-		{
-			bool bFoundX = false, bFoundY = false;
-			IMaterialVar* pBlurSizeX = pMatBlurX->FindVar( "$BLURSIZE", &bFoundX, true );
-			IMaterialVar* pBlurSizeY = pMatBlurY->FindVar( "$BLURSIZE", &bFoundY, true );
-
-			const int iPasses = Clamp( RoundFloatToInt( flBlur * 3.0f ), 2, 4 );
-			static const float flPassScale[4] = { 1.5f, 3.5f, 7.0f, 12.0f };
-
-			for ( int p = 0; p < iPasses; p++ )
-			{
-				const float flStep = flPassScale[p] * flBlur;
-				if ( pBlurSizeX != NULL )
-					pBlurSizeX->SetFloatValue( flStep );
-				if ( pBlurSizeY != NULL )
-					pBlurSizeY->SetFloatValue( flStep );
-
-				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer1, 0, 0, view.width / 4, view.height / 4 );
-				pRenderContext->DrawScreenSpaceRectangle( pMatBlurX,
-				                                          0, 0, view.width / 4, view.height / 4,
-				                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
-				                                          rtW, rtH );
-				pRenderContext->PopRenderTargetAndViewport();
-
-				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
-				pRenderContext->DrawScreenSpaceRectangle( pMatBlurY,
-				                                          0, 0, view.width / 4, view.height / 4,
-				                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
-				                                          rtW, rtH );
-				pRenderContext->PopRenderTargetAndViewport();
-			}
-		}
-	}
-
-	IMaterial* pMatBlend = GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_BLEND );
-	if ( pMatBlend != NULL )
-	{
-		bool bFound = false;
-		IMaterialVar* pIntensityVar = pMatBlend->FindVar( "$INTENSITY", &bFound, true );
-		if ( pIntensityVar != NULL )
-		{
-			pIntensityVar->SetFloatValue( flIntensity );
-		}
-	}
-
-	pRenderContext->DrawScreenSpaceRectangle( pMatBlend,
-	                                          0, 0, view.width, view.height,
-	                                          0, 0, view.width / 4 - 1, view.height / 4 - 1,
-	                                          rtW, rtH );
 }
 
 void CLightingManager::DoSceneDebug()

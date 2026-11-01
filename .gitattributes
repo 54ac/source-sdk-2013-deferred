@@ -1,8 +1,10 @@
+* text=auto eol=lf
+
 buildallprojects text
 vpc binary
 
-*.sh text
-*.bat text
+*.sh text eol=lf
+*.bat text eol=crlf
 *.txt text
 *.c text
 *.h text
@@ -33,7 +35,7 @@ vpc binary
 *.asm text
 
 .gitignore text
-README.md text
+README.md text eol=lf
 CONTRIBUTING text
 LICENSE text
 

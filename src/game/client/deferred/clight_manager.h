@@ -1,6 +1,7 @@
 #ifndef C_LIGHT_MANAGER_H
 #define C_LIGHT_MANAGER_H
 
+#include "deferred/deferred_shared_common.h"
 #include "deferred/def_light_t.h"
 #include "cliententitylist.h"
 #include "const.h"
@@ -8,6 +9,8 @@
 class CViewSetup;
 class CDeferredViewRender;
 class C_BaseEntity;
+class ConVar;
+extern ConVar r_deferred_shadow_cache;
 #if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t;
 #endif
@@ -80,6 +83,7 @@ public:
 
 	int AssignStaticAtlasSlot( def_light_t *l );
 	void FreeStaticAtlasSlot( def_light_t *l );
+	void ResetStaticAtlasSlots();
 	void CheckDynamicEntityIntersections();
 	virtual void OnEntityCreated( C_BaseEntity *pEntity ) OVERRIDE;
 	virtual void OnEntityDeleted( C_BaseEntity *pEntity ) OVERRIDE;

@@ -30,15 +30,20 @@ set SDKArgs=-local
 if "%1" == "" goto usage
 set inputbase=%1
 
-REM ignore -dx9_30
-if /i "%6" == "-dx9_30" shift /6
+set IS20=
+echo %inputbase% | findstr /i "20b" >nul && set IS20=1
+if /i "%6" == "-force20b" set IS20=1
+if /i "%7" == "-force20b" set IS20=1
+if /i "%6" == "-force30" set IS20=
+if /i "%7" == "-force30" set IS20=
 
-if /i "%6" == "-force30" goto set_force30_arg
-goto set_force_end
-:set_force30_arg
-			set IS30=1
-			goto set_force_end
-:set_force_end
+
+
+
+
+
+			
+
 
 if /i "%2" == "-game" goto set_mod_args
 goto build_shaders
@@ -111,9 +116,9 @@ if not exist %shaderDir% mkdir %shaderDir%
 if not exist %shaderDir%\fxc mkdir %shaderDir%\fxc
 REM Nuke some files that we will add to later.
 
-set SHVER=20b
-if defined IS30 (
-	set SHVER=30
+set SHVER=30
+if defined IS20 (
+	set SHVER=20b
 )
 
 title %1 %SHVER%
@@ -124,7 +129,9 @@ echo Building for %SHVER%...
 
 set DYNAMIC=
 if "%dynamic_shaders%" == "1" set DYNAMIC=-Dynamic
-powershell -NoLogo -ExecutionPolicy Bypass -Command "%SrcDirBase%\devtools\bin\process_shaders.ps1 %DYNAMIC% -Version %SHVER% '%inputbase%.txt'"
+set THREADS=
+if not "%NUMBER_OF_PROCESSORS%" == "" set THREADS=-Threads %NUMBER_OF_PROCESSORS%
+powershell -NoLogo -ExecutionPolicy Bypass -Command "%SrcDirBase%\devtools\bin\process_shaders.ps1 %DYNAMIC% %THREADS% -Version %SHVER% '%inputbase%.txt'"
 
 REM ****************
 REM PC Shader copy
