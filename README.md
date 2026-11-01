@@ -1,3 +1,9 @@
+# Note
+
+This is the `source-sdk-vs2022-deferred` fork as of 2024, from before the Source SDK anniversary update. It is archived here in case anyone still needs it. A more recent rebase with tons of additional fixes is in the `master` branch. Old readme follows below.
+
+---
+
 ## Source SDK 2013 VS2022 Deferred
 
 ### What is this?
