@@ -7,7 +7,7 @@
 // DYNAMIC:		"SKINNING"				"0..1"
 // DYNAMIC:		"MORPHING"				"0..1"
 
-// DYNAMIC:		"SHADOW_MODE"			"0..3"
+// DYNAMIC:		"SHADOW_MODE"			"0..2"
 // DYNAMIC:		"RADIOSITY"				"0..1"
 
 #include "common_vs_fxc.h"
@@ -25,7 +25,6 @@ sampler2D morphSampler						: register( s0 );
 
 #endif
 
-#if SHADOW_MODE != DEFERRED_SHADOW_MODE_DPSM
 
 const float3 g_vecShadowForward				: register( SHADER_SPECIFIC_CONST_0 );
 const float4 g_vecSlopeData					: register( SHADER_SPECIFIC_CONST_1 );
@@ -35,7 +34,7 @@ const float3 g_vecOrigin					: register( SHADER_SPECIFIC_CONST_2 );
 #define SLOPESCALE_MAX g_vecSlopeData.y
 #define PROJECTION_DEPTH g_vecSlopeData.w
 
-#endif
+
 
 #if SHADOWMAPPING_USE_COLOR
 
@@ -88,9 +87,6 @@ struct VS_OUTPUT
 #	endif
 #endif
 
-#if SHADOW_MODE == DEFERRED_SHADOW_MODE_DPSM
-	float flBack					: TEXCOORD2;
-#endif
 
 #if RADIOSITY
 	float3 vecNormal				: TEXCOORD3;
@@ -148,22 +144,6 @@ VS_OUTPUT main( const VS_INPUT In )
 
 	Out.vProjPos = mul( float4( worldPos, 1 ), cViewProj );
 
-#elif SHADOW_MODE == DEFERRED_SHADOW_MODE_DPSM
-
-	float3 orthoPos = mul( float4( worldPos, 1 ), cViewProj ).xyz;
-
-	float dist = length( orthoPos );
-	orthoPos = orthoPos / dist;
-
-	dist += SHADOWMAPPINGTWEAK_DPSM_EPSILON;
-
-	Out.flBack = orthoPos.z;
-
-	float denom = max( 0.001f, orthoPos.z + 1.0f );
-	Out.vProjPos.xy = orthoPos.xy / denom;
-	Out.vProjPos.z = min( 0.999f, dist );
-	Out.vProjPos.w = 1;
-
 #else
 
 	float viewFwdDot = abs( dot( g_vecShadowForward, worldNormal ) );
@@ -194,9 +174,6 @@ VS_OUTPUT main( const VS_INPUT In )
 	float dotFwd = dot( g_vecShadowForward, worldDelta );
 	Out.flDepth = dotFwd * PROJECTION_DEPTH;
 
-#elif SHADOW_MODE == DEFERRED_SHADOW_MODE_DPSM
-
-	Out.flDepth = dist;
 
 #elif SHADOW_MODE == DEFERRED_SHADOW_MODE_TETRA
 

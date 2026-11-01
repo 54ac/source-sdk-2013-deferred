@@ -125,7 +125,7 @@ FORCEINLINE void CommitPointLightingConstants( IShaderDynamicAPI *pShaderAPI, in
 	pShaderAPI->SetPixelShaderConstant( iConstantRegister, tweaks );
 }
 
-FORCEINLINE void CommitShadowProjectionConstants_DPSM( IShaderDynamicAPI *pShaderAPI,
+FORCEINLINE void CommitShadowProjectionConstants_Point( IShaderDynamicAPI *pShaderAPI,
 	int iFirstRegister )
 {
 	const shadowData_general_t& data = GetDeferredExt()->GetShadowData_General();

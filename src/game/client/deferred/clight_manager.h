@@ -2,6 +2,8 @@
 #define C_LIGHT_MANAGER_H
 
 #include "deferred/def_light_t.h"
+#include "cliententitylist.h"
+#include "const.h"
 
 class CViewSetup;
 class CDeferredViewRender;
@@ -10,7 +12,7 @@ class C_BaseEntity;
 struct def_light_presortdatax4_t;
 #endif
 
-class CLightingManager : public CAutoGameSystemPerFrame
+class CLightingManager : public CAutoGameSystemPerFrame, public IClientEntityListener
 {
 	typedef CAutoGameSystemPerFrame BaseClass;
 public:
@@ -79,9 +81,13 @@ public:
 	int AssignStaticAtlasSlot( def_light_t *l );
 	void FreeStaticAtlasSlot( def_light_t *l );
 	void CheckDynamicEntityIntersections();
+	virtual void OnEntityCreated( C_BaseEntity *pEntity ) OVERRIDE;
+	virtual void OnEntityDeleted( C_BaseEntity *pEntity ) OVERRIDE;
 	void OnEntityRemoved( C_BaseEntity *pEnt );
+	bool DoesLightIntersectBox( def_light_t *l, const Vector &vecCenter, float flPropRadius, const Vector &mins, const Vector &maxs );
 	bool DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt );
 	int GetStaticAtlasSlotCount() const;
+	int GetStaticPointAtlasSlotCount() const;
 	void ReevaluateStaticAtlasSlots();
 
 	void ClearTmpLists();
@@ -151,6 +157,15 @@ private:
 	Vector m_vecForward;
 	float m_flzNear;
 	bool m_bDrawVolumetrics;
+	struct CachedPropState_t
+	{
+		Vector vecOrigin;
+		Vector vecCenter;
+		QAngle angAngles;
+		float  flRadius;
+		bool   bActive;
+	};
+	CachedPropState_t *m_pCachedPropStates;
 
 	static int __cdecl LightDistanceCompare( def_light_t* const* a, def_light_t* const* b );
 	FORCEINLINE float DoLightStyle( def_light_t *l );

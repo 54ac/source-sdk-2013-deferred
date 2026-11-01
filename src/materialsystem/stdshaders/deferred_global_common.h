@@ -181,11 +181,9 @@
  */
 #define	DEFERRED_SHADOW_MODE_ORTHO 0
 #define	DEFERRED_SHADOW_MODE_PROJECTED 1
-#define	DEFERRED_SHADOW_MODE_DPSM 2
-#define	DEFERRED_SHADOW_MODE_TETRA 3
+#define	DEFERRED_SHADOW_MODE_TETRA 2
 
-#define	POINT_SHADOW_DPSM 0
-#define	POINT_SHADOW_TETRA 1
+#define	POINT_SHADOW_TETRA 0
 
 
 /* Shadowmapping type and filter
@@ -236,7 +234,6 @@
 
 /* Global hard coded filter tweaks
  */
-#define SHADOWMAPPINGTWEAK_DPSM_EPSILON 0.0015f
 
 
 /* Lighting tweaks

@@ -601,26 +601,6 @@ float PerformCascadedShadow( sampler sShadowMap, float3 worldPos,
 	return flLight;
 }
 
-float PerformDualParaboloidShadow( sampler shadowSampler, float3 vecLightToGeometry,
-	float4 offsets_0, float4 offset_1,
-	float lightToGeoDistance, float radius, float shadowMin )
-{
-	vecLightToGeometry = vecLightToGeometry / lightToGeoDistance;
-
-	bool bBack = vecLightToGeometry.z < 0;
-
-	vecLightToGeometry.z = abs(vecLightToGeometry.z) + 1;
-	vecLightToGeometry.xy = vecLightToGeometry.xy / vecLightToGeometry.z;
-
-	lightToGeoDistance = min( 0.99f, lightToGeoDistance/radius );
-
-	vecLightToGeometry.y = vecLightToGeometry.y * 0.2475f + lerp( 0.25f, 0.75f, bBack );
-	vecLightToGeometry.x = vecLightToGeometry.x * lerp( -0.495f, 0.495f, bBack ) + 0.5f;
-
-	float3 uvw = float3( vecLightToGeometry.xy, lightToGeoDistance );
-
-	return max( shadowMin, PerformShadowMapping( shadowSampler, uvw, offsets_0, offset_1 ) );
-}
 
 float PerformTetrahedralShadow( sampler shadowSampler, float3 vecLightToGeometry,
 	float4 offsets_0, float4 offset_1,

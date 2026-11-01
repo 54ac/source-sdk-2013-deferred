@@ -1,14 +1,12 @@
 
 // STATIC:		"USEWORLDTRANSFORM"			"0..1"
 
-// DYNAMIC:		"POINT_SHADOW_MODE"		"0..1"
 // DYNAMIC:		"NUM_SHADOWED_COOKIE"		"0..2"
 // DYNAMIC:		"NUM_SHADOWED"				"0..3"
 // DYNAMIC:		"NUM_COOKIE"				"0..3"
 // DYNAMIC:		"NUM_SIMPLE"				"0..10"
 
 // SKIP:		!$NUM_SHADOWED_COOKIE && !$NUM_SHADOWED && !$NUM_COOKIE && !$NUM_SIMPLE
-// SKIP:		!$NUM_SHADOWED_COOKIE && !$NUM_SHADOWED && $POINT_SHADOW_MODE
 
 // SKIP:		$USEWORLDTRANSFORM && $NUM_SHADOWED_COOKIE && $NUM_SHADOWED
 // SKIP:		$USEWORLDTRANSFORM && $NUM_SHADOWED_COOKIE && $NUM_COOKIE
@@ -203,15 +201,10 @@ PS_OUTPUT main( const PS_INPUT In )
 		float distLocal = length( vecDeltaLocal );
 		vecDeltaLocal = mul3x3( vecDeltaLocal, matRotation );
 
-#if POINT_SHADOW_MODE == POINT_SHADOW_TETRA
 		localLight.y *= PerformTetrahedralShadow( sMixedSampler[ iSamplerIndex ],
 			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
 			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
-#else
-		localLight.y *= PerformDualParaboloidShadow( sMixedSampler[ iSamplerIndex ],
-			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
-#endif
+
 
 		vecDelta = mul3x3( vecDelta, matRotation );
 
@@ -243,15 +236,10 @@ PS_OUTPUT main( const PS_INPUT In )
 		float distLocal = length( vecDeltaLocal );
 		vecDeltaLocal = mul3x3( vecDeltaLocal, matRotation );
 
-#if POINT_SHADOW_MODE == POINT_SHADOW_TETRA
 		localLight.y *= PerformTetrahedralShadow( sMixedSampler[ iSamplerIndex ],
 			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
 			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
-#else
-		localLight.y *= PerformDualParaboloidShadow( sMixedSampler[ iSamplerIndex ],
-			vecDeltaLocal, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			distLocal, g_flMixedData[ iDataIndex ].w, g_flMixedData[ iDataIndex + 2 ].w );
-#endif
+
 
 		flLight += DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,

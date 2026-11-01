@@ -39,6 +39,7 @@ ITexture *GetShadowColorRT_Proj( int index );
 ITexture *GetShadowDepthRT_Proj( int index );
 
 ITexture *GetShadowColorRT_Static( int index );
+ITexture *GetShadowColorRT_StaticPoint( int index );
 
 ITexture *GetShadowColorRT_DP( int index );
 ITexture *GetShadowDepthRT_DP( int index );

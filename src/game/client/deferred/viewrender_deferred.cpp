@@ -295,30 +295,6 @@ private:
 	int iCascadeIndex;
 };
 
-class CDualParaboloidShadowView : public CBaseShadowView
-{
-	DECLARE_CLASS( CDualParaboloidShadowView, CBaseShadowView );
-public:
-	CDualParaboloidShadowView(CViewRender *pMainView,
-		def_light_t *pLight,
-		const bool &bSecondary)
-		: CBaseShadowView( pMainView, pLight )
-	{
-			m_bSecondary = bSecondary;
-	}
-	virtual void	PushView( float waterHeight );
-	virtual void	PopView();
-
-	virtual void	CalcShadowView();
-
-	virtual int		GetShadowMode(){
-		return DEFERRED_SHADOW_MODE_DPSM;
-	};
-
-private:
-	bool m_bSecondary;
-};
-
 class CTetrahedralShadowView : public CBaseShadowView
 {
 	DECLARE_CLASS( CTetrahedralShadowView, CBaseShadowView );
@@ -1703,42 +1679,6 @@ void COrthoShadowView::CommitData()
 	pRenderContext->SetIntRenderingParameter( INT_RENDERPARM_DEFERRED_SHADOW_INDEX, iCascadeIndex );
 }
 
-void CDualParaboloidShadowView::PushView( float waterHeight )
-{
-	BaseClass::PushView( waterHeight );
-}
-
-void CDualParaboloidShadowView::PopView()
-{
-	BaseClass::PopView();
-}
-
-void CDualParaboloidShadowView::CalcShadowView()
-{
-	float flRadius = m_pLight->flRadius;
-
-	m_bOrtho = true;
-	m_OrthoTop = m_OrthoLeft = -flRadius;
-	m_OrthoBottom = m_OrthoRight = flRadius;
-
-	const int dpsmRes = GetShadowResolution_Point();
-
-	width = dpsmRes;
-	height = dpsmRes;
-
-	zNear = zNearViewmodel = 0;
-	zFar = zFarViewmodel = flRadius;
-
-	if ( m_bSecondary )
-	{
-		y = dpsmRes;
-
-		Vector fwd, up;
-		AngleVectors( angles, &fwd, NULL, &up );
-		VectorAngles( -fwd, up, angles );
-	}
-}
-
 void CTetrahedralShadowView::CalcShadowView()
 {
 	static const Vector s_vecTetraForward[4] =
@@ -1762,7 +1702,9 @@ void CTetrahedralShadowView::CalcShadowView()
 	VectorRotate( s_vecTetraUp[m_iFaceIndex], m_pLight->ang, upWorld );
 	VectorAngles( fwdWorld, upWorld, angles );
 
-	const int pointRes = GetShadowResolution_Point();
+	const int pointRes = ( m_pLight && m_pLight->IsStatic() && m_pLight->HasValidAtlasSlot() )
+		? STATIC_POINT_SHADOW_TILE_RES
+		: GetShadowResolution_Point();
 
 	m_bOrtho = false;
 	fov = fovViewmodel = 144.0f;
@@ -2682,6 +2624,9 @@ void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesi
 	extern ConVar r_deferred_shadow_cache;
 	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() && l->HasValidAtlasSlot() )
 	{
+		if ( !engine->IsInGame() || engine->IsLevelMainMenuBackground() || engine->IsDrawingLoadingImage() )
+			return;
+
 		if ( !l->IsShadowDirty() )
 		{
 			g_nShadowViewsSkippedThisFrame++;
@@ -2713,7 +2658,44 @@ void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesi
 		return;
 	}
 
-	g_nShadowViewsRenderedThisFrame++;
+	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsPoint() && l->HasValidAtlasSlot() )
+	{
+		if ( !engine->IsInGame() || engine->IsLevelMainMenuBackground() || engine->IsDrawingLoadingImage() )
+			return;
+
+		if ( !l->IsShadowDirty() )
+		{
+			g_nShadowViewsSkippedThisFrame += 4;
+			return;
+		}
+
+		g_nShadowViewsRenderedThisFrame += 4;
+
+		const int slot = l->m_nCachedAtlasSlot;
+
+		CViewSetup setup;
+		setup.origin = l->pos;
+		setup.angles = l->ang;
+		setup.m_bOrtho = false;
+		setup.m_flAspectRatio = 1;
+		setup.x = 0;
+		setup.y = 0;
+		setup.width = STATIC_POINT_SHADOW_TILE_RES;
+		setup.height = STATIC_POINT_SHADOW_TILE_RES;
+
+		Vector origins[2] = { view.origin, l->pos };
+		render->ViewSetupVis( false, 2, origins );
+
+		for ( int iFace = 0; iFace < 4; iFace++ )
+		{
+			CRefPtr<CTetrahedralShadowView> pTetraView = new CTetrahedralShadowView( this, l, iDesiredShadowmap, iFace );
+			pTetraView->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_StaticPoint( slot ) );
+			AddViewToScene( pTetraView );
+		}
+
+		l->SetShadowDirty( false );
+		return;
+	}
 
 	CViewSetup setup;
 	setup.origin = l->pos;
@@ -2734,29 +2716,18 @@ void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesi
 		break;
 	case DEFLIGHTTYPE_POINT:
 		{
-			if ( r_deferred_point_shadow_mode.GetInt() == POINT_SHADOW_DPSM )
+			g_nShadowViewsRenderedThisFrame += 4;
+			for ( int iFace = 0; iFace < 4; iFace++ )
 			{
-				CRefPtr<CDualParaboloidShadowView> pDPView0 = new CDualParaboloidShadowView( this, l, false );
-				pDPView0->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
-				AddViewToScene( pDPView0 );
-
-				CRefPtr<CDualParaboloidShadowView> pDPView1 = new CDualParaboloidShadowView( this, l, true );
-				pDPView1->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
-				AddViewToScene( pDPView1 );
-			}
-			else
-			{
-				for ( int iFace = 0; iFace < 4; iFace++ )
-				{
-					CRefPtr<CTetrahedralShadowView> pTetraView = new CTetrahedralShadowView( this, l, iDesiredShadowmap, iFace );
-					pTetraView->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
-					AddViewToScene( pTetraView );
-				}
+				CRefPtr<CTetrahedralShadowView> pTetraView = new CTetrahedralShadowView( this, l, iDesiredShadowmap, iFace );
+				pTetraView->Setup( setup, GetShadowDepthRT_DP( iDesiredShadowmap ), GetShadowColorRT_DP( iDesiredShadowmap ) );
+				AddViewToScene( pTetraView );
 			}
 		}
 		break;
 	case DEFLIGHTTYPE_SPOT:
 		{
+			g_nShadowViewsRenderedThisFrame++;
 			CRefPtr<CSpotLightShadowView> pProjView = new CSpotLightShadowView( this, l, iDesiredShadowmap );
 
 			pProjView->Setup( setup, GetShadowDepthRT_Proj( iDesiredShadowmap ), GetShadowColorRT_Proj( iDesiredShadowmap ) );

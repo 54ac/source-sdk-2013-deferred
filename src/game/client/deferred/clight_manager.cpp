@@ -6,6 +6,7 @@
 #include "deferred/deferred_shared_common.h"
 #include "deferred/vgui/vgui_deferred.h"
 #include "deferred/deferred_rt.h"
+#include "physics_shared.h"
 
 static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, float flOldValue );
 ConVar r_deferred_shadow_cache( "r_deferred_shadow_cache", "1", FCVAR_ARCHIVE, "Static shadow map caching for stationary world lights", OnDeferredShadowCacheChanged );
@@ -23,6 +24,7 @@ ConVar r_deferred_shadow_cache( "r_deferred_shadow_cache", "1", FCVAR_ARCHIVE, "
 
 static CLightingManager __g_lightingMan;
 static bool s_bAtlasSlotUsed[ MAX_STATIC_SHADOW_ATLAS_SLOTS ];
+static bool s_bAtlasSlotUsed_Point[ MAX_STATIC_POINT_SHADOW_SLOTS ];
 
 CLightingManager* GetLightingManager()
 {
@@ -47,7 +49,9 @@ CLightingManager::CLightingManager() : BaseClass( "LightingManagerSystem" )
 	m_vecViewOrigin.Init();
 	m_vecForward.Init();
 	m_flzNear          = 0;
+	m_pCachedPropStates = NULL;
 	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
+	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
 	m_bDrawVolumetrics = false;
 #if DEFCFG_USE_SSE
 	m_pSortDataX4     = NULL;
@@ -60,11 +64,27 @@ CLightingManager::~CLightingManager() {}
 bool CLightingManager::Init()
 {
 	materials->AddReleaseFunc( LightingResourceRelease );
+	if ( cl_entitylist )
+	{
+		cl_entitylist->AddListenerEntity( this );
+	}
+	m_pCachedPropStates = new CachedPropState_t[ NUM_ENT_ENTRIES ];
+	Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
 	return true;
 }
 
 void CLightingManager::Shutdown()
 {
+	if ( cl_entitylist )
+	{
+		cl_entitylist->RemoveListenerEntity( this );
+	}
+	if ( m_pCachedPropStates )
+	{
+		delete[] m_pCachedPropStates;
+		m_pCachedPropStates = NULL;
+	}
+
 	for ( int i = m_hDeferredTempLights.Count() - 1; i >= 0; i-- )
 	{
 		def_light_temp_t* light = m_hDeferredTempLights[i];
@@ -76,6 +96,7 @@ void CLightingManager::Shutdown()
 	Assert( m_hDeferredLights.Count() == 0 );
 	materials->RemoveReleaseFunc( LightingResourceRelease );
 	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
+	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
 
 #if DEFCFG_USE_SSE
 	if ( m_pSortDataX4 != NULL )
@@ -89,6 +110,11 @@ void CLightingManager::Shutdown()
 void CLightingManager::LevelInitPostEntity()
 {
 	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
+	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	if ( m_pCachedPropStates )
+	{
+		Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
+	}
 
 	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
 	{
@@ -97,11 +123,10 @@ void CLightingManager::LevelInitPostEntity()
 			continue;
 
 		l->m_nCachedAtlasSlot = -1;
-		if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() )
+		if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) )
 		{
 			AssignStaticAtlasSlot( l );
 			l->SetShadowDirty( true );
-			l->m_bEntityInsideLastFrame = false;
 		}
 	}
 }
@@ -128,6 +153,11 @@ void CLightingManager::LevelShutdownPostEntity()
 	}
 
 	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
+	Q_memset( s_bAtlasSlotUsed_Point, 0, sizeof( s_bAtlasSlotUsed_Point ) );
+	if ( m_pCachedPropStates )
+	{
+		Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
+	}
 }
 
 int CLightingManager::AssignStaticAtlasSlot( def_light_t *l )
@@ -137,13 +167,28 @@ int CLightingManager::AssignStaticAtlasSlot( def_light_t *l )
 
 	FreeStaticAtlasSlot( l );
 
-	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+	if ( l->IsPoint() )
 	{
-		if ( !s_bAtlasSlotUsed[i] )
+		for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
 		{
-			s_bAtlasSlotUsed[i] = true;
-			l->m_nCachedAtlasSlot = i;
-			return i;
+			if ( !s_bAtlasSlotUsed_Point[i] )
+			{
+				s_bAtlasSlotUsed_Point[i] = true;
+				l->m_nCachedAtlasSlot = i;
+				return i;
+			}
+		}
+	}
+	else if ( l->IsSpot() )
+	{
+		for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+		{
+			if ( !s_bAtlasSlotUsed[i] )
+			{
+				s_bAtlasSlotUsed[i] = true;
+				l->m_nCachedAtlasSlot = i;
+				return i;
+			}
 		}
 	}
 
@@ -156,9 +201,19 @@ void CLightingManager::FreeStaticAtlasSlot( def_light_t *l )
 	if ( !l || !l->HasValidAtlasSlot() )
 		return;
 
-	if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_SHADOW_ATLAS_SLOTS )
+	if ( l->IsPoint() )
 	{
-		s_bAtlasSlotUsed[ l->m_nCachedAtlasSlot ] = false;
+		if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_POINT_SHADOW_SLOTS )
+		{
+			s_bAtlasSlotUsed_Point[ l->m_nCachedAtlasSlot ] = false;
+		}
+	}
+	else if ( l->IsSpot() )
+	{
+		if ( l->m_nCachedAtlasSlot >= 0 && l->m_nCachedAtlasSlot < MAX_STATIC_SHADOW_ATLAS_SLOTS )
+		{
+			s_bAtlasSlotUsed[ l->m_nCachedAtlasSlot ] = false;
+		}
 	}
 
 	l->m_nCachedAtlasSlot = -1;
@@ -175,14 +230,29 @@ int CLightingManager::GetStaticAtlasSlotCount() const
 	return count;
 }
 
+int CLightingManager::GetStaticPointAtlasSlotCount() const
+{
+	int count = 0;
+	for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
+	{
+		if ( s_bAtlasSlotUsed_Point[i] )
+			count++;
+	}
+	return count;
+}
+
 void CLightingManager::ReevaluateStaticAtlasSlots()
 {
 	if ( r_deferred_shadow_cache.GetBool() )
 	{
+		if ( m_pCachedPropStates )
+		{
+			Q_memset( m_pCachedPropStates, 0, sizeof( CachedPropState_t ) * NUM_ENT_ENTRIES );
+		}
 		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
 		{
 			def_light_t *l = m_hDeferredLights[i];
-			if ( l->IsStatic() && l->IsSpot() && !l->HasValidAtlasSlot() )
+			if ( l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && !l->HasValidAtlasSlot() )
 			{
 				AssignStaticAtlasSlot( l );
 				l->SetShadowDirty( true );
@@ -222,20 +292,12 @@ private:
 	bool m_bPrev;
 };
 
-bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt )
+bool CLightingManager::DoesLightIntersectBox( def_light_t *l, const Vector &vecCenter, float flPropRadius, const Vector &mins, const Vector &maxs )
 {
-	if ( !l || !pEnt )
+	if ( !l )
 		return false;
 
-	CAbsQueryScope scope;
-
-	Vector mins, maxs;
-	pEnt->GetRenderBoundsWorldspace( mins, maxs );
-
-	const Vector propCenter = pEnt->WorldSpaceCenter();
-	const float flPropRadius = pEnt->BoundingRadius();
-
-	const Vector vecToProp = propCenter - l->pos;
+	const Vector vecToProp = vecCenter - l->pos;
 	const float flDistSqr = vecToProp.LengthSqr();
 	const float flMaxDist = l->flRadius + flPropRadius;
 	if ( flDistSqr > ( flMaxDist * flMaxDist ) )
@@ -262,32 +324,148 @@ bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *p
 			return false;
 	}
 
-	return true;
+	CTraceFilterWorldOnly filter;
+	trace_t tr;
+	UTIL_TraceLine( l->pos, vecCenter, MASK_OPAQUE, &filter, &tr );
+	if ( tr.fraction >= 1.0f || tr.startsolid )
+		return true;
+
+	const Vector testPoints[4] = {
+		Vector( mins.x, mins.y, maxs.z ),
+		Vector( maxs.x, maxs.y, maxs.z ),
+		Vector( mins.x, maxs.y, mins.z ),
+		Vector( maxs.x, mins.y, mins.z )
+	};
+	for ( int p = 0; p < 4; p++ )
+	{
+		UTIL_TraceLine( l->pos, testPoints[p], MASK_OPAQUE, &filter, &tr );
+		if ( tr.fraction >= 1.0f )
+			return true;
+	}
+
+	return false;
+}
+
+bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt )
+{
+	if ( !l || !pEnt )
+		return false;
+
+	CAbsQueryScope scope;
+
+	Vector mins, maxs;
+	pEnt->GetRenderBoundsWorldspace( mins, maxs );
+
+	const Vector propCenter = pEnt->WorldSpaceCenter();
+	const float flPropRadius = pEnt->BoundingRadius();
+
+	return DoesLightIntersectBox( l, propCenter, flPropRadius, mins, maxs );
+}
+
+void CLightingManager::OnEntityCreated( C_BaseEntity *pEntity )
+{
+	if ( !pEntity )
+		return;
+
+	const int entIdx = pEntity->entindex();
+	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates )
+	{
+		m_pCachedPropStates[entIdx].bActive = false;
+	}
+}
+
+void CLightingManager::OnEntityDeleted( C_BaseEntity *pEnt )
+{
+	OnEntityRemoved( pEnt );
 }
 
 void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
 {
-}
+	if ( !r_deferred_shadow_cache.GetBool() || !pEnt )
+		return;
 
-static const float MIN_SHADOW_DIRTY_SPEED_SQR = 4.0f;
-static const float MIN_SHADOW_DIRTY_ANG_SPEED_SQR = 4.0f;
+	const int entIdx = pEnt->entindex();
+	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates && m_pCachedPropStates[entIdx].bActive )
+	{
+		const Vector oldCenter = m_pCachedPropStates[entIdx].vecCenter;
+		const float flRad = m_pCachedPropStates[entIdx].flRadius;
+		const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
+		const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
+
+		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+		{
+			def_light_t *l = m_hDeferredLights[i];
+			if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
+			{
+				if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
+				{
+					l->SetShadowDirty( true );
+				}
+			}
+		}
+		m_pCachedPropStates[entIdx].bActive = false;
+		return;
+	}
+
+	if ( pEnt->IsPlayer() || dynamic_cast<C_BaseViewModel*>( pEnt ) != NULL || pEnt->IsBaseCombatWeapon() )
+		return;
+
+	if ( !pEnt->GetModel() )
+		return;
+
+	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
+	{
+		def_light_t *l = m_hDeferredLights[i];
+		if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
+		{
+			if ( DoesLightIntersectEntity( l, pEnt ) )
+			{
+				l->SetShadowDirty( true );
+			}
+		}
+	}
+}
 
 void CLightingManager::CheckDynamicEntityIntersections()
 {
 	if ( !r_deferred_shadow_cache.GetBool() || !engine->IsInGame() || engine->IsLevelMainMenuBackground() )
 		return;
 
+	if ( !m_pCachedPropStates )
+		return;
+
 	CAbsQueryScope scope;
 
 	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
 
-	CUtlVector<C_BaseEntity*> movingEnts;
 	const int maxEnts = cl_entitylist->GetHighestEntityIndex();
 	for ( int i = 1; i <= maxEnts; i++ )
 	{
 		C_BaseEntity *pEnt = cl_entitylist->GetBaseEntity( i );
 		if ( !pEnt || pEnt->IsDormant() )
+		{
+			if ( i < NUM_ENT_ENTRIES && m_pCachedPropStates[i].bActive )
+			{
+				const Vector oldCenter = m_pCachedPropStates[i].vecCenter;
+				const float flRad = m_pCachedPropStates[i].flRadius;
+				const Vector oldMins = oldCenter - Vector( flRad, flRad, flRad );
+				const Vector oldMaxs = oldCenter + Vector( flRad, flRad, flRad );
+
+				for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
+				{
+					def_light_t *l = m_hDeferredLights[lIdx];
+					if ( l && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && l->HasValidAtlasSlot() && !l->IsShadowDirty() )
+					{
+						if ( DoesLightIntersectBox( l, oldCenter, flRad, oldMins, oldMaxs ) )
+						{
+							l->SetShadowDirty( true );
+						}
+					}
+				}
+				m_pCachedPropStates[i].bActive = false;
+			}
 			continue;
+		}
 
 		if ( pEnt->IsPlayer() )
 			continue;
@@ -300,7 +478,7 @@ void CLightingManager::CheckDynamicEntityIntersections()
 
 		if ( pLocal )
 		{
-			if ( pEnt == pLocal || pEnt->GetOwnerEntity() == pLocal || pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal )
+			if ( pEnt == pLocal || pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal )
 				continue;
 		}
 
@@ -313,42 +491,81 @@ void CLightingManager::CheckDynamicEntityIntersections()
 		if ( !pEnt->GetModel() )
 			continue;
 
+		const int entIdx = pEnt->entindex();
+		if ( entIdx < 0 || entIdx >= NUM_ENT_ENTRIES )
+			continue;
+
+		CachedPropState_t &state = m_pCachedPropStates[entIdx];
+
+		const Vector curOrigin = pEnt->GetAbsOrigin();
+		const QAngle curAngles = pEnt->GetAbsAngles();
+
 		IPhysicsObject *pPhys = pEnt->VPhysicsGetObject();
-		if ( !pPhys || pPhys->IsAsleep() )
-			continue;
+		const bool bHeld = ( pPhys && ( pPhys->GetGameFlags() & FVPHYSICS_PLAYER_HELD ) != 0 ) ||
+			( pEnt->GetOwnerEntity() && pEnt->GetOwnerEntity()->IsPlayer() );
 
-		Vector vel;
-		pEnt->EstimateAbsVelocity( vel );
-		const float flSpeedSqr = vel.LengthSqr();
-		const float flAngSpeedSqr = pEnt->GetLocalAngularVelocity().LengthSqr();
-
-		if ( flSpeedSqr > MIN_SHADOW_DIRTY_SPEED_SQR || flAngSpeedSqr > MIN_SHADOW_DIRTY_ANG_SPEED_SQR )
+		bool bPoseChanged = false;
+		if ( !state.bActive )
 		{
-			movingEnts.AddToTail( pEnt );
+			bPoseChanged = true;
 		}
-	}
-
-	for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
-	{
-		def_light_t *l = m_hDeferredLights[i];
-		if ( !l || !l->IsStatic() || !l->IsSpot() || !l->HasValidAtlasSlot() )
-			continue;
-
-		bool bEntityInside = false;
-		for ( int j = 0; j < movingEnts.Count(); j++ )
+		else
 		{
-			if ( DoesLightIntersectEntity( l, movingEnts[j] ) )
+			const float flDistSqr = ( curOrigin - state.vecOrigin ).LengthSqr();
+			const float flAngDiff = ( curAngles[0] - state.angAngles[0] ) * ( curAngles[0] - state.angAngles[0] ) +
+			                        ( curAngles[1] - state.angAngles[1] ) * ( curAngles[1] - state.angAngles[1] ) +
+			                        ( curAngles[2] - state.angAngles[2] ) * ( curAngles[2] - state.angAngles[2] );
+			if ( bHeld || flDistSqr > 0.25f || flAngDiff > 0.25f )
 			{
-				bEntityInside = true;
-				break;
+				bPoseChanged = true;
 			}
 		}
 
-		if ( bEntityInside || l->m_bEntityInsideLastFrame )
+		if ( bPoseChanged )
 		{
-			l->SetShadowDirty( true );
+			Vector mins, maxs;
+			pEnt->GetRenderBoundsWorldspace( mins, maxs );
+			const Vector propCenter = pEnt->WorldSpaceCenter();
+			const float flCurRadius = ( maxs - mins ).Length() * 0.5f;
+			if ( flCurRadius < 1.0f )
+				continue;
+
+			const Vector oldCenter = state.vecCenter;
+			const float flOldRad = state.flRadius;
+			const Vector oldMins = oldCenter - Vector( flOldRad, flOldRad, flOldRad );
+			const Vector oldMaxs = oldCenter + Vector( flOldRad, flOldRad, flOldRad );
+
+			for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
+			{
+				def_light_t *l = m_hDeferredLights[lIdx];
+				if ( !l || !l->IsStatic() || ( !l->IsSpot() && !l->IsPoint() ) || !l->HasValidAtlasSlot() )
+					continue;
+
+				if ( state.bActive && l->IsShadowDirty() )
+					continue;
+
+				bool bHit = DoesLightIntersectBox( l, propCenter, flCurRadius, mins, maxs );
+
+				if ( !bHit && state.bActive )
+				{
+					if ( DoesLightIntersectBox( l, oldCenter, flOldRad, oldMins, oldMaxs ) )
+					{
+						bHit = true;
+					}
+				}
+
+				if ( bHit )
+				{
+					l->SetShadowDirty( true );
+				}
+			}
+
+			state.vecOrigin = curOrigin;
+			state.vecCenter = propCenter;
+			state.angAngles = curAngles;
+			state.flRadius  = flCurRadius;
+			state.bActive   = true;
 		}
-		l->m_bEntityInsideLastFrame = bEntityInside;
 	}
 }
 
@@ -374,6 +591,10 @@ void CLightingManager::SetRenderConstants( const VMatrix&    ScreenToWorld,
 
 void CLightingManager::LightSetup( const CViewSetup& setup )
 {
+	m_vecViewOrigin = setup.origin;
+	AngleVectors( setup.angles, &m_vecForward );
+	m_flzNear = setup.zNear;
+
 	// Remove lights that have run out of time
 	UpdateTemplights( gpGlobals->frametime );
 
@@ -432,8 +653,8 @@ void CLightingManager::OnMaterialReload()
 	FOR_EACH_VEC_FAST( def_light_t*, m_hDeferredLights, l )
 	{
 		l->ClearCookie();
-
 		l->MakeDirtyAll();
+		l->SetShadowDirty( true );
 	}
 	FOR_EACH_VEC_FAST_END
 }
@@ -444,11 +665,10 @@ void CLightingManager::AddLight( def_light_t* l )
 
 	m_hDeferredLights.AddToTail( l );
 
-	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && l->IsSpot() && !l->HasValidAtlasSlot() )
+	if ( r_deferred_shadow_cache.GetBool() && l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && !l->HasValidAtlasSlot() )
 	{
 		AssignStaticAtlasSlot( l );
 		l->SetShadowDirty( true );
-		l->m_bEntityInsideLastFrame = false;
 	}
 
 #if DEFCFG_USE_SSE
@@ -1111,10 +1331,11 @@ void CLightingManager::SortLights()
 			else
 			{
 				bool bNeedsFullscreen = IS_NAN( SubFloat( needsFullscreen, j ) );
-				if ( !bNeedsFullscreen && ( s.lights[j]->flDistance_ViewOrigin < ( s.lights[j]->flRadius + zNear + 32.0f ) ) )
+				if ( ( s.lights[j]->HasShadow() && !s.lights[j]->IsStatic() ) || ( !bNeedsFullscreen && ( s.lights[j]->flDistance_ViewOrigin < ( s.lights[j]->flRadius * 1.05f + zNear + 48.0f ) ) ) )
 				{
 					bNeedsFullscreen = true;
 				}
+				s.lights[j]->bWasFullscreen = bNeedsFullscreen;
 
 				if ( bNeedsFullscreen )
 				{
@@ -1144,8 +1365,11 @@ void CLightingManager::SortLights()
 			else
 			{
 				const float flPointDistSqr = ( pLight->pos - m_vecViewOrigin ).LengthSqr();
-				const float flPointNearDist = pLight->flRadius + zNear;
+				const float flBaseThreshold = pLight->flRadius * 1.05f + zNear + 48.0f;
+				const float flHysteresis = ( pLight->bWasFullscreen ? 32.0f : 0.0f );
+				const float flPointNearDist = flBaseThreshold + flHysteresis;
 				const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
+				pLight->bWasFullscreen = bNeedsFullscreen;
 				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( pLight );
 			}
 		}
@@ -1170,10 +1394,11 @@ void CLightingManager::SortLights()
 			bNeedsFullscreen = true;
 		}
 
-		if ( !bNeedsFullscreen && ( l->flDistance_ViewOrigin < ( l->flRadius + zNear + 32.0f ) ) )
+		if ( !bNeedsFullscreen && ( l->flDistance_ViewOrigin < ( l->flRadius * 1.05f + zNear + 48.0f ) ) )
 		{
 			bNeedsFullscreen = true;
 		}
+		l->bWasFullscreen = bNeedsFullscreen;
 
 		Assert( l->iLighttype * 2 + 1 < LSORT_COUNT );
 		m_hPreSortedLights[ l->iLighttype * 2 + (int)bNeedsFullscreen ].AddToTail( l );
@@ -1186,8 +1411,11 @@ void CLightingManager::SortLights()
 		else
 		{
 			const float flPointDistSqr = ( l->pos - m_vecViewOrigin ).LengthSqr();
-			const float flPointNearDist = l->flRadius + zNear;
+			const float flBaseThreshold = l->flRadius * 1.05f + zNear + 48.0f;
+			const float flHysteresis = ( l->bWasFullscreen ? 32.0f : 0.0f );
+			const float flPointNearDist = flBaseThreshold + flHysteresis;
 			const bool bNeedsFullscreen = ( flPointDistSqr < flPointNearDist * flPointNearDist );
+			l->bWasFullscreen = bNeedsFullscreen;
 			m_hPreSortedLights[ bNeedsFullscreen ? LSORT_POINT_FULLSCREEN : LSORT_POINT_WORLD ].AddToTail( l );
 		}
 #endif
@@ -1676,13 +1904,27 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 						def_light_t* pLight = commitableLights[iShadowed];
 						pCaller->DrawLightShadowView( view, iShadowed, pLight );
 
-						if ( pLight->IsSpot() && pLight->IsStatic() && pLight->HasValidAtlasSlot() )
+						if ( pLight->IsSpot() )
 						{
-							QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Static( pLight->m_nCachedAtlasSlot ) );
+							if ( pLight->IsStatic() && pLight->HasValidAtlasSlot() )
+							{
+								QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Static( pLight->m_nCachedAtlasSlot ) );
+							}
+							else
+							{
+								QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Proj( iShadowed ) );
+							}
 						}
-						else
+						else if ( pLight->IsPoint() )
 						{
-							QUEUE_FIRE( CommitTexture_ProjectedDepth, iShadowed, GetShadowColorRT_Proj( iShadowed ) );
+							if ( pLight->IsStatic() && pLight->HasValidAtlasSlot() )
+							{
+								QUEUE_FIRE( CommitTexture_DualParaboloidDepth, iShadowed, GetShadowColorRT_StaticPoint( pLight->m_nCachedAtlasSlot ) );
+							}
+							else
+							{
+								QUEUE_FIRE( CommitTexture_DualParaboloidDepth, iShadowed, GetShadowColorRT_DP( iShadowed ) );
+							}
 						}
 
 						if ( pLight->HasVolumetrics() && r_deferred_volumetric_intensity.GetFloat() > 0.0f )
@@ -1870,6 +2112,17 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Proj( 0 ) );
 					}
 				}
+				else if ( l->IsPoint() )
+				{
+					if ( l->IsStatic() && l->HasValidAtlasSlot() )
+					{
+						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_StaticPoint( l->m_nCachedAtlasSlot ) );
+					}
+					else
+					{
+						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_DP( 0 ) );
+					}
+				}
 
 				iDrawnShadowed++;
 			}
@@ -1977,6 +2230,17 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 					else
 					{
 						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Proj( 0 ) );
+					}
+				}
+				else if ( l->IsPoint() )
+				{
+					if ( l->IsStatic() && l->HasValidAtlasSlot() )
+					{
+						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_StaticPoint( l->m_nCachedAtlasSlot ) );
+					}
+					else
+					{
+						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_DP( 0 ) );
 					}
 				}
 
@@ -2200,11 +2464,14 @@ void CLightingManager::DoSceneDebug()
 	extern int g_nShadowViewsRenderedLastFrame;
 
 	int nSlotsAssigned = GetStaticAtlasSlotCount();
+	int nPointSlotsAssigned = GetStaticPointAtlasSlotCount();
 
 	engine->Con_NPrintf( 10, "Total deferred lights: %i", m_hDeferredLights.Count() );
 	engine->Con_NPrintf( 11, "lights on screen: %i", m_hRenderLights.Count() );
 	engine->Con_NPrintf( 12, "r_deferred_shadow_cache %i", r_deferred_shadow_cache.GetInt() );
-	engine->Con_NPrintf( 13, "  atlas slots assigned: %i / %i", nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS );
+	engine->Con_NPrintf( 13, "  atlas slots assigned: %i / %i (spot) | %i / %i (point)",
+		nSlotsAssigned, MAX_STATIC_SHADOW_ATLAS_SLOTS,
+		nPointSlotsAssigned, MAX_STATIC_POINT_SHADOW_SLOTS );
 	engine->Con_NPrintf( 14, "  shadow views: %i skipped (cached), %i rendered", g_nShadowViewsSkippedLastFrame, g_nShadowViewsRenderedLastFrame );
 	engine->Con_NPrintf( 15, "  lights point - world: %i, fullscreen: %i",
 	                     m_hPreSortedLights[LSORT_POINT_WORLD].Count(),

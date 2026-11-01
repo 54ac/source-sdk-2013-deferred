@@ -67,6 +67,7 @@ def_light_t::def_light_t( bool bWorld )
 {
 	bWorldLight = bWorld;
 	bWasShadowActive = false;
+	bWasFullscreen = false;
 
 	pos.Init();
 	ang.Init();
@@ -127,7 +128,6 @@ def_light_t::def_light_t( bool bWorld )
 	m_bIsStatic = false;
 	m_bShadowDirty = true;
 	m_nCachedAtlasSlot = -1;
-	m_bEntityInsideLastFrame = false;
 	m_hIgnoreEntity = NULL;
 
 	backDir.Init( 0, 0, -1 );

@@ -25,6 +25,7 @@ static CTextureReference g_tex_ShadowRad_Normal_Ortho[ MAX_SHADOW_ORTHO ];
 static CTextureReference g_tex_ShadowColor_Proj[ MAX_SHADOW_PROJ ];
 static CTextureReference g_tex_ShadowDepth_Proj[ MAX_SHADOW_PROJ ];
 static CTextureReference g_tex_ShadowColor_Static[ MAX_STATIC_SHADOW_ATLAS_SLOTS ];
+static CTextureReference g_tex_ShadowColor_StaticPoint[ MAX_STATIC_POINT_SHADOW_SLOTS ];
 #if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
 static CTextureReference g_tex_ShadowColor_Proj_LOD1[ MAX_SHADOW_PROJ ];
 static CTextureReference g_tex_ShadowDepth_Proj_LOD1[ MAX_SHADOW_PROJ ];
@@ -373,11 +374,12 @@ const ImageFormat fmt_gbuffer0 =
 	for ( int i = 0; i < MAX_SHADOW_DP; i++ )
 	{
 		int res_point = GetShadowResolution_Point();
-		const bool bTetra = ( r_deferred_point_shadow_mode.GetInt() == POINT_SHADOW_TETRA );
-		int res_x = bTetra ? ( res_point * 2 ) : res_point;
+		int res_x = res_point * 2;
 		int res_y = res_point * 2;
+		int depth_res_x = Max( res_x, STATIC_POINT_SHADOW_RES );
+		int depth_res_y = Max( res_y, STATIC_POINT_SHADOW_RES );
 
-		generalShadowData.iPointShadowMode = r_deferred_point_shadow_mode.GetInt();
+		generalShadowData.iPointShadowMode = POINT_SHADOW_TETRA;
 		generalShadowData.iDPSM_Res_x = res_x;
 		generalShadowData.iDPSM_Res_y = res_y;
 
@@ -386,7 +388,7 @@ const ImageFormat fmt_gbuffer0 =
 		if ( !bShadowUseColor || bFirst )
 			g_tex_ShadowDepth_DP[i].Init( materials->CreateNamedRenderTargetTextureEx2(
 				VarArgs( "%s%02i", DEFRTNAME_SHADOWDEPTH_DP, i ),
-				res_x, res_y,
+				depth_res_x, depth_res_y,
 				RT_SIZE_NO_CHANGE,
 				fmt_depth,
 				MATERIAL_RT_DEPTH_NONE,
@@ -405,9 +407,9 @@ const ImageFormat fmt_gbuffer0 =
 		else
 			g_tex_ShadowColor_DP[i].Init( g_tex_ShadowColor_DP[0] );
 
-		Assert( res_y == g_tex_ShadowDepth_DP[i]->GetActualHeight() );
+		Assert( depth_res_y == g_tex_ShadowDepth_DP[i]->GetActualHeight() );
 		Assert( res_y == g_tex_ShadowColor_DP[i]->GetActualHeight() );
-		Assert( res_x == g_tex_ShadowDepth_DP[i]->GetActualWidth() );
+		Assert( depth_res_x == g_tex_ShadowDepth_DP[i]->GetActualWidth() );
 		Assert( res_x == g_tex_ShadowColor_DP[i]->GetActualWidth() );
 	}
 
@@ -418,6 +420,17 @@ const ImageFormat fmt_gbuffer0 =
 		g_tex_ShadowColor_Static[i].Init( materials->CreateNamedRenderTargetTextureEx2(
 			VarArgs( "_rt_defShadowColor_Static_%03i", i ),
 			STATIC_SHADOW_TILE_RES, STATIC_SHADOW_TILE_RES,
+			RT_SIZE_NO_CHANGE,
+			fmt_depthColor,
+			MATERIAL_RT_DEPTH_NONE,
+			shadowColorFlags, 0 ) );
+	}
+
+	for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
+	{
+		g_tex_ShadowColor_StaticPoint[i].Init( materials->CreateNamedRenderTargetTextureEx2(
+			VarArgs( "_rt_defShadowColor_StaticPoint_%02i", i ),
+			STATIC_POINT_SHADOW_RES, STATIC_POINT_SHADOW_RES,
 			RT_SIZE_NO_CHANGE,
 			fmt_depthColor,
 			MATERIAL_RT_DEPTH_NONE,
@@ -599,6 +612,13 @@ ITexture *GetShadowColorRT_Static( int index )
 	Assert( index >= 0 && index < MAX_STATIC_SHADOW_ATLAS_SLOTS );
 	Assert( g_tex_ShadowColor_Static[ index ].IsValid() );
 	return g_tex_ShadowColor_Static[ index ];
+}
+
+ITexture *GetShadowColorRT_StaticPoint( int index )
+{
+	Assert( index >= 0 && index < MAX_STATIC_POINT_SHADOW_SLOTS );
+	Assert( g_tex_ShadowColor_StaticPoint[ index ].IsValid() );
+	return g_tex_ShadowColor_StaticPoint[ index ];
 }
 
 ITexture *GetShadowColorRT_DP( int index )

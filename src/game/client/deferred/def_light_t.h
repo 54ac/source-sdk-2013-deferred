@@ -9,6 +9,10 @@ class IDefCookie;
 #define MAX_STATIC_SHADOW_ATLAS_SLOTS 128
 #define STATIC_SHADOW_TILE_RES        1024
 
+#define MAX_STATIC_POINT_SHADOW_SLOTS 8
+#define STATIC_POINT_SHADOW_TILE_RES  1024
+#define STATIC_POINT_SHADOW_RES       2048
+
 #if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t
 {
@@ -36,6 +40,7 @@ struct def_light_t
 
 	bool bWorldLight;
 	bool bWasShadowActive;
+	bool bWasFullscreen;
 
 	Vector pos;
 	QAngle ang;
@@ -259,7 +264,6 @@ public:
 	bool m_bIsStatic;
 	bool m_bShadowDirty;
 	int16 m_nCachedAtlasSlot;
-	bool m_bEntityInsideLastFrame;
 	EHANDLE m_hIgnoreEntity;
 };
 

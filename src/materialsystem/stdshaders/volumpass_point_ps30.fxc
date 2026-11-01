@@ -1,7 +1,6 @@
 
 // STATIC:		"USEWORLDTRANSFORM"			"0..1"
 
-// DYNAMIC:		"POINT_SHADOW_MODE"		"0..1"
 // DYNAMIC:		"NUM_SHADOWED_COOKIE"		"0..1"
 // DYNAMIC:		"NUM_SHADOWED"				"0..1"
 // DYNAMIC:		"VOLUME_LOD"				"0..4"
@@ -198,15 +197,10 @@ PS_OUTPUT main( const PS_INPUT In )
 
 		flRadiusFalloff = pow( flRadiusFalloff, g_flMixedData[ 1 ].w );
 
-#if POINT_SHADOW_MODE == POINT_SHADOW_TETRA
 		float3 sample = PerformTetrahedralShadow( sMixedSampler[ 0 ],
 				vecStart, float4( 0, 0, 0, 0 ), float4( 0, 0, 0, 0 ),
 				dist, g_flMixedData[ 0 ].w, g_flMixedData[ 2 ].w );
-#else
-		float3 sample = PerformDualParaboloidShadow( sMixedSampler[ 0 ],
-				vecStart, float4( 0, 0, 0, 0 ), float4( 0, 0, 0, 0 ),
-				dist, g_flMixedData[ 0 ].w, g_flMixedData[ 2 ].w );
-#endif
+
 
 #if NUM_SHADOWED_COOKIE
 		sample *= DoCubemapCookie( sMixedSampler[ 1 ], vecStart );

@@ -104,8 +104,6 @@ void DrawPassLightPassVolum( const lightPassParms &info, CBaseVSShader *pShader,
 		case DEFLIGHTTYPE_POINT:
 			{
 				DECLARE_DYNAMIC_PIXEL_SHADER( volumpass_point_ps30 );
-				const bool bHasShadows = ( iNumShadowedCookied > 0 || iNumShadowed > 0 );
-				SET_DYNAMIC_PIXEL_SHADER_COMBO( POINT_SHADOW_MODE, bHasShadows ? pExt->GetShadowData_General().iPointShadowMode : 0 );
 				SET_DYNAMIC_PIXEL_SHADER_COMBO( NUM_SHADOWED_COOKIE, iNumShadowedCookied );
 				SET_DYNAMIC_PIXEL_SHADER_COMBO( NUM_SHADOWED, iNumShadowed );
 #if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
