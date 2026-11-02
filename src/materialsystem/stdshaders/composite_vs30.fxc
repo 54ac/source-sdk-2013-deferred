@@ -5,6 +5,7 @@
 // STATIC:		"EYEVEC"				"0..1"
 // STATIC:		"BASETEXTURE2"			"0..1"
 // STATIC:		"BLENDMODULATE"			"0..1"
+// STATIC:		"TREESWAY"				"0..2"
 
 // DYNAMIC:		"COMPRESSED_VERTS"		"0..1"
 // DYNAMIC:		"SKINNING"				"0..1"
@@ -13,9 +14,14 @@
 // SKIP:		!$MODEL && $DECAL
 // SKIP:		!$BASETEXTURE2 && $BLENDMODULATE
 // SKIP:		$MODEL && $BASETEXTURE2
+// SKIP:		!$MODEL && $TREESWAY
+// SKIP:		$TREESWAY && $MORPHING
+// SKIP:		$TREESWAY && $MORPHING_VTEX
+// SKIP:		$TREESWAY && $DECAL
 
 #include "common_vs_fxc.h"
 #include "common_deferred_fxc.h"
+#include "tree_sway.h"
 
 static const bool g_bSkinning		= SKINNING ? true : false;
 
@@ -117,6 +123,10 @@ VS_OUTPUT main( const VS_INPUT In )
 	ApplyMorph( morphSampler, cMorphTargetTextureDim, cMorphSubrect,
 		In.vVertexID, In.vTexCoord2, vPos.xyz, vNormal );
 #endif
+#endif
+
+#if ( TREESWAY )
+	vPos.xyz = ComputeTreeSway( vPos.xyz, g_flTime );
 #endif
 
 #if DECAL

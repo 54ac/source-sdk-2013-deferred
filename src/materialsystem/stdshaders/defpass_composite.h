@@ -63,6 +63,24 @@ struct defParms_composite
 	int iEnvmapParallax;
 	int iEnvmapOrigin;
 
+	// tree sway
+	int iTreeSway;
+	int iTreeSwayHeight;
+	int iTreeSwayStartHeight;
+	int iTreeSwayRadius;
+	int iTreeSwayStartRadius;
+	int iTreeSwaySpeed;
+	int iTreeSwaySpeedHighWindMultiplier;
+	int iTreeSwayStrength;
+	int iTreeSwayScrumbleSpeed;
+	int iTreeSwayScrumbleStrength;
+	int iTreeSwayScrumbleFrequency;
+	int iTreeSwayFalloffExp;
+	int iTreeSwayScrumbleFalloffExp;
+	int iTreeSwaySpeedLerpStart;
+	int iTreeSwaySpeedLerpEnd;
+	int iTreeSwayStatic;
+
 	// config
 	bool bModel;
 };

@@ -2,6 +2,7 @@
 // STATIC:		"MODEL"					"0..1"
 // STATIC:		"MORPHING_VTEX"			"0..1"
 // STATIC:		"MULTITEXTURE"			"0..1"
+// STATIC:		"TREESWAY"				"0..2"
 
 // DYNAMIC:		"COMPRESSED_VERTS"		"0..1"
 // DYNAMIC:		"SKINNING"				"0..1"
@@ -10,8 +11,13 @@
 // DYNAMIC:		"SHADOW_MODE"			"0..2"
 // DYNAMIC:		"RADIOSITY"				"0..1"
 
+// SKIP:		!$MODEL && $TREESWAY
+// SKIP:		$TREESWAY && $MORPHING
+// SKIP:		$TREESWAY && $MORPHING_VTEX
+
 #include "common_vs_fxc.h"
 #include "common_deferred_fxc.h"
+#include "tree_sway.h"
 
 
 static const bool g_bSkinning		= SKINNING ? true : false;
@@ -122,6 +128,10 @@ VS_OUTPUT main( const VS_INPUT In )
 	ApplyMorph( morphSampler, cMorphTargetTextureDim, cMorphSubrect,
 		In.vVertexID, In.vTexCoord2, vPos.xyz, vNormal );
 #endif
+#endif
+
+#if ( TREESWAY )
+	vPos.xyz = ComputeTreeSway( vPos.xyz, g_flTime );
 #endif
 
 	SkinPositionAndNormal( g_bSkinning, vPos, vNormal,

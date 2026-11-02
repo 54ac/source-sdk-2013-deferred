@@ -20,5 +20,3 @@ goto parse_args
 :done_args
 
 %BUILD_SHADER% deferred_shaders -game %GAMEDIR% -source %SOURCEDIR%
-
-if not "%dynamic_shaders%"=="1" pause

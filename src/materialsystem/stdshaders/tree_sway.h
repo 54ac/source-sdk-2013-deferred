@@ -20,6 +20,35 @@
 // Treeswaystrength should be 0 in the vmt.
 
 #if ( TREESWAY )
+#ifndef g_flTime
+	const float4 g_vTreeSwayParams0			: register( c16 );
+	const float4 g_vTreeSwayParams1			: register( c17 );
+	const float4 g_vTreeSwayParams2			: register( c18 );
+	const float4 g_vTreeSwayParams3			: register( c19 );
+	const float4 g_vTreeSwayParams4			: register( c20 );
+
+	#define g_flTime				g_vTreeSwayParams0.x
+	#define g_vWindDir				g_vTreeSwayParams0.yz
+
+	#define g_flScrumbleFalloffCurve g_vTreeSwayParams1.x
+	#define g_flSwayFalloffCurve	g_vTreeSwayParams1.y
+	#define g_flScrumbleSpeed		g_vTreeSwayParams1.z
+	#define g_flFastSwaySpeedScale	g_vTreeSwayParams1.w
+
+	#define g_flHeight				g_vTreeSwayParams2.x
+	#define g_flStartHeight			g_vTreeSwayParams2.y
+	#define g_flRadius				g_vTreeSwayParams2.z
+	#define g_flStartRadius			g_vTreeSwayParams2.w
+
+	#define g_flSwaySpeed			g_vTreeSwayParams3.x
+	#define g_flSwayIntensity		g_vTreeSwayParams3.y
+	#define g_flScrumbleWaveCount	g_vTreeSwayParams3.z
+	#define g_flScrumbleIntensity	g_vTreeSwayParams3.w
+
+	#define g_flWindSpeedLerpStart	g_vTreeSwayParams4.x
+	#define g_flWindSpeedLerpEnd	g_vTreeSwayParams4.y
+#endif
+
 	float3 ComputeTreeSway( float3 vPositionOS, float flTime )
 	{
 		static const float g_flWindOffsetScale = 19;

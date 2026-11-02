@@ -4,6 +4,7 @@
 // STATIC:		"MORPHING_VTEX"			"0..1"
 // STATIC:		"BUMPMAP2"				"0..1"
 // STATIC:		"BLENDMODULATE"			"0..1"
+// STATIC:		"TREESWAY"				"0..2"
 
 // DYNAMIC:		"COMPRESSED_VERTS"		"0..1"
 // DYNAMIC:		"SKINNING"				"0..1"
@@ -11,9 +12,13 @@
 
 // SKIP:		!$BUMPMAP2 && $BLENDMODULATE
 // SKIP:		$MODEL && $BUMPMAP2
+// SKIP:		!$MODEL && $TREESWAY
+// SKIP:		$TREESWAY && $MORPHING
+// SKIP:		$TREESWAY && $MORPHING_VTEX
 
 #include "common_vs_fxc.h"
 #include "common_deferred_fxc.h"
+#include "tree_sway.h"
 
 static const bool g_bSkinning		= SKINNING ? true : false;
 
@@ -121,6 +126,10 @@ VS_OUTPUT main( const VS_INPUT In )
 #endif
 #endif
 
+#if ( TREESWAY )
+	vPos.xyz = ComputeTreeSway( vPos.xyz, g_flTime );
+#endif
+
 	SkinPositionNormalAndTangentSpace( g_bSkinning, vPos, vNormal, vTangentMixed,
 		In.vBoneWeights, In.vBoneIndices,
 		worldPos, worldNormal, worldTangentS, worldTangentT );
@@ -138,6 +147,10 @@ VS_OUTPUT main( const VS_INPUT In )
 	ApplyMorph( morphSampler, cMorphTargetTextureDim, cMorphSubrect,
 		In.vVertexID, In.vTexCoord2, vPos.xyz, vNormal );
 #endif
+#endif
+
+#if ( TREESWAY )
+	vPos.xyz = ComputeTreeSway( vPos.xyz, g_flTime );
 #endif
 
 	SkinPositionAndNormal( g_bSkinning, vPos, vNormal,
