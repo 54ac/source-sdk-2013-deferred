@@ -125,6 +125,7 @@ void CDeferredManagerClient::Shutdown()
 
 	ShutdownDeferredMaterials();
 	ShutdownDeferredExt();
+	ShutdownDeferredRTs();
 
 	if ( IsDeferredRenderingEnabled() )
 	{

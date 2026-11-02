@@ -6,6 +6,7 @@ class ITexture;
 float GetDepthMapDepthResolution( float zDelta );
 void DefRTsOnModeChanged();
 void InitDeferredRTs( bool bInitial = false );
+void ShutdownDeferredRTs();
 
 ITexture *GetDefRT_Normals();
 ITexture *GetDefRT_Depth();

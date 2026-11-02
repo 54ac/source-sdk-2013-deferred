@@ -386,20 +386,108 @@ void CLightingManager::CheckDynamicEntityIntersections()
 			const Vector oldMins = oldCenter - Vector( flOldRad, flOldRad, flOldRad );
 			const Vector oldMaxs = oldCenter + Vector( flOldRad, flOldRad, flOldRad );
 
-			for ( int lIdx = 0; lIdx < m_hDeferredLights.Count(); lIdx++ )
+			const fltx4 curCX = ReplicateX4( propCenter.x );
+			const fltx4 curCY = ReplicateX4( propCenter.y );
+			const fltx4 curCZ = ReplicateX4( propCenter.z );
+			const fltx4 curRad = ReplicateX4( flCurRadius );
+
+			const fltx4 oldCX = ReplicateX4( oldCenter.x );
+			const fltx4 oldCY = ReplicateX4( oldCenter.y );
+			const fltx4 oldCZ = ReplicateX4( oldCenter.z );
+			const fltx4 oldRad = ReplicateX4( flOldRad );
+
+			const int nTotalLights = m_hDeferredLights.Count();
+			int lIdx = 0;
+
+			for ( ; lIdx + 3 < nTotalLights; lIdx += 4 )
 			{
-				def_light_t *l = m_hDeferredLights[lIdx];
-				if ( !l || !l->IsStatic() || ( !l->IsSpot() && !l->IsPoint() ) || !l->HasValidAtlasSlot() )
+				def_light_t *l[4] = {
+					m_hDeferredLights[lIdx],
+					m_hDeferredLights[lIdx + 1],
+					m_hDeferredLights[lIdx + 2],
+					m_hDeferredLights[lIdx + 3]
+				};
+
+				int candidateMask[4] = {
+					( l[0] && l[0]->IsStatic() && ( l[0]->IsSpot() || l[0]->IsPoint() ) && l[0]->HasValidAtlasSlot() && !( state.bActive && l[0]->IsShadowDirty() ) ) ? -1 : 0,
+					( l[1] && l[1]->IsStatic() && ( l[1]->IsSpot() || l[1]->IsPoint() ) && l[1]->HasValidAtlasSlot() && !( state.bActive && l[1]->IsShadowDirty() ) ) ? -1 : 0,
+					( l[2] && l[2]->IsStatic() && ( l[2]->IsSpot() || l[2]->IsPoint() ) && l[2]->HasValidAtlasSlot() && !( state.bActive && l[2]->IsShadowDirty() ) ) ? -1 : 0,
+					( l[3] && l[3]->IsStatic() && ( l[3]->IsSpot() || l[3]->IsPoint() ) && l[3]->HasValidAtlasSlot() && !( state.bActive && l[3]->IsShadowDirty() ) ) ? -1 : 0
+				};
+
+				fltx4 mask = LoadUnalignedIntSIMD( candidateMask );
+				if ( TestSignSIMD( mask ) == 0 )
 					continue;
 
-				if ( state.bActive && l->IsShadowDirty() )
+				float posX[4] = { l[0]->pos.x, l[1]->pos.x, l[2]->pos.x, l[3]->pos.x };
+				float posY[4] = { l[0]->pos.y, l[1]->pos.y, l[2]->pos.y, l[3]->pos.y };
+				float posZ[4] = { l[0]->pos.z, l[1]->pos.z, l[2]->pos.z, l[3]->pos.z };
+				float radArr[4] = { l[0]->flRadius, l[1]->flRadius, l[2]->flRadius, l[3]->flRadius };
+
+				fltx4 pX = LoadUnalignedSIMD( posX );
+				fltx4 pY = LoadUnalignedSIMD( posY );
+				fltx4 pZ = LoadUnalignedSIMD( posZ );
+				fltx4 lRad = LoadUnalignedSIMD( radArr );
+
+				fltx4 maxDist = AddSIMD( lRad, curRad );
+				fltx4 maxDistSqr = MulSIMD( maxDist, maxDist );
+				fltx4 dX = SubSIMD( curCX, pX );
+				fltx4 dY = SubSIMD( curCY, pY );
+				fltx4 dZ = SubSIMD( curCZ, pZ );
+				fltx4 distSqr = AddSIMD( MulSIMD( dX, dX ), AddSIMD( MulSIMD( dY, dY ), MulSIMD( dZ, dZ ) ) );
+
+				fltx4 inRange = CmpLeSIMD( distSqr, maxDistSqr );
+
+				if ( state.bActive )
+				{
+					fltx4 oldMaxDist = AddSIMD( lRad, oldRad );
+					fltx4 oldMaxDistSqr = MulSIMD( oldMaxDist, oldMaxDist );
+					fltx4 odX = SubSIMD( oldCX, pX );
+					fltx4 odY = SubSIMD( oldCY, pY );
+					fltx4 odZ = SubSIMD( oldCZ, pZ );
+					fltx4 oldDistSqr = AddSIMD( MulSIMD( odX, odX ), AddSIMD( MulSIMD( odY, odY ), MulSIMD( odZ, odZ ) ) );
+					inRange = OrSIMD( inRange, CmpLeSIMD( oldDistSqr, oldMaxDistSqr ) );
+				}
+
+				fltx4 passMask = AndSIMD( mask, inRange );
+				if ( TestSignSIMD( passMask ) == 0 )
 					continue;
 
-				bool bHit = DoesLightIntersectBox( l, propCenter, flCurRadius, mins, maxs );
+				for ( int j = 0; j < 4; ++j )
+				{
+					if ( ( SubInt( passMask, j ) & 0x80000000 ) != 0 )
+					{
+						def_light_t *curLight = l[j];
+						bool bHit = DoesLightIntersectBox( curLight, propCenter, flCurRadius, mins, maxs );
+						if ( !bHit && state.bActive )
+						{
+							if ( DoesLightIntersectBox( curLight, oldCenter, flOldRad, oldMins, oldMaxs ) )
+							{
+								bHit = true;
+							}
+						}
+						if ( bHit )
+						{
+							curLight->SetShadowDirty( true );
+						}
+					}
+				}
+			}
+
+			for ( ; lIdx < nTotalLights; ++lIdx )
+			{
+				def_light_t *curLight = m_hDeferredLights[lIdx];
+				if ( !curLight || !curLight->IsStatic() || ( !curLight->IsSpot() && !curLight->IsPoint() ) || !curLight->HasValidAtlasSlot() )
+					continue;
+
+				if ( state.bActive && curLight->IsShadowDirty() )
+					continue;
+
+				bool bHit = DoesLightIntersectBox( curLight, propCenter, flCurRadius, mins, maxs );
 
 				if ( !bHit && state.bActive )
 				{
-					if ( DoesLightIntersectBox( l, oldCenter, flOldRad, oldMins, oldMaxs ) )
+					if ( DoesLightIntersectBox( curLight, oldCenter, flOldRad, oldMins, oldMaxs ) )
 					{
 						bHit = true;
 					}
@@ -407,7 +495,7 @@ void CLightingManager::CheckDynamicEntityIntersections()
 
 				if ( bHit )
 				{
-					l->SetShadowDirty( true );
+					curLight->SetShadowDirty( true );
 				}
 			}
 

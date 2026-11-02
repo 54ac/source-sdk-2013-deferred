@@ -5,6 +5,7 @@
 #include "deferred/def_light_t.h"
 #include "cliententitylist.h"
 #include "const.h"
+#include "mathlib/ssemath.h"
 
 class CViewSetup;
 class CDeferredViewRender;
@@ -162,6 +163,20 @@ private:
 	Vector m_vecForward;
 	float m_flzNear;
 	bool m_bDrawVolumetrics;
+
+	struct FrustumPlaneSIMD_t
+	{
+		fltx4 normX;
+		fltx4 normY;
+		fltx4 normZ;
+		fltx4 dist;
+		fltx4 absX;
+		fltx4 absY;
+		fltx4 absZ;
+	};
+	FrustumPlaneSIMD_t m_FrustumPlanes[6];
+	Frustum_t m_ViewFrustum;
+	bool m_bFrustumPlanesValid;
 	struct CachedPropState_t
 	{
 		Vector vecOrigin;

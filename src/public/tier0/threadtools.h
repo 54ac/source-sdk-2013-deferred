@@ -545,7 +545,16 @@ inline unsigned ThreadInterlockedExchangeSubtract( uint32 volatile *p, uint32 va
 #if defined( _WIN64 )
 typedef __m128i int128;
 inline int128 int128_zero()	{ return _mm_setzero_si128(); }
-PLATFORM_INTERFACE bool ThreadInterlockedAssignIf128( volatile int128 *pDest, const int128 &value, const int128 &comperand ) NOINLINE;
+inline bool ThreadInterlockedAssignIf128( volatile int128 *pDest, const int128 &value, const int128 &comperand )
+{
+	Assert( ( (size_t)pDest % 16 ) == 0 );
+	volatile int64 *pDest64 = ( volatile int64 * )pDest;
+	const int64 *pValue64 = ( const int64 * )&value;
+	int64 local_comparand[2];
+	local_comparand[0] = ( (const int64 *)&comperand )[0];
+	local_comparand[1] = ( (const int64 *)&comperand )[1];
+	return _InterlockedCompareExchange128( pDest64, pValue64[1], pValue64[0], local_comparand ) == 1;
+}
 #endif
 
 //-----------------------------------------------------------------------------

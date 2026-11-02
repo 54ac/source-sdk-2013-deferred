@@ -47,6 +47,7 @@ CLightingManager::CLightingManager() : BaseClass( "LightingManagerSystem" )
 	m_vecForward.Init();
 	m_flzNear          = 0;
 	m_pCachedPropStates = NULL;
+	m_bFrustumPlanesValid = false;
 	GetLightingManager()->ResetStaticAtlasSlots();
 	m_bDrawVolumetrics = false;
 #if DEFCFG_USE_SSE
@@ -176,9 +177,31 @@ void CLightingManager::SetRenderConstants( const VMatrix&    ScreenToWorld,
 
 void CLightingManager::LightSetup( const CViewSetup& setup )
 {
+	Vector vecForward, vecRight, vecUp;
+	AngleVectors( setup.angles, &vecForward, &vecRight, &vecUp );
+	m_vecForward = vecForward;
 	m_vecViewOrigin = setup.origin;
-	AngleVectors( setup.angles, &m_vecForward );
 	m_flzNear = setup.zNear;
+
+	float flAspect = setup.m_flAspectRatio > 0.0f
+		? setup.m_flAspectRatio
+		: ( setup.height > 0 ? (float)setup.width / (float)setup.height : 1.333333f );
+	float flFovY = CalcFovY( setup.fov, flAspect );
+
+	GeneratePerspectiveFrustum( setup.origin, vecForward, vecRight, vecUp, setup.zNear, setup.zFar, setup.fov, flFovY, m_ViewFrustum );
+
+	for ( int p = 0; p < 6; ++p )
+	{
+		const cplane_t *plane = m_ViewFrustum.GetPlane( p );
+		m_FrustumPlanes[p].normX = ReplicateX4( plane->normal.x );
+		m_FrustumPlanes[p].normY = ReplicateX4( plane->normal.y );
+		m_FrustumPlanes[p].normZ = ReplicateX4( plane->normal.z );
+		m_FrustumPlanes[p].dist  = ReplicateX4( plane->dist );
+		m_FrustumPlanes[p].absX  = ReplicateX4( fabsf( plane->normal.x ) );
+		m_FrustumPlanes[p].absY  = ReplicateX4( fabsf( plane->normal.y ) );
+		m_FrustumPlanes[p].absZ  = ReplicateX4( fabsf( plane->normal.z ) );
+	}
+	m_bFrustumPlanesValid = true;
 
 	// Remove lights that have run out of time
 	UpdateTemplights( gpGlobals->frametime );
@@ -388,34 +411,181 @@ void CLightingManager::CullLights()
 {
 	Assert( m_hRenderLights.Count() == 0 );
 
-	FOR_EACH_VEC_FAST( def_light_t*, m_hDeferredLights, l )
+	const bool bDistanceFade = r_deferred_light_distance_fade.GetBool();
+	const float flShadowDistMin = r_deferred_shadow_dist_min.GetFloat();
+
+	if ( !m_bFrustumPlanesValid )
 	{
-		if ( !m_bDrawWorldLights && l->bWorldLight )
+		FOR_EACH_VEC_FAST( def_light_t*, m_hDeferredLights, l )
+		{
+			if ( !m_bDrawWorldLights && l->bWorldLight )
+				continue;
+
+			if ( engine->CullBox( l->bounds_min_naive, l->bounds_max_naive ) )
+				continue;
+
+			Vector vecClosest;
+			CalcClosestPointOnAABB( l->bounds_min_naive, l->bounds_max_naive, m_vecViewOrigin, vecClosest );
+			Vector veclightDelta = vecClosest - m_vecViewOrigin;
+
+			if ( bDistanceFade && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
+				continue;
+
+			const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
+				                                   ? flShadowDistMin
+				                                   : (float)l->iShadow_Dist;
+			const float flEffectiveShadowRange = ( l->iShadow_Range > 0 ) ? (float)l->iShadow_Range : 1024.0f;
+
+			l->flDistance_ViewOrigin = veclightDelta.Length();
+			l->flShadowFade          = l->HasShadow()
+				                           ? ( SATURATE( ( l->flDistance_ViewOrigin - flEffectiveShadowDist ) / flEffectiveShadowRange ) )
+				                           : 1.0f;
+
+			m_hRenderLights.AddToTail( l );
+		}
+		FOR_EACH_VEC_FAST_END
+		return;
+	}
+
+	const fltx4 camX = ReplicateX4( m_vecViewOrigin.x );
+	const fltx4 camY = ReplicateX4( m_vecViewOrigin.y );
+	const fltx4 camZ = ReplicateX4( m_vecViewOrigin.z );
+
+	const int totalLights = m_hDeferredLights.Count();
+	int i = 0;
+
+	for ( ; i + 3 < totalLights; i += 4 )
+	{
+		def_light_t *l[4] = {
+			m_hDeferredLights[i],
+			m_hDeferredLights[i + 1],
+			m_hDeferredLights[i + 2],
+			m_hDeferredLights[i + 3]
+		};
+
+		int skipMaskArr[4] = {
+			( !m_bDrawWorldLights && l[0]->bWorldLight ) ? -1 : 0,
+			( !m_bDrawWorldLights && l[1]->bWorldLight ) ? -1 : 0,
+			( !m_bDrawWorldLights && l[2]->bWorldLight ) ? -1 : 0,
+			( !m_bDrawWorldLights && l[3]->bWorldLight ) ? -1 : 0
+		};
+		fltx4 culledMask = LoadUnalignedIntSIMD( skipMaskArr );
+
+		float minsX[4] = { l[0]->bounds_min_naive.x, l[1]->bounds_min_naive.x, l[2]->bounds_min_naive.x, l[3]->bounds_min_naive.x };
+		float minsY[4] = { l[0]->bounds_min_naive.y, l[1]->bounds_min_naive.y, l[2]->bounds_min_naive.y, l[3]->bounds_min_naive.y };
+		float minsZ[4] = { l[0]->bounds_min_naive.z, l[1]->bounds_min_naive.z, l[2]->bounds_min_naive.z, l[3]->bounds_min_naive.z };
+
+		float maxsX[4] = { l[0]->bounds_max_naive.x, l[1]->bounds_max_naive.x, l[2]->bounds_max_naive.x, l[3]->bounds_max_naive.x };
+		float maxsY[4] = { l[0]->bounds_max_naive.y, l[1]->bounds_max_naive.y, l[2]->bounds_max_naive.y, l[3]->bounds_max_naive.y };
+		float maxsZ[4] = { l[0]->bounds_max_naive.z, l[1]->bounds_max_naive.z, l[2]->bounds_max_naive.z, l[3]->bounds_max_naive.z };
+
+		fltx4 minX = LoadUnalignedSIMD( minsX );
+		fltx4 minY = LoadUnalignedSIMD( minsY );
+		fltx4 minZ = LoadUnalignedSIMD( minsZ );
+
+		fltx4 maxX = LoadUnalignedSIMD( maxsX );
+		fltx4 maxY = LoadUnalignedSIMD( maxsY );
+		fltx4 maxZ = LoadUnalignedSIMD( maxsZ );
+
+		fltx4 cX = MulSIMD( AddSIMD( minX, maxX ), Four_PointFives );
+		fltx4 cY = MulSIMD( AddSIMD( minY, maxY ), Four_PointFives );
+		fltx4 cZ = MulSIMD( AddSIMD( minZ, maxZ ), Four_PointFives );
+
+		fltx4 eX = MulSIMD( SubSIMD( maxX, minX ), Four_PointFives );
+		fltx4 eY = MulSIMD( SubSIMD( maxY, minY ), Four_PointFives );
+		fltx4 eZ = MulSIMD( SubSIMD( maxZ, minZ ), Four_PointFives );
+
+		for ( int p = 0; p < 6; ++p )
+		{
+			const FrustumPlaneSIMD_t &plane = m_FrustumPlanes[p];
+
+			fltx4 dot = AddSIMD( MulSIMD( plane.normX, cX ),
+			            AddSIMD( MulSIMD( plane.normY, cY ),
+			                     MulSIMD( plane.normZ, cZ ) ) );
+			fltx4 centerDist = SubSIMD( dot, plane.dist );
+
+			fltx4 radius = AddSIMD( MulSIMD( plane.absX, eX ),
+			               AddSIMD( MulSIMD( plane.absY, eY ),
+			                        MulSIMD( plane.absZ, eZ ) ) );
+
+			fltx4 maxDist = AddSIMD( centerDist, radius );
+			culledMask = OrSIMD( culledMask, CmpLtSIMD( maxDist, Four_Zeros ) );
+		}
+
+		fltx4 closestX = MinSIMD( MaxSIMD( camX, minX ), maxX );
+		fltx4 closestY = MinSIMD( MaxSIMD( camY, minY ), maxY );
+		fltx4 closestZ = MinSIMD( MaxSIMD( camZ, minZ ), maxZ );
+
+		fltx4 deltaX = SubSIMD( closestX, camX );
+		fltx4 deltaY = SubSIMD( closestY, camY );
+		fltx4 deltaZ = SubSIMD( closestZ, camZ );
+
+		fltx4 distSqr = AddSIMD( MulSIMD( deltaX, deltaX ),
+		                AddSIMD( MulSIMD( deltaY, deltaY ),
+		                         MulSIMD( deltaZ, deltaZ ) ) );
+
+		if ( bDistanceFade )
+		{
+			float maxDistSqrArr[4] = { l[0]->flMaxDistSqr, l[1]->flMaxDistSqr, l[2]->flMaxDistSqr, l[3]->flMaxDistSqr };
+			fltx4 maxDistSqrX4 = LoadUnalignedSIMD( maxDistSqrArr );
+			culledMask = OrSIMD( culledMask, CmpGtSIMD( distSqr, maxDistSqrX4 ) );
+		}
+
+		if ( TestSignSIMD( culledMask ) == 0xF )
 			continue;
 
-		if ( engine->CullBox( l->bounds_min_naive, l->bounds_max_naive ) )
+		fltx4 distX4 = SqrtSIMD( distSqr );
+
+		for ( int j = 0; j < 4; ++j )
+		{
+			if ( ( SubInt( culledMask, j ) & 0x80000000 ) == 0 )
+			{
+				def_light_t *cur = l[j];
+				const float flDist = SubFloat( distX4, j );
+				const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
+					                                   ? flShadowDistMin
+					                                   : (float)cur->iShadow_Dist;
+				const float flEffectiveShadowRange = ( cur->iShadow_Range > 0 ) ? (float)cur->iShadow_Range : 1024.0f;
+
+				cur->flDistance_ViewOrigin = flDist;
+				cur->flShadowFade          = cur->HasShadow()
+					                           ? ( SATURATE( ( flDist - flEffectiveShadowDist ) / flEffectiveShadowRange ) )
+					                           : 1.0f;
+
+				m_hRenderLights.AddToTail( cur );
+			}
+		}
+	}
+
+	for ( ; i < totalLights; ++i )
+	{
+		def_light_t *cur = m_hDeferredLights[i];
+		if ( !m_bDrawWorldLights && cur->bWorldLight )
+			continue;
+
+		if ( R_CullBox( cur->bounds_min_naive, cur->bounds_max_naive, m_ViewFrustum ) )
 			continue;
 
 		Vector vecClosest;
-		CalcClosestPointOnAABB( l->bounds_min_naive, l->bounds_max_naive, m_vecViewOrigin, vecClosest );
+		CalcClosestPointOnAABB( cur->bounds_min_naive, cur->bounds_max_naive, m_vecViewOrigin, vecClosest );
 		Vector veclightDelta = vecClosest - m_vecViewOrigin;
+		float flDistSqr = veclightDelta.LengthSqr();
 
-		if ( r_deferred_light_distance_fade.GetBool() && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
+		if ( bDistanceFade && ( flDistSqr > cur->flMaxDistSqr ) )
 			continue;
 
-		const float flEffectiveShadowDist  = ( r_deferred_shadow_dist_min.GetFloat() > 0.0f )
-			                                   ? r_deferred_shadow_dist_min.GetFloat()
-			                                   : (float)l->iShadow_Dist;
-		const float flEffectiveShadowRange = ( l->iShadow_Range > 0 ) ? (float)l->iShadow_Range : 1024.0f;
+		const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
+			                                   ? flShadowDistMin
+			                                   : (float)cur->iShadow_Dist;
+		const float flEffectiveShadowRange = ( cur->iShadow_Range > 0 ) ? (float)cur->iShadow_Range : 1024.0f;
 
-		l->flDistance_ViewOrigin = veclightDelta.Length();
-		l->flShadowFade          = l->HasShadow()
-			                           ? ( SATURATE( ( l->flDistance_ViewOrigin - flEffectiveShadowDist ) / flEffectiveShadowRange ) )
+		cur->flDistance_ViewOrigin = FastSqrt( flDistSqr );
+		cur->flShadowFade          = cur->HasShadow()
+			                           ? ( SATURATE( ( cur->flDistance_ViewOrigin - flEffectiveShadowDist ) / flEffectiveShadowRange ) )
 			                           : 1.0f;
 
-		m_hRenderLights.AddToTail( l );
+		m_hRenderLights.AddToTail( cur );
 	}
-	FOR_EACH_VEC_FAST_END
 }
 
 FORCEINLINE float CLightingManager::DoLightStyle( def_light_t* l )

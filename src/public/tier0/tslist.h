@@ -884,7 +884,11 @@ public:
 
 	Node_t *Pop()
 	{
-		#define TSQUEUE_BAD_NODE_LINK ( (Node_t *)INT_TO_POINTER( 0xdeadbeef ) )
+#ifdef PLATFORM_64BITS
+		Node_t * const TSQUEUE_BAD_NODE_LINK = (Node_t *)0xdeadbeefdeadbeef;
+#else
+		Node_t * const TSQUEUE_BAD_NODE_LINK = (Node_t *)0xdeadbeef;
+#endif
 		NodeLink_t * volatile		pHead = &m_Head;
 		NodeLink_t * volatile		pTail = &m_Tail;
 		Node_t * volatile *			pHeadNode = &m_Head.value.pNode;

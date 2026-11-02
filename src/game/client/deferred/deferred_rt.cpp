@@ -47,11 +47,79 @@ float GetDepthMapDepthResolution( float zDelta )
 	return zDelta / g_flDepthScalar;
 }
 
+void ShutdownDeferredRTs()
+{
+	g_tex_Normals.Shutdown();
+	g_tex_Depth.Shutdown();
+#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
+	g_tex_LightCtrl.Shutdown();
+#endif
+	g_tex_Lightaccum.Shutdown();
+	g_tex_Albedo.Shutdown();
+	g_tex_Specular.Shutdown();
+
+	g_tex_VolumePrepass.Shutdown();
+	for ( int i = 0; i < 2; i++ )
+	{
+		g_tex_VolumetricsBuffer[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < MAX_SHADOW_ORTHO; i++ )
+	{
+		g_tex_ShadowColor_Ortho[ i ].Shutdown();
+		g_tex_ShadowDepth_Ortho[ i ].Shutdown();
+		g_tex_ShadowRad_Albedo_Ortho[ i ].Shutdown();
+		g_tex_ShadowRad_Normal_Ortho[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < MAX_SHADOW_PROJ; i++ )
+	{
+		g_tex_ShadowColor_Proj[ i ].Shutdown();
+		g_tex_ShadowDepth_Proj[ i ].Shutdown();
+#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
+		g_tex_ShadowColor_Proj_LOD1[ i ].Shutdown();
+		g_tex_ShadowDepth_Proj_LOD1[ i ].Shutdown();
+		g_tex_ShadowColor_Proj_LOD2[ i ].Shutdown();
+		g_tex_ShadowDepth_Proj_LOD2[ i ].Shutdown();
+#endif
+	}
+
+	for ( int i = 0; i < MAX_STATIC_SHADOW_ATLAS_SLOTS; i++ )
+	{
+		g_tex_ShadowColor_Static[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < MAX_STATIC_POINT_SHADOW_SLOTS; i++ )
+	{
+		g_tex_ShadowColor_StaticPoint[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < MAX_SHADOW_DP; i++ )
+	{
+		g_tex_ShadowColor_DP[ i ].Shutdown();
+		g_tex_ShadowDepth_DP[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < 2; i++ )
+	{
+		g_tex_RadiosityBuffer[ i ].Shutdown();
+		g_tex_RadiosityNormal[ i ].Shutdown();
+	}
+
+	for ( int i = 0; i < NUM_PROJECTABLE_VGUI; i++ )
+	{
+		g_tex_ProjectableVGUI[ i ].Shutdown();
+	}
+}
+
 void DefRTsOnModeChanged()
 {
 	// Causes a crash ingame, so only allow in main menu
 	if ( !engine->IsInGame() )
+	{
+		ShutdownDeferredRTs();
 		InitDeferredRTs();
+	}
 }
 
 void InitDeferredRTs( bool bInitial )

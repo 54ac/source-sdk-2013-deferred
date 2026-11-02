@@ -106,19 +106,19 @@ void CLightingManager::BuildLightSortDataBuffer()
 
 		int hasShadowX4[4] =
 		{
-			lights[0]->HasShadow() ? 1 : 0,
-			lights[1]->HasShadow() ? 1 : 0,
-			lights[2]->HasShadow() ? 1 : 0,
-			lights[3]->HasShadow() ? 1 : 0
+			lights[0]->HasShadow() ? ~0 : 0,
+			lights[1]->HasShadow() ? ~0 : 0,
+			lights[2]->HasShadow() ? ~0 : 0,
+			lights[3]->HasShadow() ? ~0 : 0
 		};
 		sortData.hasShadow = LoadUnalignedIntSIMD( hasShadowX4 );
 
 		int hasVolumetricsX4[4] =
 		{
-			lights[0]->HasVolumetrics() ? 1 : 0,
-			lights[1]->HasVolumetrics() ? 1 : 0,
-			lights[2]->HasVolumetrics() ? 1 : 0,
-			lights[3]->HasVolumetrics() ? 1 : 0
+			lights[0]->HasVolumetrics() ? ~0 : 0,
+			lights[1]->HasVolumetrics() ? ~0 : 0,
+			lights[2]->HasVolumetrics() ? ~0 : 0,
+			lights[3]->HasVolumetrics() ? ~0 : 0
 		};
 		sortData.hasVolumetrics = LoadUnalignedIntSIMD( hasVolumetricsX4 );
 	}
@@ -154,9 +154,9 @@ void CLightingManager::BuildLightSortDataBuffer()
 			boundsMaxY[i] = l->bounds_max_naive.y;
 			boundsMaxZ[i] = l->bounds_max_naive.z;
 
-			hasShadowX4[i] = l->HasShadow() ? 1 : 0;
+			hasShadowX4[i] = l->HasShadow() ? ~0 : 0;
 
-			hasVolumetricsX4[i] = l->HasVolumetrics() ? 1 : 0;
+			hasVolumetricsX4[i] = l->HasVolumetrics() ? ~0 : 0;
 		}
 
 		sortData.bounds_min_naive[0] = LoadUnalignedSIMD( boundsMinX );
@@ -235,6 +235,15 @@ void CLightingManager::SortLights()
 	const Vector camMaxs( m_vecViewOrigin + vecBloat );
 
 #if DEFCFG_USE_SSE
+#if !DEFCFG_EXTRA_SORT
+	const fltx4 camMinsX = ReplicateX4( camMins.x );
+	const fltx4 camMinsY = ReplicateX4( camMins.y );
+	const fltx4 camMinsZ = ReplicateX4( camMins.z );
+	const fltx4 camMaxsX = ReplicateX4( camMaxs.x );
+	const fltx4 camMaxsY = ReplicateX4( camMaxs.y );
+	const fltx4 camMaxsZ = ReplicateX4( camMaxs.z );
+#endif
+
 	for ( uint i = 0; i < m_uiSortDataCount; i++ )
 	{
 		def_light_presortdatax4_t& s = m_pSortDataX4[i];
@@ -311,9 +320,18 @@ void CLightingManager::SortLights()
 			}
 		}
 #else
+		fltx4 boxIntersects = AndSIMD(
+			AndSIMD(
+				AndSIMD( CmpGeSIMD( camMaxsX, s.bounds_min_naive[0] ), CmpLeSIMD( camMinsX, s.bounds_max_naive[0] ) ),
+				AndSIMD( CmpGeSIMD( camMaxsY, s.bounds_min_naive[1] ), CmpLeSIMD( camMinsY, s.bounds_max_naive[1] ) )
+			),
+			AndSIMD( CmpGeSIMD( camMaxsZ, s.bounds_min_naive[2] ), CmpLeSIMD( camMinsZ, s.bounds_max_naive[2] ) )
+		);
+
 		for ( uint j = 0; j < s.count; j++ )
 		{
 			def_light_t *pLight = s.lights[j];
+
 			const bool bHasVolumetrics = ( pLight->HasVolumetrics() && pLight->HasShadow() && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f ) );
 			if ( bHasVolumetrics )
 			{
@@ -322,7 +340,11 @@ void CLightingManager::SortLights()
 
 			if ( pLight->IsSpot() )
 			{
-				const bool bNeedsFullscreen = !R_CullBox( camMins, camMaxs, pLight->spotFrustum );
+				bool bNeedsFullscreen = false;
+				if ( ( SubInt( boxIntersects, j ) & 0x80000000 ) != 0 )
+				{
+					bNeedsFullscreen = !R_CullBox( camMins, camMaxs, pLight->spotFrustum );
+				}
 				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( pLight );
 			}
 			else
