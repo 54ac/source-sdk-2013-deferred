@@ -84,6 +84,7 @@
 #	define DEFRTNAME_GBUFFER3 "_rt_defSpecular"
 #endif
 #define DEFRTNAME_LIGHTACCUM "_rt_LightAccum"
+#define DEFRTNAME_LIGHTACCUM_SPECULAR "_rt_LightAccum_Specular"
 
 #define DEFRTNAME_VOLUMPREPASS "_rt_VolumPrepass"
 #define DEFRTNAME_VOLUMACCUM "_rt_VolumAccum_"					// + %02i

@@ -24,6 +24,7 @@ struct PS_INPUT
 struct PS_OUTPUT
 {
 	float4 vColor_0				:	COLOR0;
+	float4 vColor_1				:	COLOR1;
 };
 
 PS_OUTPUT main( const PS_INPUT In )
@@ -40,6 +41,7 @@ PS_OUTPUT main( const PS_INPUT In )
 		g_vecRadiosityOrigin, g_vecRadiosityOrigin_Far, g_flRadiositySettings );
 
 	Out.vColor_0 = float4( color , 1 );
+	Out.vColor_1 = float4( 0, 0, 0, 0 );
 
 	return Out;
 }

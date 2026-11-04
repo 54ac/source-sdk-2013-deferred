@@ -66,6 +66,7 @@ sampler sNormals						: register( s1 );
 #endif
 
 sampler sLightAccum						: register( s2 );
+sampler sLightAccumSpecular				: register( s9 );
 
 #if BUMPMASK
 sampler sBumpmap						: register( s8 );
@@ -189,6 +190,7 @@ PS_OUTPUT main( const PS_INPUT In )
 	float2 screenPos = ( In.vScreenPos + 0.5f ) * g_vecFullScreenTexel.xy;
 
 	float4 flLighting = ReadLighting( tex2D( sLightAccum, screenPos ) );
+	float3 flLightSpecular = ReadLighting( tex2D( sLightAccumSpecular, screenPos ) ).rgb;
 
 #if READNORMAL
 	float4 flNormalCtrl = tex2D( sNormals, screenPos );
@@ -232,7 +234,7 @@ PS_OUTPUT main( const PS_INPUT In )
 		flSpecularMask = 1.0f - flSpecularMask;
 
 	float3 flSpecularTint = lerp( float3( 1.0f, 1.0f, 1.0f ), flAlbedoSample.rgb, g_bPhongAlbedoTint ? 1.0f : 0.0f );
-	float3 flSpecularHighlight = flLighting.w * flSpecularMask * g_flPhongBoost * flSpecularTint;
+	float3 flSpecularHighlight = flLightSpecular * flSpecularMask * g_flPhongBoost * flSpecularTint;
 
 #if PHONGFRESNEL
 	flSpecularHighlight *= flFresnel;

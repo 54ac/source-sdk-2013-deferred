@@ -77,6 +77,7 @@ struct PS_INPUT
 struct PS_OUTPUT
 {
 	float4 vColor_0				:	COLOR0;
+	float4 vColor_1				:	COLOR1;
 };
 
 
@@ -220,7 +221,8 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	float3 worldRayInv = normalize( -vecWorldRay );
 
-	float4 flLight = 0;
+	float3 flDiffuseAccum = 0;
+	float3 flSpecularAccum = 0;
 
 	for ( int i = 0; i < NUM_SHADOWED_COOKIE; i++ )
 	{
@@ -262,9 +264,11 @@ PS_OUTPUT main( const PS_INPUT In )
 		localLight.w *= 1.0f - any( floor( depthPos.xyz ) );
 #endif
 
-		flLight += DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
+		LightAccum_t lightOut = DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
 			localLight, DoStandardCookie( sMixedSampler[ iSamplerIndex + 1 ], depthPos.xy ) );
+		flDiffuseAccum += lightOut.diffuse;
+		flSpecularAccum += lightOut.specular;
 	}
 
 	for ( int i = 0; i < NUM_SHADOWED; i++ )
@@ -308,9 +312,11 @@ PS_OUTPUT main( const PS_INPUT In )
 		localLight.w *= 1.0f - any( floor( depthPos.xyz ) );
 #endif
 
-		flLight += DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
+		LightAccum_t lightOut = DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
 			localLight );
+		flDiffuseAccum += lightOut.diffuse;
+		flSpecularAccum += lightOut.specular;
 	}
 
 	for ( int i = 0; i < NUM_COOKIE; i++ )
@@ -348,9 +354,11 @@ PS_OUTPUT main( const PS_INPUT In )
 		localLight.w *= 1.0f - any( floor( depthPos.xyz ) );
 #endif
 
-		flLight += DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
+		LightAccum_t lightOut = DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
 			localLight, DoStandardCookie( sMixedSampler[ iSamplerIndex ], depthPos.xy ) );
+		flDiffuseAccum += lightOut.diffuse;
+		flSpecularAccum += lightOut.specular;
 	}
 
 	for ( int i = 0; i < NUM_SIMPLE; i++ )
@@ -367,14 +375,17 @@ PS_OUTPUT main( const PS_INPUT In )
 									-vecDelta, dist, worldRayInv,
 									litface, half_lambert, phong_exp, true );
 
-		flLight += DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
+		LightAccum_t lightOut = DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
 			localLight );
+		flDiffuseAccum += lightOut.diffuse;
+		flSpecularAccum += lightOut.specular;
 	}
 
 	PS_OUTPUT Out;
 
-	Out.vColor_0 = WriteLighting( flLight );
+	Out.vColor_0 = WriteLighting( float4( flDiffuseAccum, 1.0f ) );
+	Out.vColor_1 = WriteLighting( float4( flSpecularAccum, 1.0f ) );
 
 	return Out;
 }

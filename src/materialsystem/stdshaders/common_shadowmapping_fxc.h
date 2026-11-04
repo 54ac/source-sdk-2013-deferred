@@ -534,17 +534,24 @@ float PerformShadowMapping( sampler depthMap, float3 uvw, float4 offsets_0, floa
 }
 
 float3 ToShadowSpace_Ortho( float3 worldPos, float viewFwdDot, float3 vecNormal,
-	float3 vecSlopeData, float4x3 viewProjOrtho )
+	float4 vecSlopeData, float4x3 viewProjOrtho )
 {
-	worldPos += vecNormal * ( 1.0f - abs( viewFwdDot ) ) * vecSlopeData.z;
+	float cosTheta = saturate( viewFwdDot );
+	float sinTheta = sqrt( saturate( 1.0f - cosTheta * cosTheta ) );
+	float tanTheta = min( sinTheta / max( 0.001f, cosTheta ), 4.0f );
+
+	worldPos += vecNormal * ( sinTheta * vecSlopeData.z );
 
 	float3 shadowPos = mul( float4( worldPos, 1 ), viewProjOrtho );
+
+	float depthBias = ( vecSlopeData.x + vecSlopeData.y * tanTheta ) * vecSlopeData.w;
+	shadowPos.z -= depthBias;
 
 	return shadowPos.xyz;
 }
 
 float PerformCascadedShadow( sampler sShadowMap, float3 worldPos,
-	float4x3 viewProjOrtho[SHADOW_NUM_CASCADES], float4 vecUVTransform[SHADOW_NUM_CASCADES], float3 vecSlopeData[SHADOW_NUM_CASCADES],
+	float4x3 viewProjOrtho[SHADOW_NUM_CASCADES], float4 vecUVTransform[SHADOW_NUM_CASCADES], float4 vecSlopeData[SHADOW_NUM_CASCADES],
 	float4 vecFilterConfig_A[SHADOW_NUM_CASCADES], float4 vecFilterConfig_B[SHADOW_NUM_CASCADES],
 	float3 flNormal, float viewFwdDot,
 	float flEyeDist, float4 csmDistances )

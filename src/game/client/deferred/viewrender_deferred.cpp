@@ -1273,6 +1273,11 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 		pRenderContext->ClearColor4ub( 255, 255, 255, 0 );
 		pRenderContext->ClearBuffers( true, false );
 		pRenderContext->PopRenderTargetAndViewport();
+
+		pRenderContext->PushRenderTargetAndViewport( GetDefRT_LightaccumSpecular() );
+		pRenderContext->ClearColor4ub( 0, 0, 0, 0 );
+		pRenderContext->ClearBuffers( true, false );
+		pRenderContext->PopRenderTargetAndViewport();
 		return;
 	}
 
@@ -1328,7 +1333,14 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 		engine->GetScreenSize( lightingView.width, lightingView.height );
 
 	CMatRenderContextPtr pRenderContext( materials );
+
+	pRenderContext->PushRenderTargetAndViewport( GetDefRT_LightaccumSpecular(), 0, 0, lightingView.width, lightingView.height );
+	pRenderContext->ClearColor4ub( 0, 0, 0, 0 );
+	pRenderContext->ClearBuffers( true, false );
+	pRenderContext->PopRenderTargetAndViewport();
+
 	pRenderContext->PushRenderTargetAndViewport( GetDefRT_Lightaccum(), 0, 0, lightingView.width, lightingView.height );
+	pRenderContext->SetRenderTargetEx( 1, GetDefRT_LightaccumSpecular() );
 
 	if ( bResetLightAccum )
 	{
@@ -1336,7 +1348,9 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 		pRenderContext->ClearBuffers( true, false );
 	}
 	else
+	{
 		DrawLightPassFullscreen( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_GLOBAL ), lightingView.width, lightingView.height );
+	}
 
 	pRenderContext.SafeRelease();
 
@@ -1346,6 +1360,7 @@ void CDeferredViewRender::PerformLighting( const CViewSetup &view )
 		EndRadiosity( view );
 
 	pRenderContext.GetFrom( materials );
+	pRenderContext->SetRenderTargetEx( 1, NULL );
 	pRenderContext->PopRenderTargetAndViewport();
 }
 

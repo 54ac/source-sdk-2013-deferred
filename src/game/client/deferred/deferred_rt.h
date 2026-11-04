@@ -14,6 +14,7 @@ ITexture *GetDefRT_Albedo();
 ITexture *GetDefRT_Specular();
 ITexture *GetDefRT_LightCtrl();
 ITexture *GetDefRT_Lightaccum();
+ITexture *GetDefRT_LightaccumSpecular();
 
 ITexture *GetDefRT_VolumePrepass();
 ITexture *GetDefRT_VolumetricsBuffer( int index );

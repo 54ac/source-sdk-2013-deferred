@@ -190,6 +190,9 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		pShaderShadow->EnableTexture( SHADER_SAMPLER2, true );
 		pShaderShadow->EnableSRGBRead( SHADER_SAMPLER2, false );
 
+		pShaderShadow->EnableTexture( SHADER_SAMPLER9, true );
+		pShaderShadow->EnableSRGBRead( SHADER_SAMPLER9, false );
+
 		if ( bEnvmap )
 		{
 			pShaderShadow->EnableTexture( SHADER_SAMPLER3, true );
@@ -457,6 +460,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 			pShader->BindTexture( SHADER_SAMPLER1, GetDeferredExt()->GetTexture_Normals() );
 
 		pShader->BindTexture( SHADER_SAMPLER2, GetDeferredExt()->GetTexture_LightAccum() );
+		pShader->BindTexture( SHADER_SAMPLER9, GetDeferredExt()->GetTexture_LightAccumSpecular() );
 
 		if ( bEnvmap && bModel )
 		{
