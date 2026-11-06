@@ -107,10 +107,10 @@ FORCEINLINE void CommitShadowProjectionConstants_Ortho_Composite( IShaderDynamic
 
 FORCEINLINE void CommitCSMDistances( IShaderDynamicAPI *pShaderAPI, int iConstantRegister )
 {
-	static ConVarRef r_deferred_csm_max_dist( "r_deferred_csm_max_dist" );
-	static ConVarRef r_deferred_csm_split_dist( "r_deferred_csm_split_dist" );
-	float flSplitDist = r_deferred_csm_split_dist.IsValid() ? r_deferred_csm_split_dist.GetFloat() : 1024.0f;
-	float flMaxDist = r_deferred_csm_max_dist.IsValid() ? r_deferred_csm_max_dist.GetFloat() : 4096.0f;
+	const lightData_Global_t &globalLight = GetDeferredExt()->GetLightData_Global();
+	float flSplitDist = globalLight.flCSMSplitDist;
+	float flMaxDist = globalLight.flCSMMaxDist;
+
 	if ( flSplitDist <= 64.0f ) flSplitDist = 1024.0f;
 	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
 	float csmDist[4] = { flSplitDist, flMaxDist, 1.0f / ( flSplitDist * 0.15f ), 1.0f / ( flMaxDist * 0.15f ) };

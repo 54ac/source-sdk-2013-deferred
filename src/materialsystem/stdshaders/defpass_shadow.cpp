@@ -90,10 +90,6 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 				pShaderShadow->EnableTexture( SHADER_SAMPLER1, true );
 		}
 
-#if DEFCFG_BILATERAL_DEPTH_TEST
-		pShaderShadow->EnableTexture( SHADER_SAMPLER4, true );
-#endif
-
 		pShaderShadow->VertexShaderVertexFormat( iVFmtFlags, iTexCoordNum, pTexCoordDim, iUserDataSize );
 
 		DECLARE_STATIC_VERTEX_SHADER( shadowpass_vs30 );
@@ -173,10 +169,6 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 		}
 
 		pShaderAPI->SetDefaultState();
-
-#if DEFCFG_BILATERAL_DEPTH_TEST
-		pShaderAPI->SetVertexShaderConstant( VERTEX_SHADER_SHADER_SPECIFIC_CONST_3, GetDeferredExt()->GetWorldToCameraDepthTexBase(), 4, true );
-#endif
 
 		if ( bModel && !nTreeSwayMode && bFastVTex )
 			pShader->SetHWMorphVertexShaderState( VERTEX_SHADER_SHADER_SPECIFIC_CONST_10, VERTEX_SHADER_SHADER_SPECIFIC_CONST_11, SHADER_VERTEXTEXTURE_SAMPLER0 );

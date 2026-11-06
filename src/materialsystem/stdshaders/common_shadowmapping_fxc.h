@@ -231,7 +231,7 @@ float ShadowColor_4x4SoftwareBilinear_Box( sampler depthMap, float3 uvw, float4 
 	return 1.0f - flLight;
 }
 
-float ShadowColor_SoftwareBilinear_SingleRow_4Tap( sampler depthMap, float objDepth, float2 uv_start, float texelsize, float frac_x )
+float ShadowColor_SoftwareBilinear_SingleRow_4Tap( sampler depthMap, float objDepth, float2 uv_start, float texelsize, float frac_x, float3 weights )
 {
 	float flLast = saturate( ceil( tex2D( depthMap, uv_start ).r - objDepth ) );
 	float flLight = 0.0f;
@@ -240,14 +240,14 @@ float ShadowColor_SoftwareBilinear_SingleRow_4Tap( sampler depthMap, float objDe
 		uv_start.x += texelsize;
 
 		float flNext = saturate( ceil( tex2D( depthMap, uv_start ).r - objDepth ) );
-		flLight += lerp( flLast, flNext, frac_x ) * gauss3[x];
+		flLight += lerp( flLast, flNext, frac_x ) * weights[x];
 
 		flLast = flNext;
 	}
 	return flLight;
 }
 
-float ShadowColor_SoftwareBilinear_SingleRow_5Tap( sampler depthMap, float objDepth, float2 uv_start, float texelsize, float frac_x )
+float ShadowColor_SoftwareBilinear_SingleRow_5Tap( sampler depthMap, float objDepth, float2 uv_start, float texelsize, float frac_x, float4 weights )
 {
 	float flLast = saturate( ceil( tex2D( depthMap, uv_start ).r - objDepth ) );
 	float flLight = 0.0f;
@@ -256,27 +256,36 @@ float ShadowColor_SoftwareBilinear_SingleRow_5Tap( sampler depthMap, float objDe
 		uv_start.x += texelsize;
 
 		float flNext = saturate( ceil( tex2D( depthMap, uv_start ).r - objDepth ) );
-		flLight += lerp( flLast, flNext, frac_x ) * gauss4[x];
+		flLight += lerp( flLast, flNext, frac_x ) * weights[x];
 
 		flLast = flNext;
 	}
 	return flLight;
 }
 
-float ShadowColor_4x4SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1 )
+float ShadowColor_4x4SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1, float lightFilterScale = 0.0f )
 {
-	float2 frac_uv = frac( uvw.xy * offsets_1.xy );
-	float2 texel_min = uvw.xy - frac_uv.xy / offsets_1.xy - offsets_0.xy * 0.5f;
+	float2 baseCoord = uvw.xy * offsets_1.xy - 0.5f;
+	float2 iBase = floor( baseCoord );
+	float2 frac_uv = frac( baseCoord );
+	float2 step = 1.0f / offsets_1.xy;
+	float2 texel_min = ( iBase - 1.0f + 0.5f ) * step;
+
+	float flScale = ( lightFilterScale > 0.001f ) ? lightFilterScale : max( 0.2f, offsets_0.x * offsets_1.x );
+	float k = 1.125f / ( flScale * flScale );
+	float w0 = exp( -k );
+	float norm = 1.0f / ( 2.0f * w0 + 1.0f );
+	float3 weights = float3( w0, 1.0f, w0 ) * norm;
 
 	float flLight = 0.0f;
-	float flRowLast = ShadowColor_SoftwareBilinear_SingleRow_4Tap( depthMap, uvw.z, texel_min, offsets_0.x, frac_uv.x );
+	float flRowLast = ShadowColor_SoftwareBilinear_SingleRow_4Tap( depthMap, uvw.z, texel_min, step.x, frac_uv.x, weights );
 
 	for ( int y = 0; y < 3; y++ )
 	{
-		texel_min.y += offsets_0.y;
+		texel_min.y += step.y;
 
-		float flRowCur = ShadowColor_SoftwareBilinear_SingleRow_4Tap( depthMap, uvw.z, texel_min, offsets_0.x, frac_uv.x );
-		flLight += lerp( flRowLast, flRowCur, frac_uv.y ) * gauss3[y];
+		float flRowCur = ShadowColor_SoftwareBilinear_SingleRow_4Tap( depthMap, uvw.z, texel_min, step.x, frac_uv.x, weights );
+		flLight += lerp( flRowLast, flRowCur, frac_uv.y ) * weights[y];
 
 		flRowLast = flRowCur;
 	}
@@ -284,20 +293,29 @@ float ShadowColor_4x4SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float
 	return flLight;
 }
 
-float ShadowColor_5x5SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1 )
+float ShadowColor_5x5SoftwareBilinear_Gauss( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1, float lightFilterScale = 0.0f )
 {
-	float2 frac_uv = frac( uvw.xy * offsets_1.xy );
-	float2 texel_min = uvw.xy - frac_uv.xy / offsets_1.xy - offsets_0.xy * 0.5f;
+	float2 baseCoord = uvw.xy * offsets_1.xy;
+	float2 iBase = floor( baseCoord );
+	float2 frac_uv = frac( baseCoord );
+	float2 step = 1.0f / offsets_1.xy;
+	float2 texel_min = ( iBase - 1.5f ) * step;
+
+	float flScale = ( lightFilterScale > 0.001f ) ? lightFilterScale : max( 0.2f, offsets_0.x * offsets_1.x );
+	float k = 0.72f / ( flScale * flScale );
+	float2 w = exp( float2( -2.25f, -0.25f ) * k );
+	float norm = 0.5f / ( w.x + w.y );
+	float4 weights = float4( w.x, w.y, w.y, w.x ) * norm;
 
 	float flLight = 0.0f;
-	float flRowLast = ShadowColor_SoftwareBilinear_SingleRow_5Tap( depthMap, uvw.z, texel_min, offsets_0.x, frac_uv.x );
+	float flRowLast = ShadowColor_SoftwareBilinear_SingleRow_5Tap( depthMap, uvw.z, texel_min, step.x, frac_uv.x, weights );
 
 	for ( int y = 0; y < 4; y++ )
 	{
-		texel_min.y += offsets_0.y;
+		texel_min.y += step.y;
 
-		float flRowCur = ShadowColor_SoftwareBilinear_SingleRow_5Tap( depthMap, uvw.z, texel_min, offsets_0.x, frac_uv.x );
-		flLight += lerp( flRowLast, flRowCur, frac_uv.y ) * gauss4[y];
+		float flRowCur = ShadowColor_SoftwareBilinear_SingleRow_5Tap( depthMap, uvw.z, texel_min, step.x, frac_uv.x, weights );
+		flLight += lerp( flRowLast, flRowCur, frac_uv.y ) * weights[y];
 
 		flRowLast = flRowCur;
 	}
@@ -504,7 +522,7 @@ pFl1[0] = resx;
 pFl1[1] = resy;
 */
 
-float PerformShadowMapping( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1 )
+float PerformShadowMapping( sampler depthMap, float3 uvw, float4 offsets_0, float4 offsets_1, float lightFilterScale = 0.0f )
 {
 #if SHADOWMAPPING_METHOD == SHADOWMAPPING_DEPTH_COLOR__RAW
 	return ShadowColor_Raw( depthMap, uvw );
@@ -513,10 +531,10 @@ float PerformShadowMapping( sampler depthMap, float3 uvw, float4 offsets_0, floa
 	return ShadowColor_4x4SoftwareBilinear_Box( depthMap, uvw, offsets_0, offsets_1 );
 
 #elif SHADOWMAPPING_METHOD == SHADOWMAPPING_DEPTH_COLOR__4X4_SOFTWARE_BILINEAR_GAUSSIAN
-	return ShadowColor_4x4SoftwareBilinear_Gauss( depthMap, uvw, offsets_0, offsets_1 );
+	return ShadowColor_4x4SoftwareBilinear_Gauss( depthMap, uvw, offsets_0, offsets_1, lightFilterScale );
 
 #elif SHADOWMAPPING_METHOD == SHADOWMAPPING_DEPTH_COLOR__5X5_SOFTWARE_BILINEAR_GAUSSIAN
-	return ShadowColor_5x5SoftwareBilinear_Gauss( depthMap, uvw, offsets_0, offsets_1 );
+	return ShadowColor_5x5SoftwareBilinear_Gauss( depthMap, uvw, offsets_0, offsets_1, lightFilterScale );
 
 #elif SHADOWMAPPING_METHOD == SHADOWMAPPING_DEPTH_STENCIL__RAW
 	return ShadowDepth_Raw_Nvidia( depthMap, uvw );
@@ -681,9 +699,9 @@ float PerformTetrahedralShadow( sampler shadowSampler, float3 vecLightToGeometry
 }
 
 float PerformProjectedShadow( sampler shadowSampler, float3 uvw,
-	float4 offsets_0, float4 offset_1, float shadowMin )
+	float4 offsets_0, float4 offset_1, float shadowMin, float lightFilterScale = 0.0f )
 {
-	return max( shadowMin, PerformShadowMapping( shadowSampler, uvw, offsets_0, offset_1 ) );
+	return max( shadowMin, PerformShadowMapping( shadowSampler, uvw, offsets_0, offset_1, lightFilterScale ) );
 }
 
 #endif

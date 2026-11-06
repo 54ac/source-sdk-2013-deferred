@@ -78,11 +78,6 @@ struct PS_OUTPUT
 
 #if ( DECAL == 0 )
 	float4 vColor_1				:	COLOR1;
-
-#	if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-	float4 vColor_2				:	COLOR2;
-#	endif
-
 #endif
 };
 
@@ -143,13 +138,8 @@ PS_OUTPUT main( const PS_INPUT In )
 #	endif
 #endif
 
-#if DEFCFG_LIGHTCTRL_PACKING
 	Out.vColor_0 = float4( worldNormal, PackLightingControls( phong_exp,
 		g_flHalflambert_Litface.x, g_flHalflambert_Litface.y ) );
-#else
-	Out.vColor_0 = float4( worldNormal, 1 );
-	Out.vColor_2 = float4( phong_exp / 63.0f, g_flHalflambert_Litface.xy, 0 );
-#endif
 
 	Out.vColor_1 = float4( In.worldNormal_Depth.w, 0, 0, 1 );
 

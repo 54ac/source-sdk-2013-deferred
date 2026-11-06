@@ -23,6 +23,7 @@ BEGIN_DATADESC_NO_BASE( def_light_t )
 	DEFINE_KEYFIELD( flFalloffPower, FIELD_FLOAT, GetLightParamName( LPARAM_POWER ) ),
 	DEFINE_KEYFIELD( flSpotCone_Inner, FIELD_FLOAT, GetLightParamName( LPARAM_SPOTCONE_INNER ) ),
 	DEFINE_KEYFIELD( flSpotCone_Outer, FIELD_FLOAT, GetLightParamName( LPARAM_SPOTCONE_OUTER ) ),
+	DEFINE_KEYFIELD( flShadowFilterScale, FIELD_FLOAT, GetLightParamName( LPARAM_SHADOW_FILTER_SCALE ) ),
 
 	DEFINE_KEYFIELD( iVisible_Dist, FIELD_SHORT, GetLightParamName( LPARAM_VIS_DIST ) ),
 	DEFINE_KEYFIELD( iVisible_Range, FIELD_SHORT, GetLightParamName( LPARAM_VIS_RANGE ) ),
@@ -39,13 +40,6 @@ BEGIN_DATADESC_NO_BASE( def_light_t )
 	DEFINE_KEYFIELD( flStyle_Random, FIELD_FLOAT, GetLightParamName( LPARAM_STYLE_RANDOM ) ),
 	DEFINE_KEYFIELD( iStyleSeed, FIELD_SHORT, GetLightParamName( LPARAM_STYLE_SEED ) ),
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	DEFINE_KEYFIELD( flVolumeLOD0Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD0_DIST ) ),
-	DEFINE_KEYFIELD( flVolumeLOD1Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD1_DIST ) ),
-	DEFINE_KEYFIELD( flVolumeLOD2Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD2_DIST ) ),
-	DEFINE_KEYFIELD( flVolumeLOD3Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD3_DIST ) ),
-#endif
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	DEFINE_KEYFIELD( iVolumeSamples, FIELD_SHORT, GetLightParamName( LPARAM_VOLUME_SAMPLES ) ),
 	DEFINE_KEYFIELD( flUberRoundness, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_ROUNDNESS ) ),
 	DEFINE_KEYFIELD( flUberWidth, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WIDTH ) ),
@@ -58,7 +52,6 @@ BEGIN_DATADESC_NO_BASE( def_light_t )
 	DEFINE_KEYFIELD( flUberCutOff, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_CUTOFF ) ),
 	DEFINE_KEYFIELD( flUberNearEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_NEAREDGE ) ),
 	DEFINE_KEYFIELD( flUberFarEdge, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_FAREDGE ) ),
-#endif
 END_DATADESC()
 
 IMesh *def_light_t::pMeshUnitSphere = NULL;
@@ -86,6 +79,7 @@ def_light_t::def_light_t( bool bWorld )
 
 	flSpotCone_Inner = SPOT_DEGREE_TO_RAD( 35 );
 	flSpotCone_Outer = SPOT_DEGREE_TO_RAD( 45 );
+	flShadowFilterScale = 0.0f;
 	flFOV = 90.0f;
 
 	iVisible_Dist = 16384;
@@ -101,17 +95,7 @@ def_light_t::def_light_t( bool bWorld )
 	flLastRandomTime = 0;
 	flLastRandomValue = 0;
 
-
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	flVolumeLOD0Dist = 128;
-	flVolumeLOD1Dist = 256;
-	flVolumeLOD2Dist = 512;
-	flVolumeLOD3Dist = 1024;
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
-	iVolumeSamples= 50;
-#endif
+	iVolumeSamples = 50;
 
 	flUberRoundness = 1.0f;
 	flUberWidth = 0.5f;
@@ -529,7 +513,6 @@ void def_light_t::UpdateXForms()
 		{
 			Vector points[5];
 			const int numPoints = ARRAYSIZE( points );
-#if DEFCFG_USE_SSE
 			static const fltx4 ALIGN32 _normPos[4] ALIGN32_POST = {
 				{  1.f,  1.f, 1.f, 1.f },
 				{ -1.f,  1.f, 1.f, 1.f },
@@ -566,19 +549,6 @@ void def_light_t::UpdateXForms()
 
 				Q_memcpy( points[i].Base(), &SubFloat( pointx4, 0 ), 3 * sizeof(float) );
 			}
-#else
-			static const Vector _normPos[4] = {
-				Vector( 1, 1, 1 ),
-				Vector( -1, 1, 1 ),
-				Vector( -1, -1, 1 ),
-				Vector( 1, -1, 1 ),
-			};
-
-			points[4] = pos;
-
-			for ( int i = 0; i < 4; i++ )
-				Vector3DMultiplyPositionProjective( spotMVPInv, _normPos[i], points[i] );
-#endif
 			points[4] = pos;
 
 			Vector list[6];

@@ -82,34 +82,24 @@ struct LightAccum_t
 LightAccum_t DoLightFinal( float3 diffuseColor, float3 ambientColor, float4 litdot_lamount_spec_fade )
 {
 	LightAccum_t result;
-#if DEFCFG_CHEAP_LIGHTS
-	result.diffuse = diffuseColor * litdot_lamount_spec_fade.y;
-	result.specular = (float3)0;
-#else
 	float lightAmount = litdot_lamount_spec_fade.y;
 	float specularVal = litdot_lamount_spec_fade.z;
 	float fade = litdot_lamount_spec_fade.w;
 
 	result.diffuse = lerp( ambientColor, diffuseColor, lightAmount ) * fade;
 	result.specular = diffuseColor * ( specularVal * lightAmount * fade );
-#endif
 	return result;
 }
 
 LightAccum_t DoLightFinalCookied( float3 diffuseColor, float3 ambientColor, float4 litdot_lamount_spec_fade, float3 vecCookieRGB )
 {
 	LightAccum_t result;
-#if DEFCFG_CHEAP_LIGHTS
-	result.diffuse = diffuseColor * vecCookieRGB * litdot_lamount_spec_fade.y;
-	result.specular = (float3)0;
-#else
 	float lightAmount = litdot_lamount_spec_fade.y;
 	float specularVal = litdot_lamount_spec_fade.z;
 	float fade = litdot_lamount_spec_fade.w;
 
 	result.diffuse = lerp( ambientColor, diffuseColor * vecCookieRGB, lightAmount ) * fade;
 	result.specular = diffuseColor * vecCookieRGB * ( specularVal * lightAmount * fade );
-#endif
 	return result;
 }
 

@@ -17,12 +17,6 @@ CDeferredExtension::CDeferredExtension()
 	m_pTexDepth = NULL;
 	m_pTexLightAccum = NULL;
 	m_pTexLightAccumSpecular = NULL;
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-	m_pTexLightCtrl = NULL;
-#elif DEFCFG_DEFERRED_SHADING == 1
-	m_pTexAlbedo = NULL;
-	m_pTexSpecular = NULL;
-#endif
 
 	Q_memset( m_pTexShadowDepth_Ortho, 0, sizeof( ITexture* ) * MAX_SHADOW_ORTHO );
 	Q_memset( m_pTexShadowDepth_DP, 0, sizeof( ITexture* ) * MAX_SHADOW_DP );
@@ -72,20 +66,13 @@ bool CDeferredExtension::IsRadiosityEnabled() const
 void CDeferredExtension::CommitCommonData( const Vector& origin,
 										   const Vector& fwd,
 										   const float& zNear, const float& zFar,
-										   const VMatrix& matTFrustum
-#if DEFCFG_BILATERAL_DEPTH_TEST
-										   , const VMatrix &matWorldCameraDepthTex
-#endif
-																							)
+										   const VMatrix& matTFrustum )
 {
 	m_vecOrigin = origin;
 	m_vecForward = fwd;
 	m_flZDists[0] = zNear;
 	m_flZDists[1] = zFar;
 	m_matTFrustumD = matTFrustum;
-#if DEFCFG_BILATERAL_DEPTH_TEST
-	m_matWorldCameraDepthTex = matWorldCameraDepthTex;
-#endif
 }
 
 void CDeferredExtension::CommitZScale( const float &zFar )
@@ -150,12 +137,6 @@ void CDeferredExtension::CommitLightData_Common( lightDataCommon_t* pData )
 }
 
 void CDeferredExtension::CommitTexture_General( ITexture *pTexNormals, ITexture *pTexDepth,
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-		ITexture *pTexLightingCtrl,
-#elif DEFCFG_DEFERRED_SHADING == 1
-		ITexture *pTexAlbedo,
-		ITexture *pTexSpecular,
-#endif
 		ITexture *pTexLightAccum,
 		ITexture *pTexLightAccumSpecular )
 {
@@ -163,12 +144,6 @@ void CDeferredExtension::CommitTexture_General( ITexture *pTexNormals, ITexture 
 	m_pTexDepth = pTexDepth;
 	m_pTexLightAccum = pTexLightAccum;
 	m_pTexLightAccumSpecular = pTexLightAccumSpecular;
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-	m_pTexLightCtrl = pTexLightingCtrl;
-#elif DEFCFG_DEFERRED_SHADING == 1
-	m_pTexAlbedo = pTexAlbedo;
-	m_pTexSpecular = pTexSpecular;
-#endif
 }
 void CDeferredExtension::CommitTexture_CascadedDepth( const int &index, ITexture *pTexShadowDepth )
 {

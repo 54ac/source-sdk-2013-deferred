@@ -29,9 +29,6 @@ public:
 	void			ViewDrawComposite( const CViewSetup &view, bool &bDrew3dSkybox, SkyboxVisibility_t &nSkyboxVisible,
 									   int nClearFlags, view_id_t viewID, bool bDrawViewModel );
 
-	void			ViewCombineDeferredShading( const CViewSetup &view, view_id_t viewID );
-	void			ViewOutputDeferredShading( const CViewSetup &view );
-
 	void			DrawSkyboxComposite( const CViewSetup &view, const bool &bDrew3dSkybox );
 	void			DrawWorldComposite( const CViewSetup &view, int nClearFlags, bool bDrawSkybox );
 

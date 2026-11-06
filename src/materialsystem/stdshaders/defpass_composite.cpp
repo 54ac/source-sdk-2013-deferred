@@ -93,6 +93,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 {
 	const bool bModel = info.bModel;
 	const bool bIsDecal = IS_FLAG_SET( MATERIAL_VAR_DECAL );
+	const bool bVertexColor = !bModel && ( bIsDecal || IS_FLAG_SET( MATERIAL_VAR_VERTEXCOLOR ) );
 	const bool bFastVTex = g_pHardwareConfig->HasFastVertexTextures();
 
 	const bool bAlbedo = PARM_TEX( info.iAlbedo );
@@ -103,7 +104,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 
 	const bool bNoCull = IS_FLAG_SET( MATERIAL_VAR_NOCULL );
 
-	const bool bUseSRGB = DEFCFG_USE_SRGB_CONVERSION != 0;
+	const bool bUseSRGB = true;
 
 	const bool bUseSpecular = g_pConfig->UseSpecular();
 	const bool bEnvmap = bUseSpecular && PARM_TEX( info.iEnvmap );
@@ -169,7 +170,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		}
 		else
 		{
-			if ( bAlbedo2 )
+			if ( bAlbedo2 || bVertexColor )
 				iVFmtFlags |= VERTEX_COLOR;
 		}
 
@@ -243,6 +244,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		SET_STATIC_VERTEX_SHADER_COMBO( BASETEXTURE2, bAlbedo2 );
 		SET_STATIC_VERTEX_SHADER_COMBO( BLENDMODULATE, bBlendmodulate );
 		SET_STATIC_VERTEX_SHADER_COMBO( TREESWAY, nTreeSwayMode );
+		SET_STATIC_VERTEX_SHADER_COMBO( VERTEXCOLOR, bVertexColor );
 		SET_STATIC_VERTEX_SHADER( composite_vs30 );
 
 		DECLARE_STATIC_PIXEL_SHADER( composite_ps30 );
@@ -264,6 +266,7 @@ void DrawPassComposite( const defParms_composite &info, CBaseVSShader *pShader, 
 		SET_STATIC_PIXEL_SHADER_COMBO( SELFILLUM_MASK, bSelfIllumMask );
 		SET_STATIC_PIXEL_SHADER_COMBO( SELFILLUM_ENVMAP_ALPHA, bSelfIllumMaskInEnvmapMask );
 		SET_STATIC_PIXEL_SHADER_COMBO( PARALLAXCORRECT, bEnvmapCorrection );
+		SET_STATIC_PIXEL_SHADER_COMBO( VERTEXCOLOR, bVertexColor );
 		SET_STATIC_PIXEL_SHADER( composite_ps30 );
 	}
 	DYNAMIC_STATE

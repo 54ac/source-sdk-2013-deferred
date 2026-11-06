@@ -43,9 +43,6 @@
 
 sampler sNormals							: register( s0 );
 sampler sDepth								: register( s1 );
-#if !DEFCFG_LIGHTCTRL_PACKING
-sampler sLightCtrl							: register( s2 );
-#endif
 
 const float3 g_vecViewOrigin				: register( c0 );
 const float4 g_vecShadowMappingTweaks_0		: register( c1 );
@@ -88,15 +85,6 @@ float4 DoPointLightBasic( const int index, float3 normal,
 	bool litface, bool half_lambert,
 	float phong_exp )
 {
-#if DEFCFG_CHEAP_LIGHTS
-	float3 normalizedLightVec = vecWorldToLight / lightToWorldDist;
-	float litDot = dot( normalizedLightVec, normal );
-
-	float distFade = 1.0f - saturate( lightToWorldDist / g_flMixedData[ index ].w );
-	distFade *= distFade;
-
-	return float4( 0, saturate( litDot ) * distFade, 0, 0 );
-#else
 	float3 normalizedLightVec = vecWorldToLight / lightToWorldDist;
 	float3 flLitNormal = lerp( normal, dot( normal, normalizedLightVec ) * normal, litface );
 
@@ -124,7 +112,6 @@ float4 DoPointLightBasic( const int index, float3 normal,
 	}
 
 	return float4( litDot, lightAmount, flSpecular, distFade );
-#endif
 }
 
 
@@ -163,18 +150,7 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	float phong_exp;
 	bool half_lambert, litface;
-#if DEFCFG_CHEAP_LIGHTS
-	phong_exp = half_lambert = litface = 0;
-#elif !DEFCFG_LIGHTCTRL_PACKING
-	{
-		float4 flLightCtrl = tex2D( sLightCtrl, vecTexcoords );
-		phong_exp = flLightCtrl.x;
-		half_lambert = flLightCtrl.y;
-		litface = flLightCtrl.z;
-	}
-#else
 	UnpackLightingControls( flNormalCtrl.a, phong_exp, half_lambert, litface );
-#endif
 
 	float3 worldRayInv = normalize( -vecWorldRay );
 

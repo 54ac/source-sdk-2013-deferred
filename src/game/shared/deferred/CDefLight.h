@@ -40,6 +40,7 @@ public:
 
 	inline float GetSpotCone_Inner();
 	inline float GetSpotCone_Outer();
+	inline float GetShadowFilterScale();
 
 	inline int GetVisible_Distance();
 	inline int GetVisible_FadeRange();
@@ -57,13 +58,7 @@ public:
 	inline int GetLight_Flags();
 	inline int GetCookieIndex();
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	inline void GetVolumeLODDistances( float& lod0, float& lod1, float& lod2, float& lod3 );
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	inline int GetVolumeSamples();
-#endif
 
 	inline float GetUberRoundness() { return m_flUberRoundness; }
 	inline float GetUberWidth() { return m_flUberWidth; }
@@ -105,6 +100,7 @@ private:
 	CNetworkVar( float, m_flFalloffPower );
 	CNetworkVar( float, m_flSpotConeInner );
 	CNetworkVar( float, m_flSpotConeOuter );
+	CNetworkVar( float, m_flShadowFilterScale );
 
 	CNetworkVar( int, m_iVisible_Dist );
 	CNetworkVar( int, m_iVisible_FadeRange );
@@ -121,16 +117,7 @@ private:
 	CNetworkVar( int, m_iDefFlags );
 	CNetworkVar( int, m_iCookieIndex );
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	CNetworkVar( float, m_flVolumeLOD0Dist );
-	CNetworkVar( float, m_flVolumeLOD1Dist );
-	CNetworkVar( float, m_flVolumeLOD2Dist );
-	CNetworkVar( float, m_flVolumeLOD3Dist );
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	CNetworkVar( int, m_iVolumeSamples );
-#endif
 
 	CNetworkVar( float, m_flUberRoundness );
 	CNetworkVar( float, m_flUberWidth );
@@ -172,6 +159,11 @@ float CDeferredLight::GetSpotCone_Inner()
 float CDeferredLight::GetSpotCone_Outer()
 {
 	return m_flSpotConeOuter;
+}
+
+float CDeferredLight::GetShadowFilterScale()
+{
+	return m_flShadowFilterScale;
 }
 
 int CDeferredLight::GetVisible_Distance()
@@ -225,21 +217,10 @@ int CDeferredLight::GetCookieIndex()
 {
 	return m_iCookieIndex;
 }
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-void CDeferredLight::GetVolumeLODDistances( float& lod0,  float& lod1,  float& lod2, float& lod3 )
-{
-	lod0 = m_flVolumeLOD0Dist;
-	lod1 = m_flVolumeLOD1Dist;
-	lod2 = m_flVolumeLOD2Dist;
-	lod3 = m_flVolumeLOD3Dist;
-}
-#endif
 
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 int CDeferredLight::GetVolumeSamples()
 {
 	return m_iVolumeSamples;
 }
-#endif
 
 #endif

@@ -7,13 +7,13 @@ class CMeshBuilder;
 class IDefCookie;
 
 #define MAX_STATIC_SHADOW_ATLAS_SLOTS 128
-#define STATIC_SHADOW_TILE_RES        1024
+class ConVar;
+extern ConVar r_deferred_rt_shadowspot_static_res;
 
 #define MAX_STATIC_POINT_SHADOW_SLOTS 8
 #define STATIC_POINT_SHADOW_TILE_RES  1024
 #define STATIC_POINT_SHADOW_RES       2048
 
-#if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t
 {
 	fltx4		bounds_min_naive[3];
@@ -23,7 +23,6 @@ struct def_light_presortdatax4_t
 	def_light_t* lights[4];
 	uint16		count;				//this throws the alignment way out
 };
-#endif
 
 struct def_light_t
 {
@@ -57,6 +56,7 @@ struct def_light_t
 
 	float flSpotCone_Inner;
 	float flSpotCone_Outer;
+	float flShadowFilterScale;
 
 	uint16 iVisible_Dist;
 	uint16 iVisible_Range;
@@ -69,14 +69,6 @@ struct def_light_t
 	float flStyle_Random;
 	float flStyle_Speed;
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	float flVolumeLOD0Dist;
-	float flVolumeLOD1Dist;
-	float flVolumeLOD2Dist;
-	float flVolumeLOD3Dist;
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	int	iVolumeSamples;
 	float flUberRoundness;
 	float flUberWidth;
@@ -89,7 +81,6 @@ struct def_light_t
 	float flUberCutOff;
 	float flUberNearEdge;
 	float flUberFarEdge;
-#endif
 
 	void BuildBox( IMesh *pMesh );
 	void BuildSphere( IMesh **pMesh );

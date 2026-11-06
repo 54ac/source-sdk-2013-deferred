@@ -26,20 +26,12 @@ float WriteDepth( float3 worldpos, float3 eyepos, float3 eyeforward, float scale
 
 float4 WriteLighting( float4 normalizedLight )
 {
-#if DEFCFG_LIGHTACCUM_COMPRESSED
-	return normalizedLight / DEFCFG_LIGHTSCALE_COMPRESS_RATIO;
-#else
 	return normalizedLight;
-#endif
 }
 
 float4 ReadLighting( float4 compressedLight )
 {
-#if DEFCFG_LIGHTACCUM_COMPRESSED
-	return compressedLight * DEFCFG_LIGHTSCALE_COMPRESS_RATIO;
-#else
 	return compressedLight;
-#endif
 }
 
 half2 EncodeDirectionVectorXYZToSphericalST( float3 vDirectionVector )

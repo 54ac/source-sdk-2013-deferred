@@ -50,10 +50,8 @@ CLightingManager::CLightingManager() : BaseClass( "LightingManagerSystem" )
 	m_bFrustumPlanesValid = false;
 	GetLightingManager()->ResetStaticAtlasSlots();
 	m_bDrawVolumetrics = false;
-#if DEFCFG_USE_SSE
 	m_pSortDataX4     = NULL;
 	m_uiSortDataCount = 0;
-#endif
 }
 
 CLightingManager::~CLightingManager() {}
@@ -94,13 +92,11 @@ void CLightingManager::Shutdown()
 	materials->RemoveReleaseFunc( LightingResourceRelease );
 	ResetStaticAtlasSlots();
 
-#if DEFCFG_USE_SSE
 	if ( m_pSortDataX4 != NULL )
 	{
 		MemAlloc_FreeAligned( m_pSortDataX4 );
 		m_pSortDataX4 = NULL;
 	}
-#endif
 }
 
 void CLightingManager::LevelInitPostEntity()
@@ -219,7 +215,6 @@ void CLightingManager::LightSetup( const CViewSetup& setup )
 
 	CullLights();
 
-#if DEFCFG_USE_SSE
 	if ( m_bSortDataNeedsRealloc )
 	{
 		AllocateSortDataBuffer();
@@ -227,7 +222,6 @@ void CLightingManager::LightSetup( const CViewSetup& setup )
 	}
 
 	BuildLightSortDataBuffer();
-#endif
 
 	SortLights();
 
@@ -279,9 +273,7 @@ void CLightingManager::AddLight( def_light_t* l )
 		l->SetShadowDirty( true );
 	}
 
-#if DEFCFG_USE_SSE
 	m_bSortDataNeedsRealloc = true;
-#endif
 }
 
 bool CLightingManager::RemoveLight( def_light_t* l )
@@ -291,14 +283,7 @@ bool CLightingManager::RemoveLight( def_light_t* l )
 	AssertMsg( m_bVolatileLists == false, "You MUST NOT remove lights while rendering." );
 #endif
 
-#if DEFCFG_USE_SSE
-	const bool bSuccess = m_hDeferredLights.FindAndRemove( l );
-	//if ( bSuccess )
-	//	m_bSortDataNeedsRealloc = true;
-	return bSuccess;
-#else
 	return m_hDeferredLights.FindAndRemove( l );
-#endif
 }
 
 bool CLightingManager::IsLightRendered( def_light_t* l ) const
@@ -355,13 +340,6 @@ ConVar r_deferred_light_distance_fade(
 	"distance attenuation fading for deferred dynamic lights"
 );
 
-ConVar r_deferred_shadow_dist_min(
-	"r_deferred_shadow_dist_min",
-	"4096",
-	FCVAR_ARCHIVE,
-	"minimum distance for dynamic light shadow fade"
-);
-
 ConVar r_deferred_shadow_max(
 	"r_deferred_shadow_max",
 	"64",
@@ -412,7 +390,6 @@ void CLightingManager::CullLights()
 	Assert( m_hRenderLights.Count() == 0 );
 
 	const bool bDistanceFade = r_deferred_light_distance_fade.GetBool();
-	const float flShadowDistMin = r_deferred_shadow_dist_min.GetFloat();
 
 	if ( !m_bFrustumPlanesValid )
 	{
@@ -431,9 +408,7 @@ void CLightingManager::CullLights()
 			if ( bDistanceFade && ( veclightDelta.LengthSqr() > l->flMaxDistSqr ) )
 				continue;
 
-			const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
-				                                   ? flShadowDistMin
-				                                   : (float)l->iShadow_Dist;
+			const float flEffectiveShadowDist  = (float)l->iShadow_Dist;
 			const float flEffectiveShadowRange = ( l->iShadow_Range > 0 ) ? (float)l->iShadow_Range : 1024.0f;
 
 			l->flDistance_ViewOrigin = veclightDelta.Length();
@@ -542,9 +517,7 @@ void CLightingManager::CullLights()
 			{
 				def_light_t *cur = l[j];
 				const float flDist = SubFloat( distX4, j );
-				const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
-					                                   ? flShadowDistMin
-					                                   : (float)cur->iShadow_Dist;
+				const float flEffectiveShadowDist  = (float)cur->iShadow_Dist;
 				const float flEffectiveShadowRange = ( cur->iShadow_Range > 0 ) ? (float)cur->iShadow_Range : 1024.0f;
 
 				cur->flDistance_ViewOrigin = flDist;
@@ -574,9 +547,7 @@ void CLightingManager::CullLights()
 		if ( bDistanceFade && ( flDistSqr > cur->flMaxDistSqr ) )
 			continue;
 
-		const float flEffectiveShadowDist  = ( flShadowDistMin > 0.0f )
-			                                   ? flShadowDistMin
-			                                   : (float)cur->iShadow_Dist;
+		const float flEffectiveShadowDist  = (float)cur->iShadow_Dist;
 		const float flEffectiveShadowRange = ( cur->iShadow_Range > 0 ) ? (float)cur->iShadow_Range : 1024.0f;
 
 		cur->flDistance_ViewOrigin = FastSqrt( flDistSqr );
@@ -741,7 +712,7 @@ FORCEINLINE int CLightingManager::WriteLight( def_light_t* l, float* pfl4, int b
 				pfl4[0] = l->flShadowFade;
 				pfl4[1] = l->HasUberlight() ? 1.0f : 0.0f;
 				pfl4[2] = l->flUberRoundness;
-				pfl4[3] = 0.0f;
+				pfl4[3] = l->flShadowFilterScale;
 				pfl4 += 4;
 
 				Q_memcpy( pfl4, l->spotWorldToTex.Base(), iFloatSize * 16 );
@@ -853,40 +824,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 	static CUtlVector<def_light_t*> lightsCookied;
 	static CUtlVector<def_light_t*> lightsSimple;
 
-#if DEFCFG_EXTRA_SORT
-	struct Lightpass_t
-	{
-		CUtlVector<def_light_t*> *lightVecFullscreenSimple;
-		CUtlVector<def_light_t*> *lightVecFullscreenAdvanced;
-		CUtlVector<def_light_t*> *lightVecWorldSimple;
-		CUtlVector<def_light_t*> *lightVecWorldAdvanced;
-		IMaterial *pMatPassFullscreen;
-		IMaterial *pMatPassWorld;
-		IMaterial *pMatVolumeFullscreen;
-		IMaterial *pMatVolumeWorld;
-		int constCount_simple;
-		int constCount_advanced;
-	};
-
-	Lightpass_t lightTypes[] =
-	{
-		{ &m_hPreSortedLights[ LSORT_POINT_FULLSCREEN_SIMPLE ], &m_hPreSortedLights[ LSORT_POINT_FULLSCREEN_ADVANCED ],
-		 &m_hPreSortedLights[ LSORT_POINT_WORLD_SIMPLE ], &m_hPreSortedLights[ LSORT_POINT_WORLD_ADVANCED ],//JACK: Here we could be sorting into
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_POINT_FULLSCREEN ),						//		simple and advanced lights as
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_POINT_WORLD ),								//		simple lights only need  a single
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_POINT_FULLSCREEN ),					//		state change (model proj) to render
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_POINT_WORLD ),
-		NUM_CONSTS_POINT_SIMPLE, NUM_CONSTS_POINT_ADVANCED },
-
-		{ &m_hPreSortedLights[ LSORT_SPOT_FULLSCREEN_SIMPLE ], &m_hPreSortedLights[ LSORT_SPOT_FULLSCREEN_ADVANCED ],
-		&m_hPreSortedLights[ LSORT_SPOT_WORLD_SIMPLE ], &m_hPreSortedLights[ LSORT_SPOT_WORLD_ADVANCED ],
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_SPOT_FULLSCREEN ),
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_SPOT_WORLD ),
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_SPOT_FULLSCREEN ),
-		GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_VOLUME_SPOT_WORLD ),
-		NUM_CONSTS_SPOT_SIMPLE, NUM_CONSTS_SPOT_ADVANCED },
-	};
-#else
 	struct Lightpass_t
 	{
 		CUtlVector<def_light_t*>* lightVecFullscreen;
@@ -921,7 +858,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			NUM_CONSTS_SPOT_SIMPLE, NUM_CONSTS_SPOT_ADVANCED
 		},
 	};
-#endif
 	const int iNumLightTypes = ARRAYSIZE( lightTypes );
 
 	int iPassesDrawnFullscreen[iNumLightTypes] = { 0 };
@@ -1083,37 +1019,12 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 					FOR_EACH_VEC_FAST( queueVolume, volumeLights, entry )
 					{
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-						const float flCameraLightDelta = (view.origin).DistTo(entry.pLight->pos);
-						int iVolumeLOD = 4;
-						if( flCameraLightDelta < entry.pLight->flVolumeLOD0Dist )
-						{
-							iVolumeLOD = 0;
-						}
-						else if( flCameraLightDelta < entry.pLight->flVolumeLOD1Dist )
-						{
-							iVolumeLOD = 1;
-						}
-						else if( flCameraLightDelta < entry.pLight->flVolumeLOD2Dist )
-						{
-							iVolumeLOD = 2;
-						}
-						else if( flCameraLightDelta < entry.pLight->flVolumeLOD3Dist )
-						{
-							iVolumeLOD = 3;
-						}
-#endif
 						volumeData_t data;
 						data.iDataOffset    = entry.dataoffset;
 						data.iSamplerOffset = entry.sampleroffset;
 						data.iNumRows       = lightTypes[i].constCount_advanced;
 						data.bHasCookie     = entry.pLight->HasCookie();
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-					data.iLOD = iVolumeLOD;
-#endif
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 						data.iSamples = entry.pLight->iVolumeSamples;
-#endif
 						QUEUE_FIRE( CommitVolumeData, data );
 
 						DrawVolumePrepass( true, view, entry.pLight );
@@ -1144,174 +1055,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 
 	for ( int i = 0; i < iNumLightTypes; i++ )
 	{
-#if DEFCFG_EXTRA_SORT
-		CMatRenderContextPtr pRenderContext( materials );
-		pRenderContext->Bind( lightTypes[i].pMatPassWorld );
-		pRenderContext->MatrixMode( MATERIAL_MODEL );
-
-		FOR_EACH_VEC_FAST( def_light_t*, (*(lightTypes[i].lightVecWorldSimple)), l )
-		{
-			if ( l->pMesh_World == NULL )
-				continue;
-
-			const bool bCookie = l->HasCookie() && l->IsCookieReady();
-
-			int numRows = bCookie ? lightTypes[i].constCount_advanced : lightTypes[i].constCount_simple;
-
-			int memToAlloc = 4 * numRows;
-
-			Assert( memToAlloc > 0 );
-
-			lightDataCommon_t *pFlLightDataBlock = new lightDataCommon_t( memToAlloc );
-
-			WriteLight( l, pFlLightDataBlock->pFlData, 0, bCookie ? 1 : 0 );
-
-			pFlLightDataBlock->numRows = lightTypes[i].constCount_simple;
-			pFlLightDataBlock->numShadowedCookied = 0;
-			pFlLightDataBlock->numShadowed = 0;
-			pFlLightDataBlock->numCookied = bCookie ? 1 : 0;
-			pFlLightDataBlock->numSimple = 0;
-			QUEUE_FIRE( CommitLightData_Common, pFlLightDataBlock );
-
-			if ( !bCookie )
-				iDrawnSimple++;
-
-			pRenderContext->PushMatrix();
-			pRenderContext->LoadMatrix( l->worldTransform );
-			l->pMesh_World->Draw();
-			pRenderContext->PopMatrix();
-
-			//ShaderStencilState_t stencilLightVolume;
-		//set to reference 1 where draw succeeds
-		//pRenderContext->Bind( lightTypes[i].pMatPassWorldStencilStage );
-		//pMatPassWorldStencilStage only draws the backface where depth test fails
-		//pRenderContext->SetStencilState( stencilLightVolume );
-		//l->pMesh_World->Draw();
-		//set to only draw where stencil is reference 1, set depth test to nearer
-			//pRenderContext->SetStencilState( stencilLightVolume );
-		}
-		FOR_EACH_VEC_FAST_END
-
-		FOR_EACH_VEC_FAST( def_light_t*, (*(lightTypes[i].lightVecWorldAdvanced)), l )
-		{
-			if ( l->pMesh_World == NULL )
-				continue;
-
-			const bool bShadow = l->ShouldRenderShadow();
-			const bool bCookie = l->HasCookie() && l->IsCookieReady();
-			const bool bUber = l->HasUberlight();
-
-			const bool bAdvanced = ( bShadow || bCookie || bUber );
-
-			int numRows = bAdvanced ? lightTypes[i].constCount_advanced : lightTypes[i].constCount_simple;
-			int memToAlloc = 4 * numRows;
-
-			Assert( memToAlloc > 0 );
-
-			lightDataCommon_t *pFlLightDataBlock = new lightDataCommon_t( memToAlloc );
-
-			WriteLight( l, pFlLightDataBlock->pFlData, bShadow ? 1 : 0, bCookie ? 1 : 0 );
-
-			if ( bShadow )
-			{
-				pCaller->DrawLightShadowView( view, 0, l );
-
-				if ( l->IsSpot() )
-				{
-					if ( l->IsStatic() && l->HasValidAtlasSlot() )
-					{
-						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Static( l->m_nCachedAtlasSlot ) );
-					}
-					else
-					{
-						QUEUE_FIRE( CommitTexture_ProjectedDepth, 0, GetShadowColorRT_Proj( 0 ) );
-					}
-				}
-				else if ( l->IsPoint() )
-				{
-					if ( l->IsStatic() && l->HasValidAtlasSlot() )
-					{
-						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_StaticPoint( l->m_nCachedAtlasSlot ) );
-					}
-					else
-					{
-						QUEUE_FIRE( CommitTexture_DualParaboloidDepth, 0, GetShadowColorRT_DP( 0 ) );
-					}
-				}
-
-				iDrawnShadowed++;
-			}
-
-			pFlLightDataBlock->numRows = numRows;
-			pFlLightDataBlock->numShadowedCookied = ( bShadow && bCookie ) ? 1 : 0;
-			pFlLightDataBlock->numShadowed = ( bShadow && !bCookie ) ? 1 : 0;
-			pFlLightDataBlock->numCookied = ( !bShadow && bCookie ) ? 1 : 0;
-			pFlLightDataBlock->numSimple = bAdvanced ? 0 : 1;
-			QUEUE_FIRE( CommitLightData_Common, pFlLightDataBlock );
-
-			if ( bCookie )
-			{
-				ITexture* pCookie = l->GetCookieForDraw();
-				Assert( pCookie != NULL );
-				QUEUE_FIRE( CommitTexture_Cookie, 0, pCookie );
-
-				iDrawnCookied++;
-			}
-
-			if ( !bShadow && !bCookie )
-				iDrawnSimple++;
-
-			pRenderContext->MatrixMode( MATERIAL_MODEL );
-			pRenderContext->PushMatrix();
-			pRenderContext->LoadMatrix( l->worldTransform );
-			pRenderContext->Bind( lightTypes[i].pMatPassWorld );
-
-			//ShaderStencilState_t stencilLightVolume;
-		//set to reference 1 where draw succeeds
-		//pRenderContext->Bind( lightTypes[i].pMatPassWorldStencilStage );
-		//pMatPassWorldStencilStage only draws the backface where depth test fails
-		//pRenderContext->SetStencilState( stencilLightVolume );
-		//l->pMesh_World->Draw();
-		//set to only draw where stencil is reference 1, set depth test to nearer
-			//pRenderContext->SetStencilState( stencilLightVolume );
-
-			l->pMesh_World->Draw();
-
-			const bool bVolumetrics = l->HasVolumetrics() && bShadow && ( r_deferred_volumetric_intensity.GetFloat() > 0.0f );
-			if ( bVolumetrics )
-			{
-				Assert( m_bDrawVolumetrics );
-				Assert( l->pMesh_Volumetrics != NULL );
-
-				volumeData_t data;
-				data.iDataOffset    = 0;
-				data.iSamplerOffset = 0;
-				data.iNumRows       = lightTypes[i].constCount_advanced;
-				data.bHasCookie     = bCookie;
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
-				data.iSamples = l->iVolumeSamples;
-#endif
-				QUEUE_FIRE( CommitVolumeData, data );
-
-				DrawVolumePrepass( false, view, l );
-
-				pRenderContext->PushRenderTargetAndViewport( pVolumBuffer0, 0, 0, view.width / 4, view.height / 4 );
-
-				pRenderContext->Bind( lightTypes[i].pMatVolumeWorld );
-				l->pMesh_Volumetrics->Draw();
-
-				pRenderContext->PopRenderTargetAndViewport();
-
-				iPassesVolumetrics[0]++;
-			}
-
-			pRenderContext->MatrixMode( MATERIAL_MODEL );
-			pRenderContext->PopMatrix();
-		}
-		FOR_EACH_VEC_FAST_END
-
-		pRenderContext.SafeRelease();
-#else
 		FOR_EACH_VEC_FAST( def_light_t*, (*(lightTypes[i].lightVecWorld)), l )
 		{
 			if ( l->pMesh_World == NULL )
@@ -1409,9 +1152,7 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 				data.iSamplerOffset = 0;
 				data.iNumRows       = lightTypes[i].constCount_advanced;
 				data.bHasCookie     = bCookie;
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 				data.iSamples = l->iVolumeSamples;
-#endif
 				QUEUE_FIRE( CommitVolumeData, data );
 
 				DrawVolumePrepass( false, view, l );
@@ -1431,7 +1172,6 @@ void CLightingManager::RenderLights( const CViewSetup& view, CDeferredViewRender
 			pRenderContext.SafeRelease();
 		}
 		FOR_EACH_VEC_FAST_END
-#endif
 	}
 
 	if ( r_deferred_light_stats.GetBool() && debugoverlay )

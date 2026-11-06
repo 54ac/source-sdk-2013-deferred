@@ -10,9 +10,6 @@ void ShutdownDeferredRTs();
 
 ITexture *GetDefRT_Normals();
 ITexture *GetDefRT_Depth();
-ITexture *GetDefRT_Albedo();
-ITexture *GetDefRT_Specular();
-ITexture *GetDefRT_LightCtrl();
 ITexture *GetDefRT_Lightaccum();
 ITexture *GetDefRT_LightaccumSpecular();
 
@@ -24,15 +21,6 @@ ITexture *GetDefRT_RadiosityNormal( int index );
 
 int GetShadowResolution_Spot();
 int GetShadowResolution_Point();
-
-#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
-int GetShadowResolution_Spot_LOD1();
-int GetShadowResolution_Spot_LOD2();
-
-
-int GetShadowResolution_Point_LOD1();
-int GetShadowResolution_Point_LOD2();
-#endif
 
 ITexture *GetShadowColorRT_Ortho( int index );
 ITexture *GetShadowDepthRT_Ortho( int index );

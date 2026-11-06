@@ -186,26 +186,7 @@ bool CLightingManager::DoesLightIntersectBox( def_light_t *l, const Vector &vecC
 			return false;
 	}
 
-	CTraceFilterWorldOnly filter;
-	trace_t tr;
-	UTIL_TraceLine( l->pos, vecCenter, MASK_OPAQUE, &filter, &tr );
-	if ( tr.fraction >= 1.0f || tr.startsolid )
-		return true;
-
-	const Vector testPoints[4] = {
-		Vector( mins.x, mins.y, maxs.z ),
-		Vector( maxs.x, maxs.y, maxs.z ),
-		Vector( mins.x, maxs.y, mins.z ),
-		Vector( maxs.x, mins.y, mins.z )
-	};
-	for ( int p = 0; p < 4; p++ )
-	{
-		UTIL_TraceLine( l->pos, testPoints[p], MASK_OPAQUE, &filter, &tr );
-		if ( tr.fraction >= 1.0f )
-			return true;
-	}
-
-	return false;
+	return true;
 }
 
 bool CLightingManager::DoesLightIntersectEntity( def_light_t *l, C_BaseEntity *pEnt )
@@ -233,6 +214,7 @@ void CLightingManager::OnEntityCreated( C_BaseEntity *pEntity )
 	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates )
 	{
 		m_pCachedPropStates[entIdx].bActive = false;
+		m_pCachedPropStates[entIdx].bHeld = false;
 	}
 }
 
@@ -272,6 +254,7 @@ void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
 	{
 		DirtyStaticLightsInBox( m_pCachedPropStates[entIdx].vecCenter, m_pCachedPropStates[entIdx].flRadius );
 		m_pCachedPropStates[entIdx].bActive = false;
+		m_pCachedPropStates[entIdx].bHeld = false;
 		return;
 	}
 
@@ -333,16 +316,21 @@ void CLightingManager::CheckDynamicEntityIntersections()
 		if ( pEnt->IsBaseCombatWeapon() )
 			continue;
 
+		IPhysicsObject *pPhys = pEnt->VPhysicsGetObject();
+		const bool bHeld = ( pPhys && ( pPhys->GetGameFlags() & FVPHYSICS_PLAYER_HELD ) != 0 ) ||
+			( pEnt->GetOwnerEntity() && pEnt->GetOwnerEntity()->IsPlayer() ) ||
+			( pLocal && ( pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal ) );
+
 		if ( pLocal )
 		{
-			if ( pEnt == pLocal || pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal )
+			if ( pEnt == pLocal )
+				continue;
+
+			if ( ( pEnt->GetMoveParent() == pLocal || pEnt->GetRootMoveParent() == pLocal ) && !bHeld && pPhys == NULL )
 				continue;
 		}
 
 		if ( pEnt->IsEffectActive( EF_NODRAW | EF_NOSHADOW ) )
-			continue;
-
-		if ( pEnt->ShadowCastType() == SHADOWS_NONE )
 			continue;
 
 		if ( !pEnt->GetModel() )
@@ -351,12 +339,8 @@ void CLightingManager::CheckDynamicEntityIntersections()
 		const Vector curOrigin = pEnt->GetAbsOrigin();
 		const QAngle curAngles = pEnt->GetAbsAngles();
 
-		IPhysicsObject *pPhys = pEnt->VPhysicsGetObject();
-		const bool bHeld = ( pPhys && ( pPhys->GetGameFlags() & FVPHYSICS_PLAYER_HELD ) != 0 ) ||
-			( pEnt->GetOwnerEntity() && pEnt->GetOwnerEntity()->IsPlayer() );
-
 		bool bPoseChanged = false;
-		if ( !state.bActive )
+		if ( !state.bActive || state.bHeld != bHeld )
 		{
 			bPoseChanged = true;
 		}
@@ -366,7 +350,9 @@ void CLightingManager::CheckDynamicEntityIntersections()
 			const float flAngDiff = ( curAngles[0] - state.angAngles[0] ) * ( curAngles[0] - state.angAngles[0] ) +
 			                        ( curAngles[1] - state.angAngles[1] ) * ( curAngles[1] - state.angAngles[1] ) +
 			                        ( curAngles[2] - state.angAngles[2] ) * ( curAngles[2] - state.angAngles[2] );
-			if ( bHeld || flDistSqr > 0.25f || flAngDiff > 0.25f )
+			const float flDistThresh = bHeld ? 0.04f : 0.25f;
+			const float flAngThresh  = bHeld ? 0.04f : 0.25f;
+			if ( flDistSqr > flDistThresh || flAngDiff > flAngThresh )
 			{
 				bPoseChanged = true;
 			}
@@ -504,6 +490,7 @@ void CLightingManager::CheckDynamicEntityIntersections()
 			state.angAngles = curAngles;
 			state.flRadius  = flCurRadius;
 			state.bActive   = true;
+			state.bHeld     = bHeld;
 		}
 	}
 }

@@ -214,15 +214,42 @@ lightData_Global_t& GetActiveGlobalLightState()
 	return data;
 }
 
+void CalculateCSMDistances( const CViewSetup &view, float &flSplitDist, float &flMaxDist )
+{
+	flMaxDist = 0.0f;
+	flSplitDist = 0.0f;
+
+	CDeferredLightGlobal *pGlobal = GetGlobalLight();
+	if ( pGlobal != NULL )
+	{
+		flMaxDist = pGlobal->GetCSMMaxDist();
+		flSplitDist = pGlobal->GetCSMSplitDist();
+	}
+
+	if ( flMaxDist <= 0.0f )
+	{
+		if ( view.zFar > 128.0f && view.zFar <= 4096.0f )
+			flMaxDist = view.zFar;
+		else
+			flMaxDist = 4096.0f;
+	}
+
+	if ( flSplitDist <= 0.0f )
+	{
+		const float flNear = 16.0f;
+		flSplitDist = 0.65f * sqrtf( flNear * flMaxDist ) + 0.35f * ( flNear + 0.5f * ( flMaxDist - flNear ) );
+	}
+
+	if ( flSplitDist <= 64.0f ) flSplitDist = 64.0f;
+	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
+}
+
 void COrthoShadowView::CalcShadowView()
 {
 	const cascade_t &m_data = GetCascadeInfo( iCascadeIndex );
 
-	float flMaxDist = r_deferred_csm_max_dist.GetFloat();
-	float flSplitDist = r_deferred_csm_split_dist.GetFloat();
-
-	if ( flSplitDist <= 64.0f ) flSplitDist = 1024.0f;
-	if ( flMaxDist <= flSplitDist ) flMaxDist = flSplitDist * 4.0f;
+	float flMaxDist, flSplitDist;
+	CalculateCSMDistances( m_CameraView, flSplitDist, flMaxDist );
 
 	float flSplitFar = ( iCascadeIndex == 0 ) ? flSplitDist : flMaxDist;
 
@@ -518,7 +545,7 @@ void CSpotLightShadowView::CalcShadowView()
 	float flRadius = m_pLight->flRadius;
 
 	int spotRes = ( m_pLight && m_pLight->IsStatic() && m_pLight->HasValidAtlasSlot() )
-		? STATIC_SHADOW_TILE_RES
+		? r_deferred_rt_shadowspot_static_res.GetInt()
 		: GetShadowResolution_Spot();
 
 	width = spotRes;
@@ -572,6 +599,7 @@ void CDeferredViewRender::RenderGlobalShadows( const CViewSetup &view, const CVi
 		return;
 
 	lightData_Global_t lightDataState = GetActiveGlobalLightState();
+	CalculateCSMDistances( view, lightDataState.flCSMSplitDist, lightDataState.flCSMMaxDist );
 
 	if ( !GetLightingEditor()->IsEditorLightingActive() &&
 		r_deferred_light_global_override.GetBool() )
@@ -671,8 +699,9 @@ void CDeferredViewRender::DrawLightShadowView( const CViewSetup &view, int iDesi
 		setup.m_flAspectRatio = 1;
 		setup.x = 0;
 		setup.y = 0;
-		setup.width = STATIC_SHADOW_TILE_RES;
-		setup.height = STATIC_SHADOW_TILE_RES;
+		const int nStaticRes = r_deferred_rt_shadowspot_static_res.GetInt();
+		setup.width = nStaticRes;
+		setup.height = nStaticRes;
 
 		Vector origins[2] = { view.origin, l->pos };
 		render->ViewSetupVis( false, 2, origins );

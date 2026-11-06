@@ -9,80 +9,10 @@
 #ifndef DEFERRED_GLOBAL_COMMON_H
 #define DEFERRED_GLOBAL_COMMON_H
 
-/* Run with deferred shading instead of deferred lighting,
- * Light accumulation is used for both.
- */
-#define DEFCFG_DEFERRED_SHADING 0
-
-/* Toggles packing mode of lighting controls (phong, halflambert, litface)
- * 0 - DISABLE packing, gbuffer 0 at 3 bytes, gbuffer 2 at 4 bytes, less expensive math
- * 1 - ENABLE packing, gbuffer 0 at 4 bytes, gbuffer 2 disabled, more expensive math
- */
-#define DEFCFG_LIGHTCTRL_PACKING 1
-
-
-/* Toggles compression for light accumulation buffer
- * 0 - DISABLE compression, 8 bytes light buffer, floating point
- * 1 - ENABLE compression, 3 bytes light buffer, integer
- */
-#define DEFCFG_LIGHTACCUM_COMPRESSED 0
-
-
-/* Toggles SRGB color space conversion for composition pass
- */
-#define DEFCFG_USE_SRGB_CONVERSION 1
-
-
-/* Disables specular, ambient, lit face and
- * per light falloff exponent math
- */
-#define DEFCFG_CHEAP_LIGHTS 0
-
-
-/* Use blinn phong instead of reflection/viewdot
- */
-#define DEFCFG_BLINN_PHONG 1
-
-/* Use SSE vector processor instrinsics to speed up
- * deferred light performance
- */
-#define DEFCFG_USE_SSE 1
-
-/* Use extra sorting to diminish render context state
- * changes.
-  */
-#define DEFCFG_EXTRA_SORT 0
-
-/* Enable adaptive shadowmap LOD controls.
- */
-#define DEFCFG_ADAPTIVE_SHADOWMAP_LOD 0
-
-/* Enable adaptive volumetrics LOD controls.
- */
-#define DEFCFG_ADAPTIVE_VOLUMETRIC_LOD	0
-
-/* Enable configurable volumetrics LOD controls.
- */
-#define DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD	1
-
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD && DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
-#	undef	DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-#	define	DEFCFG_ADAPTIVE_VOLUMETRIC_LOD 0
-#endif
-
-#define DEFCFG_BILATERAL_DEPTH_TEST 0
-
 /* RT Names
  */
 #define DEFRTNAME_GBUFFER0 "_rt_defNormals"
 #define DEFRTNAME_GBUFFER1 "_rt_defProjDepth"
-#if DEFCFG_LIGHTCTRL_PACKING == 0
-#	define DEFRTNAME_GBUFFER2 "_rt_def_UnpackedLightControl"
-#endif
-#if DEFCFG_DEFERRED_SHADING
-#	define DEFRTNAME_GBUFFER2 "_rt_defAlbedo"
-#	define DEFRTNAME_GBUFFER3 "_rt_defSpecular"
-#endif
 #define DEFRTNAME_LIGHTACCUM "_rt_LightAccum"
 #define DEFRTNAME_LIGHTACCUM_SPECULAR "_rt_LightAccum_Specular"
 
@@ -94,12 +24,6 @@
 #define DEFRTNAME_SHADOWDEPTH_DP "_rt_ShadowDepth_dp_"			// + %02i
 #define DEFRTNAME_SHADOWCOLOR_ORTHO "_rt_ShadowColor_ortho_"	// + %02i
 #define DEFRTNAME_SHADOWCOLOR_PROJ "_rt_ShadowColor_proj_"		// + %02i
-#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
-#	define DEFRTNAME_SHADOWDEPTH_PROJ_LOD1 "_rt_ShadowDepth_proj_lod1_"	// + %02i
-#	define DEFRTNAME_SHADOWCOLOR_PROJ_LOD1 "_rt_ShadowColor_proj_lod1_"	// + %02i
-#	define DEFRTNAME_SHADOWDEPTH_PROJ_LOD2 "_rt_ShadowDepth_proj_lod2_"	// + %02i
-#	define DEFRTNAME_SHADOWCOLOR_PROJ_LOD2 "_rt_ShadowColor_proj_lod2_"	// + %02i
-#endif
 #define DEFRTNAME_SHADOWCOLOR_DP "_rt_ShadowColor_dp_"			// + %02i
 #define DEFRTNAME_SHADOWRAD_ALBEDO_ORTHO "_rt_ShadowRad_Albedo_ortho_"	// + %02i
 #define DEFRTNAME_SHADOWRAD_NORMAL_ORTHO "_rt_ShadowRad_Normal_ortho_"	// + %02i
@@ -215,21 +139,8 @@
 
 /* Volumetrics quality/tweaks
  */
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-#	define VOLUMQUALITY_POINT_SAMPLES_LOD0	49
-#	define VOLUMQUALITY_POINT_SAMPLES_LOD1	25
-#	define VOLUMQUALITY_POINT_SAMPLES_LOD2	13
-#	define VOLUMQUALITY_POINT_SAMPLES_LOD3	7
-#	define VOLUMQUALITY_POINT_SAMPLES_LOD4	4
-#	define VOLUMQUALITY_SPOT_SAMPLES_LOD0	49
-#	define VOLUMQUALITY_SPOT_SAMPLES_LOD1	25
-#	define VOLUMQUALITY_SPOT_SAMPLES_LOD2	13
-#	define VOLUMQUALITY_SPOT_SAMPLES_LOD3	7
-#	define VOLUMQUALITY_SPOT_SAMPLES_LOD4	4
-#else
-#	define VOLUMQUALITY_POINT_SAMPLES 50
-#	define VOLUMQUALITY_SPOT_SAMPLES 50
-#endif
+#define VOLUMQUALITY_POINT_SAMPLES 50
+#define VOLUMQUALITY_SPOT_SAMPLES 50
 #define VOLUMTWEAK_INTENSITY_POINT 1.0f
 #define VOLUMTWEAK_INTENSITY_SPOT 0.5f
 
@@ -253,22 +164,13 @@
 /* Compression scale for integer light buff
  * 2.0 means that albedos with any channel < 0.5 can never become fully white by diffuse lighting
  */
-#if DEFCFG_LIGHTACCUM_COMPRESSED
-#	define DEFCFG_LIGHTSCALE_COMPRESS_RATIO 2.0f
-#endif
 
 
 /* How many samplers are used for shadows/cookies per pass?
  */
-#if DEFCFG_LIGHTCTRL_PACKING
-#	define FREE_LIGHT_SAMPLERS			13 //14
-#	define FIRST_LIGHT_SAMPLER			2
-#	define FIRST_LIGHT_SAMPLER_FXC		s2
-#else
-#	define FREE_LIGHT_SAMPLERS			13
-#	define FIRST_LIGHT_SAMPLER			3
-#	define FIRST_LIGHT_SAMPLER_FXC		s3
-#endif
+#define FREE_LIGHT_SAMPLERS			13
+#define FIRST_LIGHT_SAMPLER			2
+#define FIRST_LIGHT_SAMPLER_FXC		s2
 
 #define FIRST_SHARED_LIGHTDATA_CONSTANT 31
 #define FIRST_SHARED_LIGHTDATA_CONSTANT_FXC c31
@@ -282,10 +184,6 @@
 /* DON'T TOUCH THE STUFF BELOW
  */
 static const int SHADOW_NUM_CASCADES = MAX_SHADOW_ORTHO;
-
-#if DEFCFG_DEFERRED_SHADING && DEFCFG_LIGHTCTRL_PACKING == 0
-#error "can't use deferred shading and unpacked lighting controls at the same time"
-#endif
 
 #ifdef __cplusplus
 static const int NUM_COOKIE_SLOTS = MAX_LIGHTS_SHADOWEDCOOKIE + MAX_LIGHTS_COOKIE;

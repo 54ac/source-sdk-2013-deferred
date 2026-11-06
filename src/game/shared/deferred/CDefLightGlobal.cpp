@@ -18,6 +18,8 @@ BEGIN_DATADESC( CDeferredLightGlobal )
 	DEFINE_KEYFIELD( m_str_Ambient_Low, FIELD_STRING, "ambient_low" ),
 
 	DEFINE_KEYFIELD( m_flFadeTime, FIELD_FLOAT, "fadetime" ),
+	DEFINE_KEYFIELD( m_flCSMMaxDist, FIELD_FLOAT, "csm_max_dist" ),
+	DEFINE_KEYFIELD( m_flCSMSplitDist, FIELD_FLOAT, "csm_split_dist" ),
 
 	DEFINE_FIELD( m_vecColor_Diff, FIELD_VECTOR ),
 	DEFINE_FIELD( m_vecColor_Ambient_High, FIELD_VECTOR ),
@@ -33,11 +35,17 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLightGlobal, CDeferredLightGlobal_DT )
 	SendPropVector( SENDINFO( m_vecColor_Ambient_High ), 32 ),
 	SendPropVector( SENDINFO( m_vecColor_Ambient_Low ), 32 ),
 
+	SendPropFloat( SENDINFO( m_flCSMMaxDist ) ),
+	SendPropFloat( SENDINFO( m_flCSMSplitDist ) ),
+
 	SendPropInt( SENDINFO( m_iDefFlags ), DEFLIGHTGLOBAL_FLAGS_MAX_SHARED_BITS, SPROP_UNSIGNED ),
 #else
 	RecvPropVector( RECVINFO( m_vecColor_Diff ) ),
 	RecvPropVector( RECVINFO( m_vecColor_Ambient_High ) ),
 	RecvPropVector( RECVINFO( m_vecColor_Ambient_Low ) ),
+
+	RecvPropFloat( RECVINFO( m_flCSMMaxDist ) ),
+	RecvPropFloat( RECVINFO( m_flCSMSplitDist ) ),
 
 	RecvPropInt( RECVINFO( m_iDefFlags ) ),
 #endif
@@ -49,6 +57,9 @@ CDeferredLightGlobal::CDeferredLightGlobal()
 {
 	Assert( __g_pGlobalLight == NULL );
 	__g_pGlobalLight = this;
+
+	m_flCSMMaxDist = 0.0f;
+	m_flCSMSplitDist = 0.0f;
 
 	m_iDefFlags = DEFLIGHTGLOBAL_ENABLED | DEFLIGHTGLOBAL_SHADOW_ENABLED;
 #ifdef GAME_DLL
@@ -115,6 +126,9 @@ lightData_Global_t CDeferredLightGlobal::GetState()
 	Vector dir;
 	AngleVectors( GetAbsAngles(), &dir );
 	data.vecLight.Init( -dir );
+
+	data.flCSMMaxDist = GetCSMMaxDist();
+	data.flCSMSplitDist = GetCSMSplitDist();
 
 	if ( IsEnabled() &&
 		( data.diff.LengthSqr() > 0.000001f ||

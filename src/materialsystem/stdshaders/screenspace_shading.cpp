@@ -25,7 +25,7 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 
 	SHADER_DRAW
 	{
-		const bool bUseSRGB = DEFCFG_USE_SRGB_CONVERSION != 0;
+		const bool bUseSRGB = true;
 
 		SHADOW_STATE
 		{
@@ -72,11 +72,7 @@ BEGIN_VS_SHADER( SCREENSPACE_SHADING, "" )
 			SET_DYNAMIC_PIXEL_SHADER( screenspace_shading_ps30 );
 
 			BindTexture( SHADER_SAMPLER0, GetDeferredExt()->GetTexture_Depth() );
-#if DEFCFG_DEFERRED_SHADING == 1
-			BindTexture( SHADER_SAMPLER1, GetDeferredExt()->GetTexture_Albedo() );
-#else
 			Assert( 0 );
-#endif
 			BindTexture( SHADER_SAMPLER2, GetDeferredExt()->GetTexture_LightAccum() );
 #if DEFCFG_ENABLE_RADIOSITY
 			BindTexture( SHADER_SAMPLER3, GetDeferredExt()->GetTexture_RadBuffer( 0 ) );

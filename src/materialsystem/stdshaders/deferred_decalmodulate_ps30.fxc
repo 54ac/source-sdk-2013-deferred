@@ -29,7 +29,7 @@ float4 main( PS_INPUT i ) : COLOR
 	float4 result = tex2D( TexSampler, i.baseTexCoord );
 	
 	// Blend towards grey based on alpha
-	float flFactor = 1.0;
+	float flFactor = result.a;
 #if VERTEXALPHA
 	flFactor *= i.color.w;
 #endif

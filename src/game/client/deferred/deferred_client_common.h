@@ -8,15 +8,9 @@
 #define DEFLIGHT_SPOT_ZNEAR 5.0f
 
 extern ConVar r_deferred_rt_shadowspot_res;
+extern ConVar r_deferred_rt_shadowspot_static_res;
 extern ConVar r_deferred_rt_shadowpoint_res;
 extern ConVar r_deferred_shadow_filter_scale;
-
-#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
-extern ConVar r_deferred_rt_shadowspot_lod1_res;
-extern ConVar r_deferred_rt_shadowspot_lod2_res;
-extern ConVar r_deferred_rt_shadowpoint_lod1_res;
-extern ConVar r_deferred_rt_shadowpoint_lod2_res;
-#endif
 
 extern ConVar r_deferred_light_stats;
 
@@ -26,8 +20,6 @@ extern ConVar r_deferred_light_global_override_diffuse;
 extern ConVar r_deferred_light_global_override_ambient_high;
 extern ConVar r_deferred_light_global_override_ambient_low;
 
-extern ConVar r_deferred_csm_max_dist;
-extern ConVar r_deferred_csm_split_dist;
 extern ConVar r_deferred_csm_cull_convex;
 extern ConVar r_deferred_csm_cull_debug;
 
@@ -146,7 +138,6 @@ FORCEINLINE void DrawFrustum( VMatrix &invScreenToWorld )
 }
 
 // returns false when no intersection
-#if DEFCFG_USE_SSE
 FORCEINLINE bool IntersectFrustumWithFrustum( const VMatrix &invScreenToWorld_a, const VMatrix &invScreenToWorld_b )
 {
 	static const fltx4 ALIGN128 _normPos[8] ALIGN128_POST = {
@@ -328,96 +319,6 @@ FORCEINLINE bool IntersectFrustumWithFrustum( const VMatrix &invScreenToWorld_a,
 
 	return false;
 }
-#else
-FORCEINLINE bool IntersectFrustumWithFrustum( VMatrix &invScreenToWorld_a, VMatrix &invScreenToWorld_b )
-{
-	const Vector normalized_points[8] = {
-		Vector( -1, 1, 0 ),
-		Vector( 1, 1, 0 ),
-		Vector( 1, -1, 0 ),
-		Vector( -1, -1, 0 ),
-
-		Vector( -1, 1, 1 ),
-		Vector( 1, 1, 1 ),
-		Vector( 1, -1, 1 ),
-		Vector( -1, -1, 1 )
-	};
-
-	Vector _points[2][8];
-	Vector axes[22];
-	Vector on_frustum_directions[2][6];
-
-	for ( int i = 0; i < 8; i++ )
-	{
-		Vector3DMultiplyPositionProjective( invScreenToWorld_a, normalized_points[i], _points[0][i] );
-		Vector3DMultiplyPositionProjective( invScreenToWorld_b, normalized_points[i], _points[1][i] );
-	}
-
-	for ( int i = 0; i < 2; i++ ) // build minimal frustum frame
-	{
-		on_frustum_directions[i][0] = _points[i][1] - _points[i][0]; // viewplane x
-		on_frustum_directions[i][1] = _points[i][3] - _points[i][0]; // viewplane y
-
-		on_frustum_directions[i][2] = _points[i][0] - _points[i][4]; // frustum 0 0
-		on_frustum_directions[i][3] = _points[i][1] - _points[i][5]; // frustum 1 0
-		on_frustum_directions[i][4] = _points[i][2] - _points[i][6]; // frustum 1 1
-		on_frustum_directions[i][5] = _points[i][3] - _points[i][7]; // frustum 0 1
-	}
-	for ( int x = 0; x < 2; x++ )
-	{
-		for ( int y = 0; y < 6; y++ )
-		{
-			on_frustum_directions[x][y].NormalizeInPlace();
-		}
-	}
-
-	for ( int i = 0; i < 2; i++ ) // build axes
-	{
-		// normals
-		CrossProduct( on_frustum_directions[i][0], on_frustum_directions[i][1], axes[ i * 11 + 0 ] ); // viewplane
-
-		CrossProduct( on_frustum_directions[i][2], on_frustum_directions[i][5], axes[ i * 11 + 1 ] ); // left
-		CrossProduct( on_frustum_directions[i][2], on_frustum_directions[i][3], axes[ i * 11 + 2 ] ); // up
-		CrossProduct( on_frustum_directions[i][4], on_frustum_directions[i][3], axes[ i * 11 + 3 ] ); // right
-		CrossProduct( on_frustum_directions[i][4], on_frustum_directions[i][5], axes[ i * 11 + 4 ] ); // down
-
-		// and their crossproducts
-		CrossProduct( axes[ i * 11 + 1 ], axes[ i * 11 + 3 ], axes[ i * 11 + 5 ] ); // along local Z
-		CrossProduct( axes[ i * 11 + 2 ], axes[ i * 11 + 4 ], axes[ i * 11 + 6 ] ); // along local Y
-
-		CrossProduct( axes[ i * 11 + 1 ], axes[ i * 11 + 2 ], axes[ i * 11 + 7 ] );
-		CrossProduct( axes[ i * 11 + 1 ], axes[ i * 11 + 4 ], axes[ i * 11 + 8 ] );
-		CrossProduct( axes[ i * 11 + 3 ], axes[ i * 11 + 2 ], axes[ i * 11 + 9 ] );
-		CrossProduct( axes[ i * 11 + 3 ], axes[ i * 11 + 4 ], axes[ i * 11 + 10 ] );
-	}
-
-	for ( int i = 0; i < 22; i++ ) // project points onto axes, compare sets
-	{
-		float bounds_frusta[2][2]; // frustum, min/max
-		// project starting points
-		bounds_frusta[0][0] = bounds_frusta[0][1] = DotProduct( _points[0][0], axes[i] );
-		bounds_frusta[1][0] = bounds_frusta[1][1] = DotProduct( _points[1][0], axes[i] );
-
-		for ( int x = 1; x < 8; x++ )
-		{
-			float point_frustum_a = DotProduct( _points[0][x], axes[i] );
-			float point_frustum_b = DotProduct( _points[1][x], axes[i] );
-
-			bounds_frusta[0][0] = Min( bounds_frusta[0][0], point_frustum_a );
-			bounds_frusta[0][1] = Max( bounds_frusta[0][1], point_frustum_a );
-
-			bounds_frusta[1][0] = Min( bounds_frusta[1][0], point_frustum_b );
-			bounds_frusta[1][1] = Max( bounds_frusta[1][1], point_frustum_b );
-		}
-
-		if ( bounds_frusta[0][1] < bounds_frusta[1][0] ||
-			bounds_frusta[0][0] > bounds_frusta[1][1] )
-			return true;
-	}
-
-	return false;
-}
-#endif
 
 FORCEINLINE void VectorDeviceToSourceSpace( Vector &v )
 {

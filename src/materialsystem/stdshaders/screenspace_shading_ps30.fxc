@@ -55,12 +55,7 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	flLighting = lerp( flLighting, float4( 1, 1, 1, 0 ), flSkyAmt );
 
-	float flLightScale =
-#if DEFCFG_USE_SRGB_CONVERSION
-		LINEAR_LIGHT_SCALE;
-#else
-		GAMMA_LIGHT_SCALE;
-#endif
+	float flLightScale = LINEAR_LIGHT_SCALE;
 
 	Out.vColor_0.w = 0;
 	Out.vColor_0.xyz = ( ( flAlbedoSample.rgb + flLighting.w * 1.0f ) * flLighting.xyz

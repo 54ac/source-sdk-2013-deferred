@@ -12,9 +12,7 @@ class CDeferredViewRender;
 class C_BaseEntity;
 class ConVar;
 extern ConVar r_deferred_shadow_cache;
-#if DEFCFG_USE_SSE
 struct def_light_presortdatax4_t;
-#endif
 
 class CLightingManager : public CAutoGameSystemPerFrame, public IClientEntityListener
 {
@@ -77,10 +75,8 @@ public:
 
 	void FreeDynamicLight( def_light_t *&pLight, float flDecayTime = 0.0f );
 
-#if DEFCFG_USE_SSE
 	void AllocateSortDataBuffer();
 	void BuildLightSortDataBuffer();
-#endif
 
 	int AssignStaticAtlasSlot( def_light_t *l );
 	void FreeStaticAtlasSlot( def_light_t *l );
@@ -126,31 +122,18 @@ private:
 
 	enum
 	{
-#if DEFCFG_EXTRA_SORT
-		LSORT_POINT_WORLD_SIMPLE = 0,
-		LSORT_POINT_WORLD_ADVANCED,
-		LSORT_POINT_FULLSCREEN_SIMPLE,
-		LSORT_POINT_FULLSCREEN_ADVANCED,
-		LSORT_SPOT_WORLD_SIMPLE,
-		LSORT_SPOT_WORLD_ADVANCED,
-		LSORT_SPOT_FULLSCREEN_SIMPLE,
-		LSORT_SPOT_FULLSCREEN_ADVANCED,
-#else
 		LSORT_POINT_WORLD = 0,
 		LSORT_POINT_FULLSCREEN,
 		LSORT_SPOT_WORLD,
 		LSORT_SPOT_FULLSCREEN,
-#endif
 
 		LSORT_COUNT,
 	};
 
-#if DEFCFG_USE_SSE
 	def_light_presortdatax4_t* m_pSortDataX4;
 	int m_SortBufferDataSize;
 	unsigned int m_uiSortDataCount;
 	bool m_bSortDataNeedsRealloc;
-#endif
 
 	CUtlVector< def_light_t* > m_hDeferredLights;
 	CUtlVector< def_light_temp_t* > m_hDeferredTempLights;
@@ -184,6 +167,7 @@ private:
 		QAngle angAngles;
 		float  flRadius;
 		bool   bActive;
+		bool   bHeld;
 	};
 	CachedPropState_t *m_pCachedPropStates;
 

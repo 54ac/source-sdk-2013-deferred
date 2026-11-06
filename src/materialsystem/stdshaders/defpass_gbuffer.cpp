@@ -50,11 +50,6 @@ void InitPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 	if ( PARM_DEFINED( info.iAlbedo ) )
 		pShader->LoadTexture( info.iAlbedo );
 
-#if DEFCFG_DEFERRED_SHADING == 1
-	if ( PARM_DEFINED( info.iAlbedo2 ) )
-		pShader->LoadTexture( info.iAlbedo2 );
-#endif
-
 	if ( PARM_DEFINED( info.iPhongmap ) )
 		pShader->LoadTexture( info.iPhongmap );
 	else if ( PARM_DEFINED( info.iPhongmapFallback ) )
@@ -65,15 +60,13 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 	IShaderShadow* pShaderShadow, IShaderDynamicAPI* pShaderAPI,
 	VertexCompressionType_t vertexCompression, CDeferredPerMaterialContextData *pDeferredContext )
 {
-	const bool bDeferredShading = DEFCFG_DEFERRED_SHADING == 1;
-
 	const bool bModel = info.bModel;
 	const bool bIsDecal = IS_FLAG_SET( MATERIAL_VAR_DECAL );
 	const bool bFastVTex = g_pHardwareConfig->HasFastVertexTextures();
 	const bool bNoCull = IS_FLAG_SET( MATERIAL_VAR_NOCULL );
 
 	const bool bAlbedo = PARM_TEX( info.iAlbedo );
-	const bool bAlbedo2 = bDeferredShading && PARM_TEX( info.iAlbedo2 );
+	const bool bAlbedo2 = false;
 	const bool bBumpmap = g_pConfig->UseBumpmapping() && PARM_TEX( info.iBumpmap );
 	const bool bBumpmap2 = bBumpmap && PARM_TEX( info.iBumpmap2 );
 	const int iActualPhongMap = PARM_TEX( info.iPhongmap ) ? info.iPhongmap : info.iPhongmapFallback;
@@ -87,8 +80,8 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 
 	const int nTreeSwayMode = ( bModel && PARM_DEFINED( info.iTreeSway ) ) ? clamp( params[ info.iTreeSway ]->GetIntValue(), 0, 2 ) : 0;
 
-	Assert( !bIsDecal || bDeferredShading );
-	Assert( !bTranslucent || bDeferredShading );
+	Assert( !bIsDecal );
+	Assert( !bTranslucent );
 
 	SHADOW_STATE
 	{
@@ -125,7 +118,7 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 				iVFmtFlags |= VERTEX_COLOR;
 		}
 
-		if ( bAlphatest || bDeferredShading )
+		if ( bAlphatest )
 		{
 			pShaderShadow->EnableTexture( SHADER_SAMPLER0, true );
 			pShaderShadow->EnableSRGBRead( SHADER_SAMPLER0, false );
@@ -178,24 +171,14 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 		SET_STATIC_VERTEX_SHADER_COMBO( TREESWAY, nTreeSwayMode );
 		SET_STATIC_VERTEX_SHADER( gbuffer_vs30 );
 
-#if DEFCFG_DEFERRED_SHADING == 1
-		DECLARE_STATIC_PIXEL_SHADER( gbuffer_defshading_ps30 );
-#else
 		DECLARE_STATIC_PIXEL_SHADER( gbuffer_ps30 );
 		SET_STATIC_PIXEL_SHADER_COMBO( BUMPMAP2, bBumpmap2 );
-#endif
 		SET_STATIC_PIXEL_SHADER_COMBO( ALPHATEST, bAlphatest );
 		SET_STATIC_PIXEL_SHADER_COMBO( BUMPMAP, bBumpmap ? bSSBump ? 2 : 1 : 0 );
 		SET_STATIC_PIXEL_SHADER_COMBO( NOCULL, bNoCull );
 		SET_STATIC_PIXEL_SHADER_COMBO( PHONGMAP, bPhongmap );
 		SET_STATIC_PIXEL_SHADER_COMBO( BLENDMODULATE, bBlendmodulate );
-#if DEFCFG_DEFERRED_SHADING == 1
-		SET_STATIC_PIXEL_SHADER_COMBO( TWOTEXTURE, (bAlbedo2 || bBumpmap2) );
-		SET_STATIC_PIXEL_SHADER_COMBO( DECAL, bIsDecal );
-		SET_STATIC_PIXEL_SHADER( gbuffer_defshading_ps30 );
-#else
 		SET_STATIC_PIXEL_SHADER( gbuffer_ps30 );
-#endif
 	}
 	DYNAMIC_STATE
 	{
@@ -212,7 +195,7 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 				tmpBuf.SetPixelShaderConstant1( 0, PARM_FLOAT( info.iAlphatestRef ) );
 			}
 
-			if ( bAlphatest || bDeferredShading )
+			if ( bAlphatest )
 			{
 				if ( bAlbedo )
 					tmpBuf.BindTexture( pShader, SHADER_SAMPLER0, info.iAlbedo );
@@ -327,13 +310,8 @@ void DrawPassGBuffer( const defParms_gBuffer &info, CBaseVSShader *pShader, IMat
 		SET_DYNAMIC_VERTEX_SHADER_COMBO( MORPHING, (bModel && !nTreeSwayMode && pShaderAPI->IsHWMorphingEnabled()) ? 1 : 0 );
 		SET_DYNAMIC_VERTEX_SHADER( gbuffer_vs30 );
 
-#if DEFCFG_DEFERRED_SHADING == 1
-		DECLARE_DYNAMIC_PIXEL_SHADER( gbuffer_defshading_ps30 );
-		SET_DYNAMIC_PIXEL_SHADER( gbuffer_defshading_ps30 );
-#else
 		DECLARE_DYNAMIC_PIXEL_SHADER( gbuffer_ps30 );
 		SET_DYNAMIC_PIXEL_SHADER( gbuffer_ps30 );
-#endif
 
 		if ( bModel && bFastVTex )
 		{

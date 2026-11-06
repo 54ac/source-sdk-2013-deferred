@@ -176,10 +176,8 @@ void CDeferredViewRender::EndRadiosity( const CViewSetup &view )
 		}
 	}
 
-#if ( DEFCFG_DEFERRED_SHADING == 0 )
 	DrawLightPassFullscreen( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_LIGHT_RADIOSITY_BLEND ),
 		view.width, view.height );
-#endif
 }
 
 void CDeferredViewRender::DebugRadiosity( const CViewSetup &view )

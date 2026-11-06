@@ -184,14 +184,10 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 
 	bool DrawToGBuffer( IMaterialVar **params )
 	{
-#if DEFCFG_DEFERRED_SHADING == 1
-		return true;
-#else
 		const bool bIsDecal = IS_FLAG_SET( MATERIAL_VAR_DECAL );
 		const bool bTranslucent = IS_FLAG_SET( MATERIAL_VAR_TRANSLUCENT );
 
 		return !bTranslucent && !bIsDecal;
-#endif
 	}
 
 	SHADER_INIT_PARAMS()
@@ -300,7 +296,6 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 				Draw(false);
 		}
 
-#if ( DEFCFG_DEFERRED_SHADING == 0 )
 		if ( pShaderShadow != NULL ||
 			iDeferredRenderStage == DEFERRED_RENDER_STAGE_COMPOSITION )
 		{
@@ -311,7 +306,6 @@ BEGIN_VS_SHADER( DEFERRED_MODEL, "" )
 		}
 		else
 			Draw(false);
-#endif
 
 		if ( pShaderAPI != NULL && pDefContext->m_bMaterialVarsChanged )
 			pDefContext->m_bMaterialVarsChanged = false;

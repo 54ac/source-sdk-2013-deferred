@@ -333,25 +333,6 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	m_pMat_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = materials->FindMaterial( "deferred/radpass_blend", NULL );
 #endif // DEFCFG_ENABLE_RADIOSITY
 
-#if DEFCFG_DEFERRED_SHADING == 1
-	/*
-
-	deferred shading
-
-	*/
-
-	m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ] = new KeyValues( "SCREENSPACE_SHADING" );
-	if ( m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ] != NULL )
-		m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ]->SaveToFile( filesystem, "materials/deferred/screenspace_shading.vmt", "MOD" );
-
-	m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ] = new KeyValues( "SCREENSPACE_COMBINE" );
-	if ( m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ] != NULL )
-		m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ]->SaveToFile( filesystem, "materials/deferred/screenspace_combine.vmt", "MOD" );
-
-	m_pMat_Def[ DEF_MAT_SCREENSPACE_SHADING ] = materials->FindMaterial( "deferred/screenspace_shading", NULL );
-	m_pMat_Def[ DEF_MAT_SCREENSPACE_COMBINE ] = materials->FindMaterial( "deferred/screenspace_combine", NULL );
-#endif
-
 	/*
 
 	blur
@@ -515,22 +496,6 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = new KeyValues( "RADIOSITY_BLEND" );
 	if ( m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] != NULL )
 		m_pMat_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = materials->CreateMaterial( "__radpass_blend", m_pKV_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] );
-#endif
-
-#if DEFCFG_DEFERRED_SHADING == 1
-	/*
-
-	deferred shading
-
-	*/
-
-	m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ] = new KeyValues( "SCREENSPACE_SHADING" );
-	if ( m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ] != NULL )
-		m_pMat_Def[ DEF_MAT_SCREENSPACE_SHADING ] = materials->CreateMaterial( "__screenspace_shading", m_pKV_Def[ DEF_MAT_SCREENSPACE_SHADING ] );
-
-	m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ] = new KeyValues( "SCREENSPACE_COMBINE" );
-	if ( m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ] != NULL )
-		m_pMat_Def[ DEF_MAT_SCREENSPACE_COMBINE ] = materials->CreateMaterial( "__screenspace_combine", m_pKV_Def[ DEF_MAT_SCREENSPACE_COMBINE ] );
 #endif
 
 	/*

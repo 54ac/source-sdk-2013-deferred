@@ -21,6 +21,11 @@ struct lightData_Global_t
 		diff.Init();
 		ambh.Init();
 		ambl.Init();
+
+		flFadeTime = 0.0f;
+		flShadowBlend = 0.0f;
+		flCSMSplitDist = 0.0f;
+		flCSMMaxDist = 0.0f;
 	};
 
 	Vector4D diff, ambh, ambl;
@@ -31,6 +36,8 @@ struct lightData_Global_t
 	// client logic
 	float flFadeTime;
 	float flShadowBlend;
+	float flCSMSplitDist;
+	float flCSMMaxDist;
 };
 
 struct shadowData_ortho_t
@@ -61,31 +68,12 @@ struct shadowData_general_t
 		iDPSM_Res_x = 256;
 		iDPSM_Res_y = 256;
 		iPROJ_Res = 256;
-
-#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
-		iDPSM_Res_x_LOD1 = 128;
-		iDPSM_Res_y_LOD1 = 128;
-		iDPSM_Res_x_LOD2 = 64;
-		iDPSM_Res_y_LOD2 = 64;
-		iPROJ_Res_LOD1 = 128;
-		iPROJ_Res_LOD2 = 64;
-#endif
 	};
 	int iPointShadowMode;
 	int iDPSM_Res_x;
 	int iDPSM_Res_y;
 
 	int iPROJ_Res;
-
-#if DEFCFG_ADAPTIVE_SHADOWMAP_LOD
-	int iDPSM_Res_x_LOD1;
-	int iDPSM_Res_y_LOD1;
-	int iDPSM_Res_x_LOD2;
-	int iDPSM_Res_y_LOD2;
-
-	int iPROJ_Res_LOD1;
-	int iPROJ_Res_LOD2;
-#endif
 };
 
 struct volumeData_t
@@ -96,12 +84,7 @@ struct volumeData_t
 
 	bool bHasCookie;
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	int iLOD;
-#endif
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	int iSamples;
-#endif
 };
 
 struct radiosityData_t
@@ -141,11 +124,7 @@ public:
 	virtual void CommitCommonData( const Vector &origin,
 								   const Vector &fwd,
 								   const float &zNear, const float &zFar,
-								   const VMatrix &matTFrustum
-#if DEFCFG_BILATERAL_DEPTH_TEST
-								,  const VMatrix &matWorldCameraDepthTex
-#endif
-																) = 0;
+								   const VMatrix &matTFrustum ) = 0;
 
 	virtual void CommitZScale( const float &zScale ) = 0;
 
@@ -161,12 +140,6 @@ public:
 	virtual void CommitLightData_Common( lightDataCommon_t* pData ) = 0;
 
 	virtual void CommitTexture_General( ITexture *pTexNormals, ITexture *pTexDepth,
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-		ITexture *pTexLightingCtrl,
-#elif DEFCFG_DEFERRED_SHADING == 1
-		ITexture *pTexAlbedo,
-		ITexture *pTexSpecular,
-#endif
 		ITexture *pTexLightAccum,
 		ITexture *pTexLightAccumSpecular ) = 0;
 	virtual void CommitTexture_CascadedDepth( const int &index, ITexture *pTexShadowDepth ) = 0;
@@ -196,11 +169,7 @@ public:
 	void CommitCommonData( const Vector &origin,
 						   const Vector &fwd,
 						   const float &zNear, const float &zFar,
-						   const VMatrix &matTFrustum
-#if DEFCFG_BILATERAL_DEPTH_TEST
-						   , const VMatrix &matWorldCameraDepthTex
-#endif
-														);
+						   const VMatrix &matTFrustum );
 
 	virtual void CommitZScale( const float &zScale );
 
@@ -215,12 +184,6 @@ public:
 	virtual void CommitLightData_Common( lightDataCommon_t* pData );
 
 	virtual void CommitTexture_General( ITexture *pTexNormals, ITexture *pTexDepth,
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-		ITexture *pTexLightingCtrl,
-#elif DEFCFG_DEFERRED_SHADING == 1
-		ITexture *pTexAlbedo,
-		ITexture *pTexSpecular,
-#endif
 		ITexture *pTexLightAccum,
 		ITexture *pTexLightAccumSpecular );
 	virtual void CommitTexture_CascadedDepth( const int &index, ITexture *pTexShadowDepth );
@@ -238,9 +201,6 @@ public:
 	inline const float &GetZDistFar();
 	inline float GetZScale();
 	inline float *GetFrustumDeltaBase();
-#if DEFCFG_BILATERAL_DEPTH_TEST
-	inline float *GetWorldToCameraDepthTexBase();
-#endif
 
 	inline int GetNumActiveLights_ShadowedCookied();
 	inline int GetNumActiveLights_Shadowed();
@@ -262,12 +222,6 @@ public:
 	inline ITexture *GetTexture_Depth();
 	inline ITexture *GetTexture_LightAccum();
 	inline ITexture *GetTexture_LightAccumSpecular();
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-	inline ITexture *GetTexture_LightCtrl();
-#elif DEFCFG_DEFERRED_SHADING == 1
-	inline ITexture *GetTexture_Albedo();
-	inline ITexture *GetTexture_Specular();
-#endif
 	inline ITexture *GetTexture_ShadowDepth_Ortho( const int &index );
 	inline ITexture *GetTexture_ShadowDepth_DP( const int &index );
 	inline ITexture *GetTexture_ShadowDepth_Proj( const int &index );
@@ -285,9 +239,6 @@ private:
 	Vector4D m_vecForward;
 	float m_flZDists[3];
 	VMatrix m_matTFrustumD;
-#if DEFCFG_BILATERAL_DEPTH_TEST
-	VMatrix m_matWorldCameraDepthTex;
-#endif
 
 	shadowData_ortho_t m_dataOrtho[ SHADOW_NUM_CASCADES ];
 	shadowData_proj_t m_dataProj[ MAX_SHADOW_PROJ ];
@@ -308,12 +259,6 @@ private:
 	ITexture *m_pTexDepth;
 	ITexture *m_pTexLightAccum;
 	ITexture *m_pTexLightAccumSpecular;
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-	ITexture *m_pTexLightCtrl;
-#elif DEFCFG_DEFERRED_SHADING == 1
-	ITexture *m_pTexAlbedo;
-	ITexture *m_pTexSpecular;
-#endif
 	ITexture *m_pTexShadowDepth_Ortho[ MAX_SHADOW_ORTHO ];
 	ITexture *m_pTexShadowDepth_DP[ MAX_SHADOW_DP ];
 	ITexture *m_pTexShadowDepth_Proj[ MAX_SHADOW_PROJ ];
@@ -349,12 +294,6 @@ float *CDeferredExtension::GetFrustumDeltaBase()
 	return m_matTFrustumD.Base();
 }
 
-#if DEFCFG_BILATERAL_DEPTH_TEST
-float *CDeferredExtension::GetWorldToCameraDepthTexBase()
-{
-	return m_matWorldCameraDepthTex.Base();
-}
-#endif
 const shadowData_ortho_t &CDeferredExtension::GetShadowData_Ortho( const int &index )
 {
 	Assert( index >= 0 && index < SHADOW_NUM_CASCADES );
@@ -427,21 +366,7 @@ ITexture *CDeferredExtension::GetTexture_LightAccumSpecular()
 {
 	return m_pTexLightAccumSpecular;
 }
-#if ( DEFCFG_LIGHTCTRL_PACKING == 0 )
-ITexture *CDeferredExtension::GetTexture_LightCtrl()
-{
-	return m_pTexLightCtrl;
-}
-#elif DEFCFG_DEFERRED_SHADING == 1
-ITexture *CDeferredExtension::GetTexture_Albedo()
-{
-	return m_pTexAlbedo;
-}
-ITexture *CDeferredExtension::GetTexture_Specular()
-{
-	return m_pTexSpecular;
-}
-#endif
+
 ITexture *CDeferredExtension::GetTexture_ShadowDepth_Ortho( const int &index )
 {
 	Assert( index >= 0 && index < MAX_SHADOW_ORTHO );

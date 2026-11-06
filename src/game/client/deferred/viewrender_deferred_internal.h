@@ -69,6 +69,7 @@ extern int g_nShadowViewsSkippedLastFrame;
 extern int g_nShadowViewsRenderedLastFrame;
 
 extern lightData_Global_t& GetActiveGlobalLightState();
+extern void CalculateCSMDistances( const CViewSetup &view, float &flSplitDist, float &flMaxDist );
 
 extern void DrawCube( CMeshBuilder &meshBuilder, Vector vecPos, float flRadius, float *pfl2Texcoords );
 
@@ -164,30 +165,6 @@ protected:
 	sky3dparams_t *m_pSky3dParams;
 
 	bool		m_bGBufferPass;
-};
-
-class CPostLightingView : public CBaseWorldViewDeferred
-{
-	DECLARE_CLASS( CPostLightingView, CBaseWorldViewDeferred );
-public:
-	CPostLightingView(CViewRender *pMainView) : CBaseWorldViewDeferred( pMainView )
-	{
-	}
-
-	void			Setup( const CViewSetup &view );
-	void			Draw();
-
-	virtual void	PushView( float waterHeight );
-	virtual void	PopView();
-
-	virtual void	DrawWorldDeferred( float waterZAdjust );
-	virtual void	DrawOpaqueRenderablesDeferred(bool);
-
-	static void		PushDeferredShadingFrameBuffer();
-	static void		PopDeferredShadingFrameBuffer();
-
-private:
-	VisibleFogVolumeInfo_t m_fogInfo;
 };
 
 class CBaseShadowView : public CBaseWorldViewDeferred

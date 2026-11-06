@@ -15,6 +15,7 @@ BEGIN_DATADESC( CDeferredLight )
 	DEFINE_KEYFIELD( m_flFalloffPower, FIELD_FLOAT, GetLightParamName( LPARAM_POWER ) ),
 	DEFINE_KEYFIELD( m_flSpotConeInner, FIELD_FLOAT, GetLightParamName( LPARAM_SPOTCONE_INNER ) ),
 	DEFINE_KEYFIELD( m_flSpotConeOuter, FIELD_FLOAT, GetLightParamName( LPARAM_SPOTCONE_OUTER ) ),
+	DEFINE_KEYFIELD( m_flShadowFilterScale, FIELD_FLOAT, GetLightParamName( LPARAM_SHADOW_FILTER_SCALE ) ),
 
 	DEFINE_KEYFIELD( m_iVisible_Dist, FIELD_INTEGER, GetLightParamName( LPARAM_VIS_DIST ) ),
 	DEFINE_KEYFIELD( m_iVisible_FadeRange, FIELD_INTEGER, GetLightParamName( LPARAM_VIS_RANGE ) ),
@@ -30,16 +31,7 @@ BEGIN_DATADESC( CDeferredLight )
 	DEFINE_KEYFIELD( m_flStyle_Random, FIELD_FLOAT, GetLightParamName( LPARAM_STYLE_RANDOM ) ),
 	DEFINE_KEYFIELD( m_iStyle_Seed, FIELD_INTEGER, GetLightParamName( LPARAM_STYLE_SEED ) ),
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	DEFINE_KEYFIELD( m_flVolumeLOD0Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD0_DIST ) ),
-	DEFINE_KEYFIELD( m_flVolumeLOD1Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD1_DIST ) ),
-	DEFINE_KEYFIELD( m_flVolumeLOD2Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD2_DIST ) ),
-	DEFINE_KEYFIELD( m_flVolumeLOD3Dist, FIELD_FLOAT, GetLightParamName( LPARAM_VOLUME_LOD3_DIST ) ),
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	DEFINE_KEYFIELD( m_iVolumeSamples, FIELD_INTEGER, GetLightParamName( LPARAM_VOLUME_SAMPLES ) ),
-#endif
 
 	DEFINE_KEYFIELD( m_flUberRoundness, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_ROUNDNESS ) ),
 	DEFINE_KEYFIELD( m_flUberWidth, FIELD_FLOAT, GetLightParamName( LPARAM_UBER_WIDTH ) ),
@@ -66,6 +58,7 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 	SendPropFloat( SENDINFO( m_flFalloffPower ) ),
 	SendPropFloat( SENDINFO( m_flSpotConeInner ) ),
 	SendPropFloat( SENDINFO( m_flSpotConeOuter ) ),
+	SendPropFloat( SENDINFO( m_flShadowFilterScale ) ),
 
 	SendPropInt( SENDINFO( m_iVisible_Dist ), 15, SPROP_UNSIGNED ),
 	SendPropInt( SENDINFO( m_iVisible_FadeRange ), 15, SPROP_UNSIGNED ),
@@ -82,16 +75,7 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 	SendPropFloat( SENDINFO( m_flStyle_Random ) ),
 	SendPropInt( SENDINFO( m_iStyle_Seed ), DEFLIGHT_SEED_MAX_BITS, SPROP_UNSIGNED ),
 
-#	if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	SendPropFloat( SENDINFO( m_flVolumeLOD0Dist ) ),
-	SendPropFloat( SENDINFO( m_flVolumeLOD1Dist ) ),
-	SendPropFloat( SENDINFO( m_flVolumeLOD2Dist ) ),
-	SendPropFloat( SENDINFO( m_flVolumeLOD3Dist ) ),
-#	endif
-
-#	if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	SendPropInt( SENDINFO( m_iVolumeSamples ) ),
-#	endif
 	SendPropFloat( SENDINFO( m_flUberRoundness ) ),
 	SendPropFloat( SENDINFO( m_flUberWidth ) ),
 	SendPropFloat( SENDINFO( m_flUberHeight ) ),
@@ -111,6 +95,7 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 	RecvPropFloat( RECVINFO( m_flFalloffPower ) ),
 	RecvPropFloat( RECVINFO( m_flSpotConeInner ) ),
 	RecvPropFloat( RECVINFO( m_flSpotConeOuter ) ),
+	RecvPropFloat( RECVINFO( m_flShadowFilterScale ) ),
 
 	RecvPropInt( RECVINFO( m_iVisible_Dist ) ),
 	RecvPropInt( RECVINFO( m_iVisible_FadeRange ) ),
@@ -127,16 +112,7 @@ IMPLEMENT_NETWORKCLASS_DT( CDeferredLight, CDeferredLight_DT )
 	RecvPropFloat( RECVINFO( m_flStyle_Random ) ),
 	RecvPropInt( RECVINFO( m_iStyle_Seed ) ),
 
-#	if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	RecvPropFloat( RECVINFO( m_flVolumeLOD0Dist ) ),
-	RecvPropFloat( RECVINFO( m_flVolumeLOD1Dist ) ),
-	RecvPropFloat( RECVINFO( m_flVolumeLOD2Dist ) ),
-	RecvPropFloat( RECVINFO( m_flVolumeLOD3Dist ) ),
-#	endif
-
-#	if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	RecvPropInt( RECVINFO( m_iVolumeSamples ) ),
-#	endif
 	RecvPropFloat( RECVINFO( m_flUberRoundness ) ),
 	RecvPropFloat( RECVINFO( m_flUberWidth ) ),
 	RecvPropFloat( RECVINFO( m_flUberHeight ) ),
@@ -267,6 +243,7 @@ void CDeferredLight::ApplyDataToLight()
 
 	m_pLight->flSpotCone_Inner = SPOT_DEGREE_TO_RAD( GetSpotCone_Inner() );
 	m_pLight->flSpotCone_Outer = SPOT_DEGREE_TO_RAD( GetSpotCone_Outer() );
+	m_pLight->flShadowFilterScale = GetShadowFilterScale();
 
 	m_pLight->iVisible_Dist = GetVisible_Distance();
 	m_pLight->iVisible_Range = GetVisible_FadeRange();
@@ -285,15 +262,7 @@ void CDeferredLight::ApplyDataToLight()
 	m_pLight->iFlags |= GetLight_Flags();
 	m_pLight->iCookieIndex = GetCookieIndex();
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	GetVolumeLODDistances( m_pLight->flVolumeLOD0Dist,
-		 m_pLight->flVolumeLOD1Dist, m_pLight->flVolumeLOD2Dist,
-		 m_pLight->flVolumeLOD3Dist );
-#endif
-
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	m_pLight->iVolumeSamples = GetVolumeSamples();
-#endif
 	m_pLight->flUberRoundness = GetUberRoundness();
 	m_pLight->flUberWidth = GetUberWidth();
 	m_pLight->flUberHeight = GetUberHeight();

@@ -404,6 +404,7 @@ void CDeferredManagerServer::LevelInitPreEntity()
 		COPY_LIGHT_DATA( "_fifty_percent_distance" );
 		COPY_LIGHT_DATA( "_zero_percent_distance" );
 		COPY_LIGHT_DATA( "_distance" );
+		COPY_LIGHT_DATA( "shadow_filter_scale" );
 		pair.spotlight->SetInt( "light_type", 5 );
 		pair.light->deleteThis();
 	}
@@ -418,6 +419,7 @@ void CDeferredManagerServer::LevelInitPreEntity()
 	const char* szParamVisRange = GetLightParamName( LPARAM_VIS_RANGE );
 	const char* szParamShadowDist = GetLightParamName( LPARAM_SHADOW_DIST );
 	const char* szParamShadowRange = GetLightParamName( LPARAM_SHADOW_RANGE );
+	const char* szParamShadowFilterScale = GetLightParamName( LPARAM_SHADOW_FILTER_SCALE );
 	const char* szParamVolumeSamples = GetLightParamName( LPARAM_VOLUME_SAMPLES );
 
 	bool bCreatedGlobalLight = false;
@@ -572,6 +574,9 @@ void CDeferredManagerServer::LevelInitPreEntity()
 			lightEntity->KeyValue( szParamSpotConeInner, flInnerCone );
 			lightEntity->KeyValue( szParamSpotConeOuter, flOuterCone );
 			lightEntity->KeyValue( szParamPower, flPower );
+			float flFilterScale = entity->GetFloat( "shadow_filter_scale" );
+			if ( flFilterScale > 0.0f )
+				lightEntity->KeyValue( szParamShadowFilterScale, flFilterScale );
 			if ( type == 5 )
 				lightEntity->KeyValue( szParamVolumeSamples, 50 );
 		}

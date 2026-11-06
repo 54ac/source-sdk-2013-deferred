@@ -70,11 +70,7 @@ BEGIN_VS_SHADER( DEFERRED_DECALMODULATE,
 		Assert( pShaderAPI == NULL ||
 			iDeferredRenderStage != DEFERRED_RENDER_STAGE_INVALID );
 
-		const bool bDeferredShading = DEFCFG_DEFERRED_SHADING == 1;
-
-		if ( pShaderAPI != NULL &&
-			(iDeferredRenderStage != DEFERRED_RENDER_STAGE_GBUFFER && bDeferredShading
-			|| iDeferredRenderStage != DEFERRED_RENDER_STAGE_COMPOSITION && !bDeferredShading) )
+		if ( pShaderAPI != NULL && iDeferredRenderStage != DEFERRED_RENDER_STAGE_COMPOSITION )
 		{
 			Draw( false );
 			return;

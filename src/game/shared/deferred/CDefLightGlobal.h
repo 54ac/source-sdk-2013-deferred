@@ -35,6 +35,9 @@ public:
 	inline bool HasShadow();
 	inline bool ShouldFade();
 
+	inline float GetCSMMaxDist();
+	inline float GetCSMSplitDist();
+
 private:
 
 #ifdef GAME_DLL
@@ -49,6 +52,8 @@ private:
 
 	float m_flFadeTime;
 	CNetworkVar( int, m_iDefFlags );
+	CNetworkVar( float, m_flCSMMaxDist );
+	CNetworkVar( float, m_flCSMSplitDist );
 	
 #ifdef GAME_DLL
 public:
@@ -76,6 +81,16 @@ Vector CDeferredLightGlobal::GetColor_Ambient_Low()
 float CDeferredLightGlobal::GetFadeTime()
 {
 	return m_flFadeTime;
+}
+
+float CDeferredLightGlobal::GetCSMMaxDist()
+{
+	return m_flCSMMaxDist;
+}
+
+float CDeferredLightGlobal::GetCSMSplitDist()
+{
+	return m_flCSMSplitDist;
 }
 
 bool CDeferredLightGlobal::IsEnabled()

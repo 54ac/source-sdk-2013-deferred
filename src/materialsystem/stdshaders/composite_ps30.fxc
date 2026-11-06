@@ -21,10 +21,18 @@
 // STATIC:		"SELFILLUM_ENVMAP_ALPHA"	"0..1"
 
 // STATIC:		"PARALLAXCORRECT"			"0..1"
+// STATIC:		"VERTEXCOLOR"				"0..1"
 
 // DYNAMIC:		"PIXELFOGTYPE"		"0..1"
 
 // SKIP:		$ALPHATEST && $TRANSLUCENT
+// SKIP:		$VERTEXCOLOR && $BASETEXTURE2
+// SKIP:		$VERTEXCOLOR && $ALPHATEST
+// SKIP:		$VERTEXCOLOR && $PHONG
+// SKIP:		$VERTEXCOLOR && $ENVMAP
+// SKIP:		$VERTEXCOLOR && $SELFILLUM
+// SKIP:		$VERTEXCOLOR && $PARALLAXCORRECT
+// SKIP:		$VERTEXCOLOR && $RIMLIGHT
 // SKIP:		!$ENVMAP && $ENVMAPFRESNEL
 // SKIP:		!$ENVMAP && $ENVMAPMASK
 // SKIP:		!$PHONG && $PHONGFRESNEL
@@ -144,7 +152,7 @@ struct PS_INPUT
 	float3 worldToEye				: TEXCOORD3;
 #endif
 
-#if BASETEXTURE2
+#if BASETEXTURE2 || VERTEXCOLOR
 	float4 vColor_0					: COLOR0;
 #endif
 
@@ -182,7 +190,11 @@ PS_OUTPUT main( const PS_INPUT In )
 #endif
 
 #if TRANSLUCENT
+#if VERTEXCOLOR
+	Out.vColor_0.w = flAlbedoSample.a * In.vColor_0.w;
+#else
 	Out.vColor_0.w = flAlbedoSample.a;
+#endif
 #else
 	Out.vColor_0.w = 1;
 #endif
@@ -350,14 +362,12 @@ PS_OUTPUT main( const PS_INPUT In )
 		flAlbedoSample.rgb * g_flSelfIllum_Tint * flSelfIllumAmount );
 #endif
 
-	float flLightScale =
-#if DEFCFG_USE_SRGB_CONVERSION
-		LINEAR_LIGHT_SCALE;
-#else
-		GAMMA_LIGHT_SCALE;
-#endif
+	float flLightScale = LINEAR_LIGHT_SCALE;
 
 	float3 flDiffuseLighting = flAlbedoSample.rgb * flLighting.rgb;
+#if VERTEXCOLOR
+	flDiffuseLighting *= In.vColor_0.rgb;
+#endif
 
 	Out.vColor_0.xyz = ( flDiffuseLighting
 		+ flSpecularHighlight

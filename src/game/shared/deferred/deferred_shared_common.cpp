@@ -47,15 +47,9 @@ static const char *g_pszLightParamNames[ LPARAM_COUNT ] =
 	"uber_nearedge",
 	"uber_faredge",
 
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-	"volume_lod0_dist",
-	"volume_lod1_dist",
-	"volume_lod2_dist",
-	"volume_lod3_dist",
-#endif
-#if DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
+	"shadow_filter_scale",
+
 	"volume_samples",
-#endif
 };
 
 const char *GetLightParamName( LIGHT_PARAM_ID id )

@@ -186,23 +186,7 @@ PS_OUTPUT main( const PS_INPUT In )
 	float flProjectedDot = step( 0.0001f, dot( vecMarchingNormal, vecWorldRay ) );
 
 	clip( flProjectedDot - 0.5f );
-#if DEFCFG_ADAPTIVE_VOLUMETRIC_LOD
-#	if VOLUME_LOD == 0
-		float iNumSamples = VOLUMQUALITY_SPOT_SAMPLES_LOD0;
-#	elif VOLUME_LOD == 1
-		float iNumSamples = VOLUMQUALITY_SPOT_SAMPLES_LOD1;
-#	elif VOLUME_LOD == 2
-		float iNumSamples = VOLUMQUALITY_SPOT_SAMPLES_LOD2;
-#	elif VOLUME_LOD == 3
-		float iNumSamples = VOLUMQUALITY_SPOT_SAMPLES_LOD3;
-#	else
-		float iNumSamples = VOLUMQUALITY_SPOT_SAMPLES_LOD4;
-#	endif
-#elif DEFCFG_CONFIGURABLE_VOLUMETRIC_LOD
 	float iNumSamples = VOLUME_SAMPLES;
-#else
-	float iNumSamples = VOLUMQUALITY_POINT_SAMPLES;
-#endif
 
 	float2 screenPix = vecTexcoords / ( 2.0f * max( 1e-6f, g_vecHalfScreenTexel ) );
 	float dither = frac( 52.9829189f * frac( dot( screenPix, float2( 0.06711056f, 0.00583715f ) ) ) );

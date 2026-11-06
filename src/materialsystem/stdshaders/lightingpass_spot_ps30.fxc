@@ -45,9 +45,6 @@
 
 sampler sNormals							: register( s0 );
 sampler sDepth								: register( s1 );
-#if !DEFCFG_LIGHTCTRL_PACKING
-sampler sLightCtrl							: register( s2 );
-#endif
 
 const float3 g_vecViewOrigin				: register( c0 );
 const float4 g_vecShadowMappingTweaks_0		: register( c1 );
@@ -88,21 +85,6 @@ float4 DoSpotLightBasic( const int index, float3 normal,
 	bool litface, bool half_lambert,
 	float phong_exp, const bool bDoSpotAttn )
 {
-#if DEFCFG_CHEAP_LIGHTS
-	float3 normalizedLightVec = vecWorldToLight / lightToWorldDist;
-	float litDot = dot( normalizedLightVec, normal );
-
-	float fade = 1.0f - saturate( lightToWorldDist / g_flMixedData[ index ].w );
-	fade *= fade;
-
-	if ( bDoSpotAttn )
-	{
-		float spotDot = dot( g_flMixedData[ index + 3 ].xyz, normalizedLightVec );
-		fade *= smoothstep( g_flMixedData[ index + 2 ].w, g_flMixedData[ index + 3 ].w, spotDot );
-	}
-
-	return float4( 0, saturate( litDot ) * fade, 0, 0 );
-#else
 	float3 normalizedLightVec = vecWorldToLight / lightToWorldDist;
 	float3 flLitNormal = lerp( normal, dot( normal, normalizedLightVec ) * normal, litface );
 
@@ -135,7 +117,6 @@ float4 DoSpotLightBasic( const int index, float3 normal,
 	}
 
 	return float4( litDot, lightAmount, flSpecular, fade );
-#endif
 }
 
 
@@ -206,18 +187,7 @@ PS_OUTPUT main( const PS_INPUT In )
 
 	float phong_exp;
 	bool half_lambert, litface;
-#if DEFCFG_CHEAP_LIGHTS
-	phong_exp = half_lambert = litface = 0;
-#elif !DEFCFG_LIGHTCTRL_PACKING
-	{
-		float4 flLightCtrl = tex2D( sLightCtrl, vecTexcoords );
-		phong_exp = flLightCtrl.x;
-		half_lambert = flLightCtrl.y;
-		litface = flLightCtrl.z;
-	}
-#else
 	UnpackLightingControls( flNormalCtrl.a, phong_exp, half_lambert, litface );
-#endif
 
 	float3 worldRayInv = normalize( -vecWorldRay );
 
@@ -237,36 +207,49 @@ PS_OUTPUT main( const PS_INPUT In )
 			g_flMixedData[ iDataIndex + 7 ],
 			g_flMixedData[ iDataIndex + 8 ] );
 
-		float viewDot = 1.0f - abs( dot( vecDelta / dist, flNormal ) );
-		float3 worldPosLocal = worldPos + flNormal * ( viewDot + dist * 0.0075f );
+		float4 spotTexCoord = mul( float4( worldPos, 1.0f ), spotWorldToTexture );
+		spotTexCoord.xyz /= spotTexCoord.w;
 
-		float4 depthPos = mul( float4( worldPosLocal, 1 ), spotWorldToTexture );
-		depthPos.xyz /= depthPos.w;
+		float3 normalizedLightVec = -vecDelta / dist;
+		float cosTheta = saturate( dot( normalizedLightVec, flNormal ) );
+		float sinTheta = sqrt( saturate( 1.0f - cosTheta * cosTheta ) );
+		float tanTheta = min( sinTheta / max( 0.05f, cosTheta ), 4.0f );
+
+		float normalBias = min( 2.5f, 0.4f + 1.6f * sinTheta + dist * 0.0015f );
+		float3 worldPosBiased = worldPos + flNormal * normalBias;
+
+		float4 shadowDepthPos = mul( float4( worldPosBiased, 1.0f ), spotWorldToTexture );
+		shadowDepthPos.xyz /= shadowDepthPos.w;
+
+		float depthSlope = 5.0f / max( 25.0f, dist * dist );
+		shadowDepthPos.z -= ( 0.2f + 0.6f * tanTheta ) * depthSlope;
 
 		float4 localLight = DoSpotLightBasic( iDataIndex, flNormal,
 									-vecDelta, dist, worldRayInv,
 									litface, half_lambert, phong_exp, false );
 
-		float uberAtten = ApplyUberlight( depthPos.xyz, iDataIndex, dist );
+		float uberAtten = ApplyUberlight( spotTexCoord.xyz, iDataIndex, dist );
 		localLight.y *= uberAtten;
 		localLight.w *= uberAtten;
 
-		localLight.y *= PerformProjectedShadow( sMixedSampler[ iSamplerIndex ],
-			depthPos, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			g_flMixedData[ iDataIndex + 4 ].x );
+		float flProjShadow = PerformProjectedShadow( sMixedSampler[ iSamplerIndex ],
+			shadowDepthPos, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
+			g_flMixedData[ iDataIndex + 4 ].x, g_flMixedData[ iDataIndex + 4 ].w );
+
+		localLight.y *= flProjShadow;
 
 #if VENDOR == VENDOR_FXC_AMD
-		float3 AMDVec = abs( floor( depthPos.xyz ) );
+		float3 AMDVec = abs( floor( spotTexCoord.xyz ) );
 		float AMDAmt = AMDVec.x + AMDVec.y + AMDVec.z;
 		int AMDScale = step( AMDAmt, 0.0001f );
 		localLight.w *= AMDScale;
 #else
-		localLight.w *= 1.0f - any( floor( depthPos.xyz ) );
+		localLight.w *= 1.0f - any( floor( spotTexCoord.xyz ) );
 #endif
 
 		LightAccum_t lightOut = DoLightFinalCookied( g_flMixedData[ iDataIndex + 1 ].xyz,
 			g_flMixedData[ iDataIndex + 2 ].xyz,
-			localLight, DoStandardCookie( sMixedSampler[ iSamplerIndex + 1 ], depthPos.xy ) );
+			localLight, DoStandardCookie( sMixedSampler[ iSamplerIndex + 1 ], spotTexCoord.xy ) );
 		flDiffuseAccum += lightOut.diffuse;
 		flSpecularAccum += lightOut.specular;
 	}
@@ -285,31 +268,44 @@ PS_OUTPUT main( const PS_INPUT In )
 			g_flMixedData[ iDataIndex + 7 ],
 			g_flMixedData[ iDataIndex + 8 ] );
 
-		float viewDot = 1.0f - abs( dot( vecDelta / dist, flNormal ) );
-		float3 worldPosLocal = worldPos + flNormal * ( viewDot + dist * 0.0075f );
+		float4 spotTexCoord = mul( float4( worldPos, 1.0f ), spotWorldToTexture );
+		spotTexCoord.xyz /= spotTexCoord.w;
 
-		float4 depthPos = mul( float4( worldPosLocal, 1 ), spotWorldToTexture );
-		depthPos.xyz /= depthPos.w;
+		float3 normalizedLightVec = -vecDelta / dist;
+		float cosTheta = saturate( dot( normalizedLightVec, flNormal ) );
+		float sinTheta = sqrt( saturate( 1.0f - cosTheta * cosTheta ) );
+		float tanTheta = min( sinTheta / max( 0.05f, cosTheta ), 4.0f );
+
+		float normalBias = min( 2.5f, 0.4f + 1.6f * sinTheta + dist * 0.0015f );
+		float3 worldPosBiased = worldPos + flNormal * normalBias;
+
+		float4 shadowDepthPos = mul( float4( worldPosBiased, 1.0f ), spotWorldToTexture );
+		shadowDepthPos.xyz /= shadowDepthPos.w;
+
+		float depthSlope = 5.0f / max( 25.0f, dist * dist );
+		shadowDepthPos.z -= ( 0.2f + 0.6f * tanTheta ) * depthSlope;
 
 		float4 localLight = DoSpotLightBasic( iDataIndex, flNormal,
 									-vecDelta, dist, worldRayInv,
 									litface, half_lambert, phong_exp, true );
 
-		float uberAtten = ApplyUberlight( depthPos.xyz, iDataIndex, dist );
+		float uberAtten = ApplyUberlight( spotTexCoord.xyz, iDataIndex, dist );
 		localLight.y *= uberAtten;
 		localLight.w *= uberAtten;
 
-		localLight.y *= PerformProjectedShadow( sMixedSampler[ iSamplerIndex ],
-			depthPos, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
-			g_flMixedData[ iDataIndex + 4 ].x );
+		float flProjShadow = PerformProjectedShadow( sMixedSampler[ iSamplerIndex ],
+			shadowDepthPos, g_vecShadowMappingTweaks_0, g_vecShadowMappingTweaks_1,
+			g_flMixedData[ iDataIndex + 4 ].x, g_flMixedData[ iDataIndex + 4 ].w );
+
+		localLight.y *= flProjShadow;
 
 #if VENDOR == VENDOR_FXC_AMD
-		float3 AMDVec = abs( floor( depthPos.xyz ) );
+		float3 AMDVec = abs( floor( spotTexCoord.xyz ) );
 		float AMDAmt = AMDVec.x + AMDVec.y + AMDVec.z;
 		int AMDScale = step( AMDAmt, 0.0001f );
 		localLight.w *= AMDScale;
 #else
-		localLight.w *= 1.0f - any( floor( depthPos.xyz ) );
+		localLight.w *= 1.0f - any( floor( spotTexCoord.xyz ) );
 #endif
 
 		LightAccum_t lightOut = DoLightFinal( g_flMixedData[ iDataIndex + 1 ].xyz,
