@@ -301,7 +301,7 @@ C_EntityFlame::~C_EntityFlame( void )
 void C_EntityFlame::StopEffect( void )
 {
 	if ( GetLightingManager() )
-		GetLightingManager()->FreeDynamicLight( m_pDeferredLight, 0.4f );
+		GetLightingManager()->FreeDynamicLight( m_pDeferredLight );
 
 	if ( m_hEffect )
 	{

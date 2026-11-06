@@ -290,6 +290,7 @@ public:
 	virtual void	UpdateOnRemove( void );
 	virtual void	OnDataChanged( DataUpdateType_t updateType );
 	virtual void	ClientThink( void );
+	virtual void	CreateLightEffects( void ) {}
 
 	CNewParticleEffect *m_hEffect;
 	EHANDLE				m_hEntAttached;		// The entity that we are burning (attached to).

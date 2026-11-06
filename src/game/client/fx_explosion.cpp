@@ -732,7 +732,7 @@ void C_BaseExplosionEffect::CreateDynamicLight( void )
 	dl->color.b = 128;
 	dl->die		= gpGlobals->curtime + 0.1f;*/
 
-	def_light_temp_t *l = new def_light_temp_t( 0.07f );
+	def_light_temp_t *l = new def_light_temp_t( 0.15f );
 
 	l->ang = vec3_angle;
 	l->pos = m_vecOrigin;
