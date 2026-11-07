@@ -118,84 +118,117 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 			break;
 
 			case MATERIAL_VAR_TYPE_TEXTURE:
-				msg->SetString( pVarName, pVar->GetTextureValue()->GetName() );
+				if ( pVar->GetTextureValue() )
+				{
+					msg->SetString( pVarName, pVar->GetTextureValue()->GetName() );
+				}
 				break;
 
 			case MATERIAL_VAR_TYPE_MATERIAL:
-				msg->SetString( pVarName, pVar->GetMaterialValue()->GetName() );
+				if ( pVar->GetMaterialValue() )
+				{
+					msg->SetString( pVarName, pVar->GetMaterialValue()->GetName() );
+				}
 				break;
 		}
 	}
 
-	const bool bAlphaBlending = pMat->IsTranslucent() || pMat->GetMaterialVarFlag( MATERIAL_VAR_TRANSLUCENT );
-	const bool bAlphaTesting = pMat->IsAlphaTested() || pMat->GetMaterialVarFlag( MATERIAL_VAR_ALPHATEST );
-	const bool bSelfillum = pMat->GetMaterialVarFlag( MATERIAL_VAR_SELFILLUM );
-	const bool bBaseAlphaEnvmapMask = pMat->GetMaterialVarFlag( MATERIAL_VAR_BASEALPHAENVMAPMASK );
-	const bool bNormalMapAlphaEnvmapMask = pMat->GetMaterialVarFlag( MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK );
-	const bool bDecal = pszOldShadername != NULL && Q_stristr( pszOldShadername,"decal" ) != NULL ||
-		pszMatname != NULL && Q_stristr( pszMatname, "decal" ) != NULL ||
-		pMat->GetMaterialVarFlag( MATERIAL_VAR_DECAL );
+	unsigned int nSavedFlags = 0;
+	for ( int bit = 0; bit <= 30; ++bit )
+	{
+		MaterialVarFlags_t flag = static_cast<MaterialVarFlags_t>( 1 << bit );
+		if ( pMat->GetMaterialVarFlag( flag ) )
+		{
+			nSavedFlags |= ( 1 << bit );
+		}
+	}
+
+	const bool bAlphaBlending = pMat->IsTranslucent() || ( nSavedFlags & MATERIAL_VAR_TRANSLUCENT ) != 0;
+	const bool bAlphaTesting = pMat->IsAlphaTested() || ( nSavedFlags & MATERIAL_VAR_ALPHATEST ) != 0;
+	const bool bDecal = ( pszOldShadername != NULL && Q_stristr( pszOldShadername, "decal" ) != NULL ) ||
+		( pszMatname != NULL && Q_stristr( pszMatname, "decal" ) != NULL ) ||
+		( ( nSavedFlags & MATERIAL_VAR_DECAL ) != 0 );
 
 	if ( bDecal )
 	{
+		nSavedFlags |= MATERIAL_VAR_DECAL;
 		msg->SetInt( "$decal", 1 );
 	}
 
 	if ( bAlphaTesting )
 	{
+		nSavedFlags |= MATERIAL_VAR_ALPHATEST;
 		msg->SetInt( "$alphatest", 1 );
 	}
-	else if ( bAlphaBlending )
+	else if ( bAlphaBlending || bDecal )
 	{
+		nSavedFlags |= MATERIAL_VAR_TRANSLUCENT;
 		msg->SetInt( "$translucent", 1 );
 	}
 
-	if ( pMat->IsTwoSided() )
+	if ( pMat->IsTwoSided() || ( nSavedFlags & MATERIAL_VAR_NOCULL ) != 0 )
 	{
+		nSavedFlags |= MATERIAL_VAR_NOCULL;
 		msg->SetInt( "$nocull", 1 );
 	}
 
-	if ( bSelfillum )
+	if ( ( nSavedFlags & MATERIAL_VAR_SELFILLUM ) != 0 )
 	{
 		msg->SetInt( "$selfillum", 1 );
 	}
 
-	if ( bBaseAlphaEnvmapMask )
+	if ( ( nSavedFlags & MATERIAL_VAR_BASEALPHAENVMAPMASK ) != 0 )
 	{
 		msg->SetInt( "$basealphaenvmapmask", 1 );
 	}
 
-	if ( bNormalMapAlphaEnvmapMask )
+	if ( ( nSavedFlags & MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK ) != 0 )
 	{
 		msg->SetInt( "$normalmapalphaenvmapmask", 1 );
 	}
 
+	if ( ( nSavedFlags & MATERIAL_VAR_VERTEXCOLOR ) != 0 )
+	{
+		msg->SetInt( "$vertexcolor", 1 );
+	}
+
+	if ( ( nSavedFlags & MATERIAL_VAR_VERTEXALPHA ) != 0 )
+	{
+		msg->SetInt( "$vertexalpha", 1 );
+	}
+
 	pMat->SetShaderAndParams( msg );
 
-	if ( bBaseAlphaEnvmapMask )
+	for ( int bit = 0; bit <= 30; ++bit )
 	{
-		pMat->SetMaterialVarFlag( MATERIAL_VAR_BASEALPHAENVMAPMASK, true );
-	}
-	if ( bNormalMapAlphaEnvmapMask )
-	{
-		pMat->SetMaterialVarFlag( MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK, true );
+		MaterialVarFlags_t flag = static_cast<MaterialVarFlags_t>( 1 << bit );
+		pMat->SetMaterialVarFlag( flag, ( nSavedFlags & ( 1 << bit ) ) != 0 );
 	}
 
 	pMat->RefreshPreservingMaterialVars();
+
+	for ( int bit = 0; bit <= 30; ++bit )
+	{
+		MaterialVarFlags_t flag = static_cast<MaterialVarFlags_t>( 1 << bit );
+		pMat->SetMaterialVarFlag( flag, ( nSavedFlags & ( 1 << bit ) ) != 0 );
+	}
 
 }
 
 IMaterial* CDeferredMaterialSystem::FindProceduralMaterial( const char* pMaterialName, const char* pTextureGroupName,
                                                         KeyValues* pVMTKeyValues )
 {
-	const char* pShaderName = pVMTKeyValues->GetName();
-	for ( const char* const* row : pszShaderReplaceDict )
+	const char* pShaderName = pVMTKeyValues ? pVMTKeyValues->GetName() : NULL;
+	if ( pShaderName )
 	{
-		if ( FStrEq( pShaderName, row[0] ) )
+		for ( const char* const* row : pszShaderReplaceDict )
 		{
-			pVMTKeyValues->SetName( row[1] );
-			matCount++;
-			break;
+			if ( !V_stricmp( pShaderName, row[0] ) )
+			{
+				pVMTKeyValues->SetName( row[1] );
+				matCount++;
+				break;
+			}
 		}
 	}
 	return BaseClass::FindProceduralMaterial( pMaterialName, pTextureGroupName, pVMTKeyValues );
@@ -203,14 +236,17 @@ IMaterial* CDeferredMaterialSystem::FindProceduralMaterial( const char* pMateria
 
 IMaterial* CDeferredMaterialSystem::CreateMaterial( const char* pMaterialName, KeyValues* pVMTKeyValues )
 {
-	const char* pShaderName = pVMTKeyValues->GetName();
-	for ( const char* const* row : pszShaderReplaceDict )
+	const char* pShaderName = pVMTKeyValues ? pVMTKeyValues->GetName() : NULL;
+	if ( pShaderName )
 	{
-		if ( FStrEq( pShaderName, row[0] ) )
+		for ( const char* const* row : pszShaderReplaceDict )
 		{
-			pVMTKeyValues->SetName( row[1] );
-			matCount++;
-			break;
+			if ( !V_stricmp( pShaderName, row[0] ) )
+			{
+				pVMTKeyValues->SetName( row[1] );
+				matCount++;
+				break;
+			}
 		}
 	}
 	return BaseClass::CreateMaterial( pMaterialName, pVMTKeyValues );
@@ -221,12 +257,8 @@ IMaterial* CDeferredMaterialSystem::ReplaceMaterialInternal( IMaterial* pMat ) c
 	if ( !pMat || pMat->IsErrorMaterial() )
 		return pMat;
 
-
-	//FIXME: subrect decals don't work at all
-	if (V_stristr(pMat->GetName(), "_subrect")) {
-		DevMsg(2, "Decal %s skipped due to subrect issues\n", pMat->GetName());
+	if ( V_stristr( pMat->GetName(), "_subrect" ) )
 		return pMat;
-	}
 
 	const char* pShaderName = pMat->GetShaderName();
 	if ( pShaderName )

@@ -400,6 +400,11 @@ public:
 		return ReplaceMaterialInternal( BaseClass::FindMaterial( pMaterialName, pTextureGroupName, complain, pComplainPrefix ) );
 	}
 
+	IMaterial* GetMaterial( MaterialHandle_t h ) const OVERRIDE
+	{
+		return ReplaceMaterialInternal( BaseClass::GetMaterial( h ) );
+	}
+
 	IMaterial* FindProceduralMaterial( const char* pMaterialName, const char* pTextureGroupName, KeyValues* pVMTKeyValues ) OVERRIDE;
 
 	IMaterial* CreateMaterial( const char* pMaterialName, KeyValues* pVMTKeyValues ) OVERRIDE;
