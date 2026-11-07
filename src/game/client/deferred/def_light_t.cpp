@@ -567,10 +567,6 @@ void def_light_t::UpdateXForms()
 
 			CalcBoundaries( points, numPoints, bounds_min_naive, bounds_max_naive );
 
-			const Vector radVec( flRadius, flRadius, flRadius );
-			bounds_min_naive = VectorMax( bounds_min_naive, pos - radVec );
-			bounds_max_naive = VectorMin( bounds_max_naive, pos + radVec );
-
 			boundsCenter = bounds_min_naive + ( bounds_max_naive - bounds_min_naive ) * 0.5f;
 		}
 		break;
@@ -929,65 +925,44 @@ void def_light_t::BuildCone( IMesh *pMesh )
 {
 	CMeshBuilder meshBuilder;
 
-	static const Vector _normPos[4] = {
-		Vector( 1, 1, 1 ),
-		Vector( -1, 1, 1 ),
-		Vector( -1, -1, 1 ),
-		Vector( 1, -1, 1 ),
-	};
+	const int nSegments = 16;
+	Vector world[nSegments];
 
-	Vector world[4];
-
-	for ( int i = 0; i < 4; i++ )
+	for ( int i = 0; i < nSegments; i++ )
 	{
-		Vector3DMultiplyPositionProjective( spotVPInv, _normPos[i], world[i] );
-
+		float flAngle = ( (float)i / (float)nSegments ) * ( 2.0f * M_PI_F );
+		Vector normPos( cosf( flAngle ), sinf( flAngle ), 1.0f );
+		Vector3DMultiplyPositionProjective( spotVPInv, normPos, world[i] );
 		VectorDeviceToSourceSpace( world[i] );
 	}
 
-	meshBuilder.Begin( pMesh, MATERIAL_TRIANGLES, 6 );
+	Vector baseCenter;
+	Vector3DMultiplyPositionProjective( spotVPInv, Vector( 0, 0, 1.0f ), baseCenter );
+	VectorDeviceToSourceSpace( baseCenter );
 
-	meshBuilder.Position3fv( world[0].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[1].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[2].Base() );
-	meshBuilder.AdvanceVertex();
+	meshBuilder.Begin( pMesh, MATERIAL_TRIANGLES, nSegments * 2 );
 
-	meshBuilder.Position3fv( world[0].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[2].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[3].Base() );
-	meshBuilder.AdvanceVertex();
+	for ( int i = 0; i < nSegments; i++ )
+	{
+		int next = ( i + 1 ) % nSegments;
+		meshBuilder.Position3fv( baseCenter.Base() );
+		meshBuilder.AdvanceVertex();
+		meshBuilder.Position3fv( world[i].Base() );
+		meshBuilder.AdvanceVertex();
+		meshBuilder.Position3fv( world[next].Base() );
+		meshBuilder.AdvanceVertex();
+	}
 
-	meshBuilder.Position3fv( vec3_origin.Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[1].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[0].Base() );
-	meshBuilder.AdvanceVertex();
-
-	meshBuilder.Position3fv( vec3_origin.Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[3].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[2].Base() );
-	meshBuilder.AdvanceVertex();
-
-	meshBuilder.Position3fv( vec3_origin.Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[2].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[1].Base() );
-	meshBuilder.AdvanceVertex();
-
-	meshBuilder.Position3fv( vec3_origin.Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[0].Base() );
-	meshBuilder.AdvanceVertex();
-	meshBuilder.Position3fv( world[3].Base() );
-	meshBuilder.AdvanceVertex();
+	for ( int i = 0; i < nSegments; i++ )
+	{
+		int next = ( i + 1 ) % nSegments;
+		meshBuilder.Position3fv( vec3_origin.Base() );
+		meshBuilder.AdvanceVertex();
+		meshBuilder.Position3fv( world[next].Base() );
+		meshBuilder.AdvanceVertex();
+		meshBuilder.Position3fv( world[i].Base() );
+		meshBuilder.AdvanceVertex();
+	}
 
 	meshBuilder.End();
 }

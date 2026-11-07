@@ -239,6 +239,7 @@ void CLightingManager::SortLights()
 				{
 					bNeedsFullscreen = !R_CullBox( camMins, camMaxs, pLight->spotFrustum );
 				}
+				pLight->bWasFullscreen = bNeedsFullscreen;
 				m_hPreSortedLights[ bNeedsFullscreen ? LSORT_SPOT_FULLSCREEN : LSORT_SPOT_WORLD ].AddToTail( pLight );
 			}
 			else
