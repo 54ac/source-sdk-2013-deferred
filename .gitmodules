@@ -1,0 +1,15 @@
+[submodule "src/thirdparty/ShaderCompile"]
+	path = src/thirdparty/ShaderCompile
+	url = https://github.com/ficool2/ShaderCompile
+[submodule "src/thirdparty/libspng"]
+	path = src/thirdparty/libspng
+	url = https://github.com/randy408/libspng.git
+[submodule "src/thirdparty/zlib"]
+	path = src/thirdparty/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "src/thirdparty/protobuf"]
+	path = src/thirdparty/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git
+[submodule "src/thirdparty/lzma"]
+	path = src/thirdparty/lzma
+	url = https://github.com/welovegit/LZMA-SDK.git

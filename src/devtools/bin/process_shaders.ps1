@@ -39,4 +39,4 @@ $argsList.Add("-shaderpath")
 $argsList.Add($File.DirectoryName)
 $argsList.AddRange($shaders)
 
-& "$PSScriptRoot\ShaderCompile2" @argsList
+& "$PSScriptRoot\ShaderCompile" @argsList

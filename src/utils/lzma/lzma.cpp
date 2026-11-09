@@ -13,9 +13,9 @@
 #endif
 #include "tier0/memdbgon.h"
 #include "../../public/tier1/lzmaDecoder.h"
-#include "C/7zTypes.h"
-#include "C/LzmaEnc.h"
-#include "C/LzmaDec.h"
+#include "7zTypes.h"
+#include "LzmaEnc.h"
+#include "LzmaDec.h"
 #include "tier0/dbg.h"
 
 // Allocator to pass to LZMA functions
