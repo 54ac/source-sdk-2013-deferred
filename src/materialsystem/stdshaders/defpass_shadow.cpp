@@ -62,7 +62,7 @@ void DrawPassShadowPass( const defParms_shadow &info, CBaseVSShader *pShader, IM
 
 		pShaderShadow->EnableSRGBWrite( false );
 
-		if ( bNoCull )
+		if ( bNoCull || !bModel )
 		{
 			pShaderShadow->EnableCulling( false );
 		}

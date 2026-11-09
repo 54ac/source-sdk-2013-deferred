@@ -23,6 +23,14 @@ static void OnDeferredShadowCacheChanged( IConVar *var, const char *pOldValue, f
 	}
 }
 
+CON_COMMAND( r_deferred_shadow_cache_invalidate, "Invalidate static shadow cache and re-render static shadow maps" )
+{
+	if ( GetLightingManager() )
+	{
+		GetLightingManager()->ReevaluateStaticAtlasSlots();
+	}
+}
+
 void CLightingManager::ResetStaticAtlasSlots()
 {
 	Q_memset( s_bAtlasSlotUsed, 0, sizeof( s_bAtlasSlotUsed ) );
@@ -121,9 +129,12 @@ void CLightingManager::ReevaluateStaticAtlasSlots()
 		for ( int i = 0; i < m_hDeferredLights.Count(); i++ )
 		{
 			def_light_t *l = m_hDeferredLights[i];
-			if ( l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) && !l->HasValidAtlasSlot() )
+			if ( l->IsStatic() && ( l->IsSpot() || l->IsPoint() ) )
 			{
-				AssignStaticAtlasSlot( l );
+				if ( !l->HasValidAtlasSlot() )
+				{
+					AssignStaticAtlasSlot( l );
+				}
 				l->SetShadowDirty( true );
 			}
 		}
@@ -210,7 +221,7 @@ void CLightingManager::OnEntityCreated( C_BaseEntity *pEntity )
 	if ( !pEntity )
 		return;
 
-	const int entIdx = pEntity->entindex();
+	const int entIdx = pEntity->GetRefEHandle().GetEntryIndex();
 	if ( entIdx >= 0 && entIdx < NUM_ENT_ENTRIES && m_pCachedPropStates )
 	{
 		m_pCachedPropStates[entIdx].bActive = false;
@@ -279,7 +290,7 @@ void CLightingManager::OnEntityRemoved( C_BaseEntity *pEnt )
 
 void CLightingManager::CheckDynamicEntityIntersections()
 {
-	if ( !r_deferred_shadow_cache.GetBool() || !engine->IsInGame() || engine->IsLevelMainMenuBackground() )
+	if ( !r_deferred_shadow_cache.GetBool() || !engine->IsInGame() || engine->IsLevelMainMenuBackground() || engine->IsDrawingLoadingImage() )
 		return;
 
 	if ( !m_pCachedPropStates )

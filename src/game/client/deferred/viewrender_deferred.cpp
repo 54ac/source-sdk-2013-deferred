@@ -1005,9 +1005,6 @@ void CDeferredViewRender::ViewDrawComposite( const CViewSetup &view, bool &bDrew
 
 	SetupCurrentView( view.origin, view.angles, viewID );
 
-	// Invoke pre-render methods
-	IGameSystem::PreRenderAllSystems();
-
 	// Start view
 	unsigned int visFlags;
 	SetupVis( view, visFlags, NULL );
@@ -1374,6 +1371,9 @@ void CDeferredViewRender::RenderView( const CViewSetup &view, int nClearFlags, i
 
 	// clear happens here probably
 	SetupMain3DView( worldView, nClearFlags );
+
+	// Invoke pre-render methods
+	IGameSystem::PreRenderAllSystems();
 
 	unsigned int visFlags;
 	SetupVis( worldView, visFlags, NULL );

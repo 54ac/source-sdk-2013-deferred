@@ -21,7 +21,13 @@ void CBaseShadowView::Setup( const CViewSetup &view, ITexture *pDepthTexture, IT
 	CalcShadowView();
 
 	m_pCustomVisibility = &shadowVis;
+	shadowVis = ViewCustomVisibility_t();
 	shadowVis.AddVisOrigin( origin );
+	shadowVis.AddVisOrigin( view.origin );
+	if ( pReflView )
+	{
+		shadowVis.AddVisOrigin( pReflView->origin );
+	}
 }
 
 void CBaseShadowView::SetupRadiosityTargets( ITexture *pAlbedoTexture, ITexture *pNormalTexture )
@@ -103,7 +109,7 @@ void CBaseShadowView::DrawSetup( float waterHeight, int nSetupFlags, float water
 	SetupCurrentView( origin, angles, VIEW_DEFERRED_SHADOW );
 
 	const bool bDrawEntities = ( nSetupFlags & DF_DRAW_ENTITITES ) != 0;
-	BuildWorldRenderLists( bDrawEntities, iForceViewLeaf, ShouldCacheLists(), false, NULL );
+	BuildWorldRenderLists( bDrawEntities, iForceViewLeaf, ShouldCacheLists(), bShadowDepth, NULL );
 	PruneWorldListInfo();
 	if ( bDrawEntities )
 	{

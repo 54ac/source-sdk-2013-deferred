@@ -191,9 +191,6 @@ static float CalibrateFalloffPower( float flRadius, float flFiftyDist, float flZ
 	return 1.0f;
 }
 
-ConVar r_deferred_autoenvlight_ambient_intensity_low("r_deferred_autoenvlight_ambient_intensity_low", "0.1");
-ConVar r_deferred_autoenvlight_ambient_intensity_high("r_deferred_autoenvlight_ambient_intensity_high", "0.2");
-ConVar r_deferred_autoenvlight_diffuse_intensity("r_deferred_autoenvlight_diffuse_intensity", "0.7");
 
 void CDeferredManagerServer::LevelInitPreEntity()
 {
@@ -444,22 +441,53 @@ void CDeferredManagerServer::LevelInitPreEntity()
 
 		if ( type == 3 )
 		{
-			rot.x = -entity->GetInt( "pitch" );
+			const float flPitch = entity->GetFloat( "pitch", 0.0f );
+			if ( flPitch != 0.0f )
+				rot.x = -flPitch;
+
 			CDeferredLightGlobal* lightEntity = static_cast<CDeferredLightGlobal*>( CBaseEntity::CreateNoSpawn( "light_deferred_global", pos, rot ) );
 			if ( !lightEntity )
 				break;
 
-			int color[4], ambient[4];
-			UTIL_StringToIntArray( color, 4, entity->GetString( "_light" ) );
-			UTIL_StringToIntArray( ambient, 4, entity->GetString( "_ambient" ) );
+			int color[4] = { 255, 255, 255, 0 };
+			int ambient[4] = { 128, 128, 128, 0 };
+			const int nColorTokens = sscanf( entity->GetString( "_light" ), "%d %d %d %d", &color[0], &color[1], &color[2], &color[3] );
+			const int nAmbTokens = sscanf( entity->GetString( "_ambient" ), "%d %d %d %d", &ambient[0], &ambient[1], &ambient[2], &ambient[3] );
 
-			const float ds = r_deferred_autoenvlight_diffuse_intensity.GetFloat();
-			const float asl = r_deferred_autoenvlight_ambient_intensity_low.GetFloat();
-			const float ash = r_deferred_autoenvlight_ambient_intensity_high.GetFloat();
+			if ( nColorTokens <= 0 )
+			{
+				color[0] = color[1] = color[2] = 255;
+				color[3] = 200;
+			}
+			else if ( nColorTokens == 3 )
+			{
+				color[3] = 200;
+			}
 
-			lightEntity->KeyValue( "diffuse", UTIL_VarArgs("%d %d %d %f", color[0], color[1], color[2], color[3] * ds ) );
-			lightEntity->KeyValue( "ambient_high", UTIL_VarArgs("%d %d %d %f", ambient[0], ambient[1], ambient[2], ambient[3] * ash ) );
-			lightEntity->KeyValue( "ambient_low", UTIL_VarArgs("%d %d %d %f", ambient[0], ambient[1], ambient[2], ambient[3] * asl ) );
+			if ( nAmbTokens <= 0 )
+			{
+				ambient[0] = ambient[1] = ambient[2] = 128;
+				ambient[3] = 20;
+			}
+			else if ( nAmbTokens == 3 )
+			{
+				ambient[3] = 100;
+			}
+
+			const float flSunIntensity = (float)Max( 0, color[3] );
+			const float flAmbIntensity = (float)Max( 0, ambient[3] );
+			const float flTotalIntensity = flSunIntensity + flAmbIntensity;
+
+			const float kBaseScale = 0.20f;
+			const float flScale = ( flTotalIntensity > 350.0f ) ? ( 350.0f / flTotalIntensity ) * kBaseScale : kBaseScale;
+
+			const float flSunIntensityNorm = flSunIntensity * flScale;
+			const float flAmbHighIntensityNorm = flAmbIntensity * flScale;
+			const float flAmbLowIntensityNorm = 0.50f * flAmbHighIntensityNorm;
+
+			lightEntity->KeyValue( "diffuse", UTIL_VarArgs("%d %d %d %f", color[0], color[1], color[2], flSunIntensityNorm ) );
+			lightEntity->KeyValue( "ambient_high", UTIL_VarArgs("%d %d %d %f", ambient[0], ambient[1], ambient[2], flAmbHighIntensityNorm ) );
+			lightEntity->KeyValue( "ambient_low", UTIL_VarArgs("%d %d %d %f", ambient[0], ambient[1], ambient[2], flAmbLowIntensityNorm ) );
 			lightEntity->KeyValue( "spawnflags", "3" );
 
 			DispatchSpawn( lightEntity );

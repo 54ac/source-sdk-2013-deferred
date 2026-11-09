@@ -4,9 +4,6 @@
 #ifndef CDEFERRED_MANAGER_SERVER_H
 #define CDEFERRED_MANAGER_SERVER_H
 
-extern ConVar r_deferred_autoenvlight_ambient_intensity_low;
-extern ConVar r_deferred_autoenvlight_ambient_intensity_high;
-extern ConVar r_deferred_autoenvlight_diffuse_intensity;
 
 class CDeferredLight;
 
