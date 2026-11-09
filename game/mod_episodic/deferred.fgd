@@ -1,0 +1,72 @@
+@include "base.fgd"
+
+@PointClass base(Targetname, Parentname, Angles) iconsprite("editor/light.vmt") sphere(radius) cone(spot_cone_outer) = light_deferred : "Deferred local point or spot light with dynamic shadows, cookies, volumetrics, and animated lightstyles."
+[
+	spawnflags(flags) =
+	[
+		1 	: "Enabled" : 1
+		2 	: "Enable shadow" : 0
+		4 	: "Enable cookie" : 0
+		8 	: "Enable volumetrics" : 0
+		16	: "Enable lightstyle" : 0
+		32	: "Enable Uberlight shaping" : 0
+	]
+
+	light_type(Choices) : "Light type" : 0 : "Selects whether the light is omnidirectional point light or directional spotlight." =
+	[
+		0 : "Point"
+		1 : "Spot"
+	]
+
+	diffuse(color255) : "Color diffuse" : "255 255 255 255" : "Direct diffuse light color (R G B A)."
+	ambient(color255) : "Color ambient" : "10 10 10 255" : "Ambient light fill color (R G B A)."
+
+	radius(float) : "Radius" : "256.0" : "Maximum light influence radius in world units."
+	power(float) : "Falloff power" : "2.0" : "Falloff exponent (2.0 = physically based inverse-square falloff)."
+
+	spot_cone_inner(float) : "Spotlight cone inner" : "35.0" : "Inner spotlight cone angle in degrees (full brightness)."
+	spot_cone_outer(float) : "Spotlight cone outer" : "45.0" : "Outer spotlight cone angle in degrees (falloff to zero)."
+
+	vis_dist(integer) : "Visible distance" : 2048 : "Maximum distance from camera where the light is rendered."
+	vis_range(integer) : "Visible fade range" : 512 : "Distance range over which the light smoothly fades out."
+	shadow_dist(integer) : "Shadow distance" : 1536 : "Maximum distance from camera where real-time shadows are rendered."
+	shadow_range(integer) : "Shadow fade range" : 512 : "Distance range over which real-time shadows smoothly fade out."
+	shadow_filter_scale(float) : "Shadow softness" : "0.0" : "Penumbra softness scale (0.0 = default 1.25, 0.5 = crisp/sharp, 1.5 = diffuse/soft)."
+
+	cookietex(string) : "Cookie texture" : : "Path to vtf or vgui projectable factory name."
+
+	style_seed(integer) : "Lightstyle seed" : -1 : "Random seed for procedural lightstyle noise (-1 = random)."
+	style_amt(float) : "Lightstyle amount" : "0.5" : "Amplitude of lightstyle animation (0.0 = static, 1.0 = full flicker)."
+	style_speed(float) : "Lightstyle speed" : "0.3" : "Speed/frequency of lightstyle oscillation."
+	style_smooth(float) : "Lightstyle smoothing" : "0.5" : "Smoothing factor for lightstyle interpolation (0.0 = sharp noise, 1.0 = smooth wave)."
+	style_random(float) : "Lightstyle random" : "0.5" : "Randomness ratio versus periodic wave."
+
+	volume_samples(integer) : "Volumetric Samples" : 50 : "Sample slice count for volumetric ray marching when volumetric spawnflag is enabled (default 50)."
+
+	uber_roundness(float) : "Uberlight roundness" : "1.0" : "Superellipse roundness (1.0 = round/ellipse, 0.0 = sharp rectangle)."
+	uber_width(float) : "Uberlight half-width" : "0.5" : "Horizontal beam half-width factor."
+	uber_height(float) : "Uberlight half-height" : "0.5" : "Vertical beam half-height factor."
+	uber_wedge(float) : "Uberlight horizontal softness" : "0.05" : "Softness falloff width at left/right edges."
+	uber_hedge(float) : "Uberlight vertical softness" : "0.05" : "Softness falloff width at top/bottom edges."
+	uber_shear_x(float) : "Uberlight shear X" : "0.0" : "Beam shear angle offset on horizontal axis."
+	uber_shear_y(float) : "Uberlight shear Y" : "0.0" : "Beam shear angle offset on vertical axis."
+	uber_cuton(float) : "Uberlight cut-on distance" : "0.0" : "Near distance gate where light begins."
+	uber_cutoff(float) : "Uberlight cut-off distance" : "0.0" : "Far distance gate where light ends (0 = disabled)."
+]
+
+@PointClass base(Targetname, Angles) iconsprite("editor/light_env.vmt") = light_deferred_global : "Deferred directional sun/environment light with cascaded shadow maps."
+[
+	spawnflags(flags) =
+	[
+		1 	: "Enabled" : 1
+		2 	: "Enable shadow" : 1
+		4 	: "Enable transitions" : 1
+	]
+	diffuse(color255) : "Color diffuse" : "255 255 255 255" : "Directional sunlight color (R G B A)."
+	ambient_high(color255) : "Color ambient high" : "20 40 80 255" : "Sky/upward ambient hemisphere light color (R G B A)."
+	ambient_low(color255) : "Color ambient low" : "40 20 10 255" : "Ground/downward ambient hemisphere light color (R G B A)."
+
+	fadetime(float) : "Fade interval time" : "1.0" : "Transition fade time in seconds when switching active global lights."
+	csm_max_dist(float) : "CSM Max Distance" : "0.0" : "Maximum distance for sun shadows in world units (0.0 = Auto-detect from map fog/farZ, or 4096)."
+	csm_split_dist(float) : "CSM Split Distance" : "0.0" : "Split distance for near cascade (0.0 = Auto-calculate using PSSM logarithmic blend)."
+]
