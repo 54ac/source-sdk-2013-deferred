@@ -182,7 +182,7 @@ source_sdk_add_tool(vvis_dll SHARED
     DEFINES
         PROTECTED_THINGS_DISABLE
     LIBRARIES
-        "${LIBCOMMON_DIR}/lzma.lib"
+        lzma
         odbc32
         odbccp32
         ws2_32
@@ -251,7 +251,7 @@ source_sdk_add_tool(vrad_dll SHARED
     DEFINES
         PROTECTED_THINGS_DISABLE
     LIBRARIES
-        "${LIBCOMMON_DIR}/lzma.lib"
+        lzma
         bitmap
         vtf
         raytrace
@@ -329,7 +329,7 @@ source_sdk_add_tool(vbsp
         MACRO_MATHLIB
         PROTECTED_THINGS_DISABLE
     LIBRARIES
-        "${LIBCOMMON_DIR}/lzma.lib"
+        lzma
         bitmap
         vtf
         fgdlib
