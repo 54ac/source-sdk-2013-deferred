@@ -2,7 +2,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Compile + Run",
+      "name": "Compile + Run (Debug)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "preLaunchTask": "Build (hl2mp-debug)",
+      "program": "${workspaceFolder}/game/mod_hl2mp_win64.exe",
+      "args": [
+        "-game",
+        "mod_hl2mp",
+        "-windowed",
+        "-novid",
+        "-dev",
+        "-allowdebug"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/game",
+      "environment": [],
+      "console": "internalConsole"
+    },
+    {
+      "name": "Compile + Run (Release)",
       "type": "cppvsdbg",
       "request": "launch",
       "preLaunchTask": "Build (hl2mp-release)",
@@ -18,7 +37,7 @@
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/game",
       "environment": [],
-      "console": "externalTerminal"
+      "console": "internalConsole"
     },
     {
       "name": "Run",
@@ -36,7 +55,7 @@
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/game",
       "environment": [],
-      "console": "externalTerminal"
+      "console": "internalConsole"
     }
   ]
 }

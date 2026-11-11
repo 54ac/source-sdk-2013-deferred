@@ -53,16 +53,16 @@ add_compile_definitions(
 )
 
 if(WIN32)
-    add_compile_definitions(WIN32 _WIN32 _WINDOWS _MBCS COMPILER_MSVC)
+    add_compile_definitions(WIN32 _WIN32 _WINDOWS _MBCS COMPILER_MSVC _DLL_EXT=.dll)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         add_compile_definitions(PLATFORM_64BITS WIN64 _WIN64 COMPILER_MSVC64)
     else()
         add_compile_definitions(COMPILER_MSVC32)
     endif()
 elseif(APPLE)
-    add_compile_definitions(_OSX OSX POSIX _POSIX COMPILER_CLANG PLATFORM_64BITS)
+    add_compile_definitions(_OSX OSX POSIX _POSIX COMPILER_CLANG PLATFORM_64BITS _DLL_EXT=.dylib)
 elseif(UNIX)
-    add_compile_definitions(_LINUX LINUX POSIX _POSIX COMPILER_GCC PLATFORM_64BITS)
+    add_compile_definitions(_LINUX LINUX POSIX _POSIX COMPILER_GCC PLATFORM_64BITS _DLL_EXT=.so)
 endif()
 
 # Compiler-specific configuration

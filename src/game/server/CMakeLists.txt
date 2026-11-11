@@ -97,6 +97,9 @@ if(SERVER_AUTO_SRCS)
 endif()
 
 # Additional files not using precompiled header
+list(APPEND SERVER_SOURCES
+    "${SRCDIR}/public/tier0/memoverride.cpp"
+)
 list(APPEND SERVER_PCH_DISABLED
     "${SRCDIR}/common/randoverride.cpp"
     "${SRCDIR}/public/bone_setup.cpp"
@@ -106,6 +109,7 @@ list(APPEND SERVER_PCH_DISABLED
     "${SRCDIR}/public/dt_utlvector_send.cpp"
     "${SRCDIR}/public/interpolatortypes.cpp"
     "${SRCDIR}/public/networkstringtable_hash.cpp"
+    "${SRCDIR}/public/tier0/memoverride.cpp"
 )
 
 add_library(server SHARED ${SERVER_SOURCES})
@@ -167,8 +171,8 @@ set_target_properties(server PROPERTIES
     FOLDER "Game"
     PREFIX ""
     OUTPUT_NAME "server"
-    RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${GAMEDIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin/x64"
+    LIBRARY_OUTPUT_DIRECTORY "${GAMEDIR}/bin/x64"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
@@ -177,9 +181,3 @@ if(ENABLE_PCH)
     set_source_files_properties(${SERVER_PCH_DISABLED} stdafx.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
     target_precompile_headers(server PRIVATE cbase.h)
 endif()
-
-add_custom_command(TARGET server POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAMEDIR}/bin/x64"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:server>" "${GAMEDIR}/bin/x64/server.dll"
-    COMMENT "Deploying server.dll to ${GAMEDIR}/bin and ${GAMEDIR}/bin/x64"
-)

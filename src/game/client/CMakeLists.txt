@@ -102,12 +102,16 @@ if(CLIENT_AUTO_SRCS)
 endif()
 
 # Additional files not using precompiled header
+list(APPEND CLIENT_SOURCES
+    "${SRCDIR}/public/tier0/memoverride.cpp"
+)
 list(APPEND CLIENT_PCH_DISABLED
     "${SRCDIR}/common/compiledcaptionswap.cpp"
     "${SRCDIR}/common/language.cpp"
     "${SRCDIR}/common/randoverride.cpp"
     "${SRCDIR}/public/bone_setup.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/deferred/viewrender_deferred_water.cpp"
+    "${SRCDIR}/public/tier0/memoverride.cpp"
 )
 
 add_library(client SHARED ${CLIENT_SOURCES})
@@ -176,8 +180,8 @@ set_target_properties(client PROPERTIES
     FOLDER "Game"
     PREFIX ""
     OUTPUT_NAME "client"
-    RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${GAMEDIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin/x64"
+    LIBRARY_OUTPUT_DIRECTORY "${GAMEDIR}/bin/x64"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
@@ -186,9 +190,3 @@ if(ENABLE_PCH)
     set_source_files_properties(${CLIENT_PCH_DISABLED} stdafx.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
     target_precompile_headers(client PRIVATE cbase.h)
 endif()
-
-add_custom_command(TARGET client POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAMEDIR}/bin/x64"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:client>" "${GAMEDIR}/bin/x64/client.dll"
-    COMMENT "Deploying client.dll to ${GAMEDIR}/bin and ${GAMEDIR}/bin/x64"
-)

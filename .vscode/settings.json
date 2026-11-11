@@ -3,7 +3,6 @@
   "editor.formatOnType": false,
   "editor.formatOnPaste": false,
   "C_Cpp.formatting": "disabled",
-  "C_Cpp.intelliSenseEngine": "disabled",
   "cmake.useCMakePresets": "always",
   "clangd.arguments": [
     "--compile-commands-dir=${workspaceFolder}",

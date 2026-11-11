@@ -1,0 +1,25 @@
+set(GAME_SHADER_SRCS
+    ${SRCDIR}/materialsystem/stdshaders/BaseVSShader.cpp
+    ${SRCDIR}/materialsystem/stdshaders/blur.cpp
+    ${SRCDIR}/materialsystem/stdshaders/debug_lightingctrl.cpp
+    ${SRCDIR}/materialsystem/stdshaders/debug_radiosity_grid.cpp
+    ${SRCDIR}/materialsystem/stdshaders/debug_shadow.cpp
+    ${SRCDIR}/materialsystem/stdshaders/deferred_brush.cpp
+    ${SRCDIR}/materialsystem/stdshaders/deferred_decalModulate.cpp
+    ${SRCDIR}/materialsystem/stdshaders/deferred_model.cpp
+    ${SRCDIR}/materialsystem/stdshaders/deferred_utility.cpp
+    ${SRCDIR}/materialsystem/stdshaders/defpass_composite.cpp
+    ${SRCDIR}/materialsystem/stdshaders/defpass_gbuffer.cpp
+    ${SRCDIR}/materialsystem/stdshaders/defpass_shadow.cpp
+    ${SRCDIR}/materialsystem/stdshaders/IDeferredExt.cpp
+    ${SRCDIR}/materialsystem/stdshaders/lighting_global.cpp
+    ${SRCDIR}/materialsystem/stdshaders/lighting_pass_basic.cpp
+    ${SRCDIR}/materialsystem/stdshaders/lighting_pass_volum.cpp
+    ${SRCDIR}/materialsystem/stdshaders/lighting_volume.cpp
+    ${SRCDIR}/materialsystem/stdshaders/lighting_world.cpp
+    ${SRCDIR}/materialsystem/stdshaders/radiosity_blend.cpp
+    ${SRCDIR}/materialsystem/stdshaders/radiosity_global.cpp
+    ${SRCDIR}/materialsystem/stdshaders/radiosity_propagate.cpp
+    ${SRCDIR}/materialsystem/stdshaders/volume_blend.cpp
+    ${SRCDIR}/materialsystem/stdshaders/volume_prepass.cpp
+)

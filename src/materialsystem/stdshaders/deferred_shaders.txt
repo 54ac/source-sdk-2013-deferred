@@ -17,9 +17,6 @@ lightingpass_global_ps30.fxc
 lightingpass_point_ps30.fxc
 lightingpass_spot_ps30.fxc
 
-screenspace_shading_ps30.fxc
-screenspace_combine_ps30.fxc
-
 volume_blend_ps30.fxc
 volume_prepass_vs30.fxc
 volume_prepass_ps30.fxc

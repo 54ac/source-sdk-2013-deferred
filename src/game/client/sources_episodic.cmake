@@ -1,4 +1,3 @@
-# Auto-generated source list for client_episodic
 set(CLIENT_EPISODIC_SOURCES
     ${SRCDIR}/game/client/replay/replaycamera.cpp
     ${SRCDIR}/game/client/replay/cdll_replay.cpp

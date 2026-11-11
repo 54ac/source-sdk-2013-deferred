@@ -414,35 +414,12 @@ endif()
 
 # Shader DLL
 if(BUILD_SHADERS)
-    set(GAME_SHADER_SRCS
-        "${SRCDIR}/materialsystem/stdshaders/BaseVSShader.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/blur.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/debug_lightingctrl.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/debug_radiosity_grid.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/debug_shadow.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/deferred_brush.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/deferred_decalModulate.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/deferred_model.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/deferred_utility.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/defpass_composite.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/defpass_gbuffer.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/defpass_shadow.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/IDeferredExt.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/lighting_global.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/lighting_pass_basic.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/lighting_pass_volum.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/lighting_volume.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/lighting_world.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/radiosity_blend.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/radiosity_global.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/radiosity_propagate.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/screenspace_combine.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/screenspace_shading.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/volume_blend.cpp"
-        "${SRCDIR}/materialsystem/stdshaders/volume_prepass.cpp"
-    )
+    include("${SRCDIR}/materialsystem/stdshaders/sources_shaders.cmake")
 
-    add_library(game_shader_dx9 SHARED ${GAME_SHADER_SRCS})
+    add_library(game_shader_dx9 SHARED
+        ${GAME_SHADER_SRCS}
+        "${SRCDIR}/public/tier0/memoverride.cpp"
+    )
     source_sdk_target(game_shader_dx9)
     target_include_directories(game_shader_dx9 PRIVATE
         "${SRCDIR}/materialsystem/stdshaders"
@@ -469,19 +446,14 @@ if(BUILD_SHADERS)
     )
     set_target_properties(game_shader_dx9 PROPERTIES
         FOLDER "Shaders"
-        OUTPUT_NAME "game_shader_dx9_${GAME}"
-        RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin"
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${GAMEDIR}/bin"
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${GAMEDIR}/bin"
+        OUTPUT_NAME "game_shader_dx9"
+        RUNTIME_OUTPUT_DIRECTORY "${GAMEDIR}/bin/x64"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${GAMEDIR}/bin/x64"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${GAMEDIR}/bin/x64"
     )
     if(AUTO_BUILD_SHADERS AND TARGET deferred_shaders)
         add_dependencies(game_shader_dx9 deferred_shaders)
     endif()
-    add_custom_command(TARGET game_shader_dx9 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAMEDIR}/bin/x64"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:game_shader_dx9>" "${GAMEDIR}/bin/x64/game_shader_dx9_${GAME}.dll"
-        COMMENT "Deploying game_shader_dx9_${GAME} to ${GAMEDIR}/bin and ${GAMEDIR}/bin/x64"
-    )
 endif()
 
 # Launchers
@@ -556,6 +528,6 @@ endif()
 set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${GAMEDIR}/bin/x64/client.dll"
     "${GAMEDIR}/bin/x64/server.dll"
-    "${GAMEDIR}/bin/x64/game_shader_dx9_${GAME}.dll"
+    "${GAMEDIR}/bin/x64/game_shader_dx9.dll"
     "${GAMEDIR}/shaders"
 )

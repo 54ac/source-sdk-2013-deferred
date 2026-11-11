@@ -1,4 +1,3 @@
-# Auto-generated source list for server_tf
 set(SERVER_TF_SOURCES
     ${SRCDIR}/game/server/gamedll_replay.cpp
     ${SRCDIR}/game/shared/replay_gamestats_shared.cpp

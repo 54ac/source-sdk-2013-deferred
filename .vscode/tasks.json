@@ -2,9 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build (hl2mp-release)",
-      "type": "shell",
-      "command": "cmake --build --preset hl2mp-release",
+      "label": "Build (hl2mp-debug)",
+      "type": "cmake",
+      "command": "build",
+      "preset": "hl2mp-debug",
       "group": {
         "kind": "build",
         "isDefault": true
@@ -12,15 +13,31 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "Build (hl2mp-release)",
+      "type": "cmake",
+      "command": "build",
+      "preset": "hl2mp-release",
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
       "label": "Compile Shaders",
-      "type": "shell",
-      "command": "cmake --build --preset hl2mp-release --target deferred_shaders",
+      "type": "cmake",
+      "command": "build",
+      "preset": "hl2mp-release",
+      "targets": [
+        "deferred_shaders"
+      ],
       "problemMatcher": []
     },
     {
       "label": "Clean Shaders",
-      "type": "shell",
-      "command": "cmake --build --preset hl2mp-release --target clean_shaders",
+      "type": "cmake",
+      "command": "build",
+      "preset": "hl2mp-release",
+      "targets": [
+        "clean_shaders"
+      ],
       "problemMatcher": []
     }
   ]

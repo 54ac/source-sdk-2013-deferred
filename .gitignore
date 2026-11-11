@@ -63,7 +63,9 @@ voice_ban.dt
 textwindow_temp.html
 maps/graphs/
 settings.scr
+ServerConfig.vdf
 downloadlists/
+*.ain
 
 # shader files
 *.tmp

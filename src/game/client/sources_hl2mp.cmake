@@ -1,4 +1,3 @@
-# Auto-generated source list for client_hl2mp
 set(CLIENT_HL2MP_SOURCES
     ${SRCDIR}/game/client/replay/replaycamera.cpp
     ${SRCDIR}/game/client/replay/cdll_replay.cpp

@@ -1,4 +1,3 @@
-# Auto-generated source list for server_hl2
 set(SERVER_HL2_SOURCES
     ${SRCDIR}/game/server/gamedll_replay.cpp
     ${SRCDIR}/game/shared/deferred/CDefLight.cpp
