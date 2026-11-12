@@ -23,7 +23,7 @@ static IShaderDynamicAPI *g_pShaderAPI = NULL;
 #include "tier0/memdbgon.h"
 
 BEGIN_VS_SHADER( DEFERRED_DECALMODULATE, 
-			  "" )
+			  "Deferred Modulative Decal Shader" )
 			  
 	BEGIN_SHADER_PARAMS
 		SHADER_PARAM( FOGEXPONENT, SHADER_PARAM_TYPE_FLOAT, "0.4", "exponent to tweak fog fade" )

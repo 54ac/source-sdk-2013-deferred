@@ -5,7 +5,7 @@
 #include "radiosity_blend_ps30.inc"
 
 
-BEGIN_VS_SHADER( RADIOSITY_BLEND, "" )
+BEGIN_VS_SHADER( RADIOSITY_BLEND, "Deferred Radiosity Blend Pass" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

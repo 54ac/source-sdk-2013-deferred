@@ -4,11 +4,11 @@
 #include "defconstruct_vs30.inc"
 #include "lightingpass_point_ps30.inc"
 
-BEGIN_VS_SHADER( LIGHTING_VOLUME, "" )
+BEGIN_VS_SHADER( LIGHTING_VOLUME, "Deferred Volumetric Light Pass" )
 	BEGIN_SHADER_PARAMS
 
-		SHADER_PARAM( LIGHTTYPE, SHADER_PARAM_TYPE_INTEGER, "0", "" )
-		SHADER_PARAM( WORLDPROJECTION, SHADER_PARAM_TYPE_BOOL, "0", "" )
+		SHADER_PARAM( LIGHTTYPE, SHADER_PARAM_TYPE_INTEGER, "0", "Light volume type (0 = point, 1 = spot)" )
+		SHADER_PARAM( WORLDPROJECTION, SHADER_PARAM_TYPE_BOOL, "0", "Use world projection transform" )
 
 	END_SHADER_PARAMS
 

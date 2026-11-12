@@ -4,7 +4,7 @@
 #include "volume_prepass_vs30.inc"
 #include "volume_prepass_ps30.inc"
 
-BEGIN_VS_SHADER( VOLUME_PREPASS, "" )
+BEGIN_VS_SHADER( VOLUME_PREPASS, "Deferred Volumetric Occlusion Prepass" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

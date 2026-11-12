@@ -166,6 +166,11 @@ void CBaseWorldViewDeferred::DrawExecute( float waterHeight, view_id_t viewID, f
 	//if ( m_DrawFlags & DF_DRAW_ENTITITES )
 	DrawOpaqueRenderablesDeferred( bShadowDepth );
 
+	if ( viewID == VIEW_DEFERRED_GBUFFER )
+	{
+		DrawOpaqueDetailObjects();
+	}
+
 	if ( !bIsGBufferOrShadow )
 	{
 		if ( m_DrawFlags & DF_DRAW_ENTITITES )
@@ -301,6 +306,14 @@ void CBaseWorldViewDeferred::DrawWorldDeferred( float waterZAdjust )
 void CBaseWorldViewDeferred::DrawOpaqueRenderablesDeferred(bool k)
 {
 	DrawOpaqueRenderables(k ? DEPTH_MODE_SHADOW : DEPTH_MODE_NORMAL);
+}
+
+void CBaseWorldViewDeferred::DrawOpaqueDetailObjects()
+{
+	if ( m_pWorldListInfo && m_pWorldListInfo->m_LeafCount > 0 )
+	{
+		DetailObjectSystem()->RenderOpaqueDetailObjects( m_pWorldListInfo->m_LeafCount, m_pWorldListInfo->m_pLeafList );
+	}
 }
 
 void CBaseWorldViewDeferred::PushComposite()

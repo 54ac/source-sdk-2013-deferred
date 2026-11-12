@@ -1,4 +1,4 @@
-//====== Copyright � Sandern Corporation, All rights reserved. ===========//
+//====== Copyright  Sandern Corporation, All rights reserved. ===========//
 //
 // Purpose:
 //
@@ -33,13 +33,66 @@ static const char * const pszShaderReplaceDict[][2] = {
 	{ "vertexlitgeneric",				"DEFERRED_MODEL" },
 	{ "lightmappedgeneric",			"DEFERRED_BRUSH" },
 	{ "worldvertextransition",	"DEFERRED_BRUSH" },
-	{ "decalmodulate",				"DEFERRED_DECALMODULATE" },
+	{ "decalmodulate",					"DEFERRED_DECALMODULATE" },
+	{ "cable",									"DEFERRED_QUAD" },
 };
+
+static inline bool IsModelMaterial( const char *pMatName, const char *pTexGroup, bool bModelFlag )
+{
+	if ( bModelFlag )
+		return true;
+
+	if ( pTexGroup && !V_stricmp( pTexGroup, TEXTURE_GROUP_MODEL ) )
+		return true;
+
+	if ( pMatName && V_strnicmp( pMatName, "models/", 7 ) == 0 )
+		return true;
+
+	return false;
+}
+
+static inline bool ShouldReplaceUnlitGenericWithDeferredModel( const char *pMatName, const char *pTexGroup, bool bModelFlag, bool bAdditiveFlag )
+{
+	if ( bAdditiveFlag )
+		return false;
+
+	if ( pTexGroup && !V_stricmp( pTexGroup, TEXTURE_GROUP_VGUI ) )
+		return false;
+
+	return IsModelMaterial( pMatName, pTexGroup, bModelFlag );
+}
+
+static const char *GetDeferredReplacementShader( const char *pShaderName, const char *pMaterialName, const char *pTextureGroupName, bool bModel, bool bAdditive )
+{
+	if ( !pShaderName || !V_strnicmp( pShaderName, "DEFERRED_", 9 ) )
+		return NULL;
+
+	if ( pMaterialName && V_stristr( pMaterialName, "detailsprites" ) )
+		return "DEFERRED_QUAD";
+
+	if ( !V_stricmp( pShaderName, "unlitgeneric" ) )
+	{
+		if ( ShouldReplaceUnlitGenericWithDeferredModel( pMaterialName, pTextureGroupName, bModel, bAdditive ) )
+			return "DEFERRED_MODEL";
+		return NULL;
+	}
+
+	for ( const char* const* row : pszShaderReplaceDict )
+	{
+		if ( V_stristr( pShaderName, row[0] ) )
+			return row[1];
+	}
+
+	return NULL;
+}
 
 // Copied from cdeferred_manager_client.cpp
 static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 {
 	const char *pszOldShadername = pMat->GetShaderName();
+	if ( pszOldShadername && !V_stricmp( pszOldShadername, szNewShadername ) )
+		return;
+
 	const char *pszMatname = pMat->GetName();
 
 	KeyValuesAD msg( szNewShadername );
@@ -118,11 +171,14 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 			break;
 
 			case MATERIAL_VAR_TYPE_TEXTURE:
-				if ( pVar->GetTextureValue() )
+			{
+				const char *pTexName = pVar->GetTextureValue() ? pVar->GetTextureValue()->GetName() : pVar->GetStringValue();
+				if ( pTexName && *pTexName )
 				{
-					msg->SetString( pVarName, pVar->GetTextureValue()->GetName() );
+					msg->SetString( pVarName, pTexName );
 				}
-				break;
+			}
+			break;
 
 			case MATERIAL_VAR_TYPE_MATERIAL:
 				if ( pVar->GetMaterialValue() )
@@ -143,11 +199,13 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 		}
 	}
 
-	const bool bAlphaBlending = pMat->IsTranslucent() || ( nSavedFlags & MATERIAL_VAR_TRANSLUCENT ) != 0;
-	const bool bAlphaTesting = pMat->IsAlphaTested() || ( nSavedFlags & MATERIAL_VAR_ALPHATEST ) != 0;
-	const bool bDecal = ( pszOldShadername != NULL && Q_stristr( pszOldShadername, "decal" ) != NULL ) ||
+	const bool bIsQuad = ( V_stricmp( szNewShadername, "DEFERRED_QUAD" ) == 0 );
+
+	const bool bAlphaBlending = !bIsQuad && ( pMat->IsTranslucent() || ( nSavedFlags & MATERIAL_VAR_TRANSLUCENT ) != 0 );
+	const bool bAlphaTesting = bIsQuad || pMat->IsAlphaTested() || ( nSavedFlags & MATERIAL_VAR_ALPHATEST ) != 0;
+	const bool bDecal = !bIsQuad && ( ( pszOldShadername != NULL && Q_stristr( pszOldShadername, "decal" ) != NULL ) ||
 		( pszMatname != NULL && Q_stristr( pszMatname, "decal" ) != NULL ) ||
-		( ( nSavedFlags & MATERIAL_VAR_DECAL ) != 0 );
+		( ( nSavedFlags & MATERIAL_VAR_DECAL ) != 0 ) );
 
 	if ( bDecal )
 	{
@@ -158,43 +216,85 @@ static void ShaderReplaceReplMat( const char *szNewShadername, IMaterial *pMat )
 	if ( bAlphaTesting )
 	{
 		nSavedFlags |= MATERIAL_VAR_ALPHATEST;
+		nSavedFlags &= ~MATERIAL_VAR_TRANSLUCENT;
 		msg->SetInt( "$alphatest", 1 );
+		msg->SetInt( "$translucent", 0 );
 	}
 	else if ( bAlphaBlending || bDecal )
 	{
 		nSavedFlags |= MATERIAL_VAR_TRANSLUCENT;
+		nSavedFlags &= ~MATERIAL_VAR_ALPHATEST;
 		msg->SetInt( "$translucent", 1 );
+		msg->SetInt( "$alphatest", 0 );
 	}
 
-	if ( pMat->IsTwoSided() || ( nSavedFlags & MATERIAL_VAR_NOCULL ) != 0 )
+	if ( bIsQuad || pMat->IsTwoSided() || ( nSavedFlags & MATERIAL_VAR_NOCULL ) != 0 )
 	{
 		nSavedFlags |= MATERIAL_VAR_NOCULL;
 		msg->SetInt( "$nocull", 1 );
 	}
 
-	if ( ( nSavedFlags & MATERIAL_VAR_SELFILLUM ) != 0 )
+	const bool bIsModel = ( V_stricmp( szNewShadername, "DEFERRED_MODEL" ) == 0 ) ||
+	                      ( ( nSavedFlags & MATERIAL_VAR_MODEL ) != 0 ) ||
+	                      ( pszMatname && V_stristr( pszMatname, "models/" ) );
+	if ( bIsModel )
 	{
-		msg->SetInt( "$selfillum", 1 );
+		nSavedFlags |= MATERIAL_VAR_MODEL;
+		msg->SetInt( "$model", 1 );
 	}
 
-	if ( ( nSavedFlags & MATERIAL_VAR_BASEALPHAENVMAPMASK ) != 0 )
+	if ( !bIsQuad && bAlphaTesting && !msg->FindKey( "$alphatestreference" ) )
 	{
-		msg->SetInt( "$basealphaenvmapmask", 1 );
+		msg->SetFloat( "$alphatestreference", 0.5f );
 	}
 
-	if ( ( nSavedFlags & MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK ) != 0 )
+	if ( bIsQuad )
 	{
-		msg->SetInt( "$normalmapalphaenvmapmask", 1 );
+		const bool bIsCable = ( pszOldShadername && V_stristr( pszOldShadername, "cable" ) ) ||
+		                      ( pszMatname && V_stristr( pszMatname, "cable" ) );
+		msg->SetInt( "$normalmode", bIsCable ? 1 : 0 );
+		msg->SetFloat( "$alphatestreference", 0.4f );
+		msg->SetInt( "$translucent", 0 );
+		nSavedFlags &= ~MATERIAL_VAR_TRANSLUCENT;
+		nSavedFlags &= ~MATERIAL_VAR_VERTEXALPHA;
+		if ( bIsCable )
+		{
+			nSavedFlags |= MATERIAL_VAR_VERTEXCOLOR;
+			msg->SetInt( "$vertexcolor", 1 );
+		}
+		else
+		{
+			nSavedFlags &= ~MATERIAL_VAR_VERTEXCOLOR;
+			msg->SetInt( "$vertexcolor", 0 );
+			msg->SetInt( "$vertexalpha", 0 );
+		}
 	}
-
-	if ( ( nSavedFlags & MATERIAL_VAR_VERTEXCOLOR ) != 0 )
+	else
 	{
-		msg->SetInt( "$vertexcolor", 1 );
-	}
+		if ( ( nSavedFlags & MATERIAL_VAR_SELFILLUM ) != 0 )
+		{
+			msg->SetInt( "$selfillum", 1 );
+		}
 
-	if ( ( nSavedFlags & MATERIAL_VAR_VERTEXALPHA ) != 0 )
-	{
-		msg->SetInt( "$vertexalpha", 1 );
+		if ( ( nSavedFlags & MATERIAL_VAR_BASEALPHAENVMAPMASK ) != 0 )
+		{
+			msg->SetInt( "$basealphaenvmapmask", 1 );
+		}
+
+		if ( ( nSavedFlags & MATERIAL_VAR_NORMALMAPALPHAENVMAPMASK ) != 0 )
+		{
+			msg->SetInt( "$normalmapalphaenvmapmask", 1 );
+		}
+
+		if ( ( nSavedFlags & MATERIAL_VAR_VERTEXCOLOR ) != 0 )
+		{
+			msg->SetInt( "$vertexcolor", 1 );
+		}
+
+		if ( ( nSavedFlags & MATERIAL_VAR_VERTEXALPHA ) != 0 )
+		{
+			msg->SetInt( "$vertexalpha", 1 );
+		}
 	}
 
 	pMat->SetShaderAndParams( msg );
@@ -221,14 +321,13 @@ IMaterial* CDeferredMaterialSystem::FindProceduralMaterial( const char* pMateria
 	const char* pShaderName = pVMTKeyValues ? pVMTKeyValues->GetName() : NULL;
 	if ( pShaderName )
 	{
-		for ( const char* const* row : pszShaderReplaceDict )
+		const bool bModel = ( pVMTKeyValues->GetInt( "$model", 0 ) != 0 );
+		const bool bAdditive = ( pVMTKeyValues->GetInt( "$additive", 0 ) != 0 );
+		const char *pReplShader = GetDeferredReplacementShader( pShaderName, pMaterialName, pTextureGroupName, bModel, bAdditive );
+		if ( pReplShader )
 		{
-			if ( !V_stricmp( pShaderName, row[0] ) )
-			{
-				pVMTKeyValues->SetName( row[1] );
-				matCount++;
-				break;
-			}
+			pVMTKeyValues->SetName( pReplShader );
+			matCount++;
 		}
 	}
 	return BaseClass::FindProceduralMaterial( pMaterialName, pTextureGroupName, pVMTKeyValues );
@@ -239,14 +338,13 @@ IMaterial* CDeferredMaterialSystem::CreateMaterial( const char* pMaterialName, K
 	const char* pShaderName = pVMTKeyValues ? pVMTKeyValues->GetName() : NULL;
 	if ( pShaderName )
 	{
-		for ( const char* const* row : pszShaderReplaceDict )
+		const bool bModel = ( pVMTKeyValues->GetInt( "$model", 0 ) != 0 );
+		const bool bAdditive = ( pVMTKeyValues->GetInt( "$additive", 0 ) != 0 );
+		const char *pReplShader = GetDeferredReplacementShader( pShaderName, pMaterialName, NULL, bModel, bAdditive );
+		if ( pReplShader )
 		{
-			if ( !V_stricmp( pShaderName, row[0] ) )
-			{
-				pVMTKeyValues->SetName( row[1] );
-				matCount++;
-				break;
-			}
+			pVMTKeyValues->SetName( pReplShader );
+			matCount++;
 		}
 	}
 	return BaseClass::CreateMaterial( pMaterialName, pVMTKeyValues );
@@ -260,17 +358,18 @@ IMaterial* CDeferredMaterialSystem::ReplaceMaterialInternal( IMaterial* pMat ) c
 	if ( V_stristr( pMat->GetName(), "_subrect" ) )
 		return pMat;
 
+	const char* pMatName = pMat->GetName();
 	const char* pShaderName = pMat->GetShaderName();
 	if ( pShaderName )
 	{
-		for ( const char* const* row : pszShaderReplaceDict )
+		const bool bModel = pMat->GetMaterialVarFlag( MATERIAL_VAR_MODEL );
+		const bool bAdditive = pMat->GetMaterialVarFlag( MATERIAL_VAR_ADDITIVE );
+		const char *pTexGroup = pMat->GetTextureGroupName();
+		const char *pReplShader = GetDeferredReplacementShader( pShaderName, pMatName, pTexGroup, bModel, bAdditive );
+		if ( pReplShader )
 		{
-			if ( V_stristr( pShaderName, row[0] ) )
-			{
-				ShaderReplaceReplMat( row[1], pMat );
-				matCount++;
-				break;
-			}
+			ShaderReplaceReplMat( pReplShader, pMat );
+			matCount++;
 		}
 	}
 	return pMat;

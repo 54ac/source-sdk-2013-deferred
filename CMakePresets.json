@@ -38,7 +38,8 @@
       "inherits": "base-ninja",
       "cacheVariables": {
         "GAME": "hl2mp",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TOOLS": "OFF"
       }
     },
     {
@@ -58,7 +59,8 @@
       "inherits": "base-ninja",
       "cacheVariables": {
         "GAME": "hl2",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TOOLS": "OFF"
       }
     },
     {
@@ -78,7 +80,8 @@
       "inherits": "base-ninja",
       "cacheVariables": {
         "GAME": "episodic",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TOOLS": "OFF"
       }
     },
     {
@@ -98,7 +101,8 @@
       "inherits": "base-ninja",
       "cacheVariables": {
         "GAME": "tf",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TOOLS": "OFF"
       }
     },
     {

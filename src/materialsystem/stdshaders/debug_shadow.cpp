@@ -4,7 +4,7 @@
 #include "defconstruct_vs30.inc"
 #include "debug_shadow_ortho_ps30.inc"
 
-BEGIN_VS_SHADER( DEBUG_SHADOW, "" )
+BEGIN_VS_SHADER( DEBUG_SHADOW, "Deferred Debug Shadow Map Overlay Visualization" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

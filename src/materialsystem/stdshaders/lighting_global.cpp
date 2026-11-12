@@ -4,7 +4,7 @@
 #include "defconstruct_vs30.inc"
 #include "lightingpass_global_ps30.inc"
 
-BEGIN_VS_SHADER( LIGHTING_GLOBAL, "" )
+BEGIN_VS_SHADER( LIGHTING_GLOBAL, "Deferred Global Directional Light Pass" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

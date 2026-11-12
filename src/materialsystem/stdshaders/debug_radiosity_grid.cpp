@@ -4,7 +4,7 @@
 #include "debug_radiosity_grid_vs30.inc"
 #include "debug_radiosity_grid_ps30.inc"
 
-BEGIN_VS_SHADER( DEBUG_RADIOSITY_GRID, "" )
+BEGIN_VS_SHADER( DEBUG_RADIOSITY_GRID, "Deferred Debug Radiosity Grid Visualization" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

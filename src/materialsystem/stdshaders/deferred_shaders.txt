@@ -32,6 +32,9 @@ radiosity_blend_ps30.fxc
 screenspace_vs30.fxc
 gaussianblur_6_ps30.fxc
 
+quad_deferred_vs30.fxc
+quad_deferred_ps30.fxc
+
 debug_shadow_ortho_ps30.fxc
 debug_lighting_ctrl_ps30.fxc
 debug_radiosity_grid_ps30.fxc

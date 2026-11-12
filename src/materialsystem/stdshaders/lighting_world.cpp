@@ -4,11 +4,11 @@
 #include "defconstruct_vs30.inc"
 #include "lightingpass_point_ps30.inc"
 
-BEGIN_VS_SHADER( LIGHTING_WORLD, "" )
+BEGIN_VS_SHADER( LIGHTING_WORLD, "Deferred World Direct Lighting Pass" )
 	BEGIN_SHADER_PARAMS
 
-		SHADER_PARAM( LIGHTTYPE, SHADER_PARAM_TYPE_INTEGER, "0", "" )
-		SHADER_PARAM( WORLDPROJECTION, SHADER_PARAM_TYPE_BOOL, "0", "" )
+		SHADER_PARAM( LIGHTTYPE, SHADER_PARAM_TYPE_INTEGER, "0", "Light type (0 = point, 1 = spot)" )
+		SHADER_PARAM( WORLDPROJECTION, SHADER_PARAM_TYPE_BOOL, "0", "Use world projection geometry" )
 
 	END_SHADER_PARAMS
 

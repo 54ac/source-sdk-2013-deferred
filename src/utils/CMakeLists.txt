@@ -338,3 +338,24 @@ source_sdk_add_tool(vbsp
         winmm
         ws2_32
 )
+
+add_custom_target(sdk_tools
+    DEPENDS
+        bspzip
+        captioncompiler
+        glview
+        height2normal
+        mksheet
+        motionmapper
+        phonemeextractor
+        qc_eyes
+        serverplugin_empty
+        simdtest
+        tgadiff
+        vbsp
+        vice
+        vrad
+        vtex
+        vvis
+)
+set_target_properties(sdk_tools PROPERTIES FOLDER "Tools")

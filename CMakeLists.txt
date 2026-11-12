@@ -76,156 +76,196 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 if(BUILD_LIBRARIES)
     # zlib 1.2.5
     set(ZLIB_DIR "${SRCDIR}/thirdparty/zlib")
-    set(ZLIB_SRCS
-        "${ZLIB_DIR}/adler32.c"
-        "${ZLIB_DIR}/compress.c"
-        "${ZLIB_DIR}/crc32.c"
-        "${ZLIB_DIR}/deflate.c"
-        "${ZLIB_DIR}/gzclose.c"
-        "${ZLIB_DIR}/gzlib.c"
-        "${ZLIB_DIR}/gzread.c"
-        "${ZLIB_DIR}/gzwrite.c"
-        "${ZLIB_DIR}/infback.c"
-        "${ZLIB_DIR}/inffast.c"
-        "${ZLIB_DIR}/inflate.c"
-        "${ZLIB_DIR}/inftrees.c"
-        "${ZLIB_DIR}/trees.c"
-        "${ZLIB_DIR}/uncompr.c"
-        "${ZLIB_DIR}/zutil.c"
-    )
-    add_library(libz STATIC ${ZLIB_SRCS})
-    source_sdk_target(libz)
-    target_include_directories(libz PUBLIC
-        "${ZLIB_DIR}"
-        "${SRCDIR}/public/zlib"
-    )
-    target_compile_definitions(libz PRIVATE
-        $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE>
-    )
-    if(MSVC)
-        target_compile_options(libz PRIVATE /TC /wd4131 /wd4244 /wd4127)
-    endif()
-    set_target_properties(libz PROPERTIES
-        FOLDER "Thirdparty"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    )
-    if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(LIBZ_PATH "${LIBPUBLIC_DIR}/libz.lib")
+    if(EXISTS "${LIBZ_PATH}")
+        add_library(libz STATIC IMPORTED GLOBAL)
         set_target_properties(libz PROPERTIES
+            IMPORTED_LOCATION "${LIBZ_PATH}"
+            INTERFACE_INCLUDE_DIRECTORIES "${ZLIB_DIR};${SRCDIR}/public/zlib"
+        )
+    else()
+        set(ZLIB_SRCS
+            "${ZLIB_DIR}/adler32.c"
+            "${ZLIB_DIR}/compress.c"
+            "${ZLIB_DIR}/crc32.c"
+            "${ZLIB_DIR}/deflate.c"
+            "${ZLIB_DIR}/gzclose.c"
+            "${ZLIB_DIR}/gzlib.c"
+            "${ZLIB_DIR}/gzread.c"
+            "${ZLIB_DIR}/gzwrite.c"
+            "${ZLIB_DIR}/infback.c"
+            "${ZLIB_DIR}/inffast.c"
+            "${ZLIB_DIR}/inflate.c"
+            "${ZLIB_DIR}/inftrees.c"
+            "${ZLIB_DIR}/trees.c"
+            "${ZLIB_DIR}/uncompr.c"
+            "${ZLIB_DIR}/zutil.c"
+        )
+        add_library(libz STATIC ${ZLIB_SRCS})
+        source_sdk_target(libz)
+        target_include_directories(libz PUBLIC
+            "${ZLIB_DIR}"
+            "${SRCDIR}/public/zlib"
+        )
+        target_compile_definitions(libz PRIVATE
+            NDEBUG
+            $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE>
+        )
+        if(MSVC)
+            target_compile_options(libz PRIVATE /TC /wd4131 /wd4244 /wd4127 /O2 /Ob2 /Oi /Ot /GF /Gy)
+            set_target_properties(libz PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+        endif()
+        set_target_properties(libz PROPERTIES
+            FOLDER "Thirdparty"
+            ARCHIVE_OUTPUT_DIRECTORY "${LIBPUBLIC_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${LIBPUBLIC_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${LIBPUBLIC_DIR}"
         )
     endif()
 
     # libspng
-    add_library(libspng STATIC
-        "${SRCDIR}/thirdparty/libspng/spng/spng.c"
-        "${SRCDIR}/thirdparty/libspng/spng/spng.h"
-    )
-    target_include_directories(libspng PUBLIC
-        "${SRCDIR}/thirdparty/libspng/spng"
-    )
-    target_link_libraries(libspng PRIVATE libz)
-    target_compile_definitions(libspng PRIVATE
-        SPNG_STATIC
-        $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
-    )
-    if(MSVC)
-        target_compile_options(libspng PRIVATE /wd4090)
-    endif()
-    # Mirror binary to SDK lib folder on Windows x64 for legacy compatibility
-    if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(LIBSPNG_PATH "${LIBCOMMON_DIR}/libspng.lib")
+    if(EXISTS "${LIBSPNG_PATH}")
+        add_library(libspng STATIC IMPORTED GLOBAL)
+        set_target_properties(libspng PROPERTIES
+            IMPORTED_LOCATION "${LIBSPNG_PATH}"
+            INTERFACE_INCLUDE_DIRECTORIES "${SRCDIR}/thirdparty/libspng/spng"
+            INTERFACE_LINK_LIBRARIES libz
+        )
+    else()
+        add_library(libspng STATIC
+            "${SRCDIR}/thirdparty/libspng/spng/spng.c"
+            "${SRCDIR}/thirdparty/libspng/spng/spng.h"
+        )
+        target_include_directories(libspng PUBLIC
+            "${SRCDIR}/thirdparty/libspng/spng"
+        )
+        target_link_libraries(libspng PRIVATE libz)
+        target_compile_definitions(libspng PRIVATE
+            SPNG_STATIC
+            NDEBUG
+            $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+        )
+        if(MSVC)
+            target_compile_options(libspng PRIVATE /wd4090 /O2 /Ob2 /Oi /Ot /GF /Gy)
+            set_target_properties(libspng PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+        endif()
         set_target_properties(libspng PROPERTIES
             FOLDER "Thirdparty"
+            ARCHIVE_OUTPUT_DIRECTORY "${LIBCOMMON_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${LIBCOMMON_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${LIBCOMMON_DIR}"
         )
     endif()
 
     # lzma (LZMA SDK + Valve wrapper)
     set(LZMA_SDK_DIR "${SRCDIR}/thirdparty/lzma/C")
-    set(LZMA_SRCS
-        "${SRCDIR}/utils/lzma/lzma.cpp"
-        "${LZMA_SDK_DIR}/LzmaEnc.c"
-        "${LZMA_SDK_DIR}/LzmaDec.c"
-        "${LZMA_SDK_DIR}/LzFind.c"
-    )
-    add_library(lzma STATIC ${LZMA_SRCS})
-    source_sdk_target(lzma)
-    target_include_directories(lzma PUBLIC
-        "${LZMA_SDK_DIR}"
-        "${SRCDIR}/utils/lzma"
-    )
-    target_compile_definitions(lzma PRIVATE
-        _NO_EXCEPTIONS
-        _LZMA_PROB32
-        _7ZIP_ST
-        $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
-    )
-    if(MSVC)
-        target_compile_options(lzma PRIVATE /wd4131 /wd4244 /wd4127 /wd4267)
-    endif()
-    set_target_properties(lzma PROPERTIES
-        FOLDER "Thirdparty"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    )
-    if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(LZMA_PATH "${LIBCOMMON_DIR}/lzma.lib")
+    if(EXISTS "${LZMA_PATH}")
+        add_library(lzma STATIC IMPORTED GLOBAL)
         set_target_properties(lzma PROPERTIES
+            IMPORTED_LOCATION "${LZMA_PATH}"
+            INTERFACE_INCLUDE_DIRECTORIES "${LZMA_SDK_DIR};${SRCDIR}/utils/lzma"
+        )
+    else()
+        set(LZMA_SRCS
+            "${SRCDIR}/utils/lzma/lzma.cpp"
+            "${LZMA_SDK_DIR}/LzmaEnc.c"
+            "${LZMA_SDK_DIR}/LzmaDec.c"
+            "${LZMA_SDK_DIR}/LzFind.c"
+        )
+        add_library(lzma STATIC ${LZMA_SRCS})
+        source_sdk_target(lzma)
+        target_include_directories(lzma PUBLIC
+            "${LZMA_SDK_DIR}"
+            "${SRCDIR}/utils/lzma"
+        )
+        target_compile_definitions(lzma PRIVATE
+            _NO_EXCEPTIONS
+            _LZMA_PROB32
+            _7ZIP_ST
+            NDEBUG
+            $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+        )
+        if(MSVC)
+            target_compile_options(lzma PRIVATE /wd4131 /wd4244 /wd4127 /wd4267 /O2 /Ob2 /Oi /Ot /GF /Gy)
+            set_target_properties(lzma PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+        endif()
+        set_target_properties(lzma PROPERTIES
+            FOLDER "Thirdparty"
+            ARCHIVE_OUTPUT_DIRECTORY "${LIBCOMMON_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${LIBCOMMON_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${LIBCOMMON_DIR}"
         )
     endif()
 
     # protobuf 2.6.1
     set(PROTOBUF_DIR "${SRCDIR}/thirdparty/protobuf")
-    set(PROTOBUF_SRCS
-        "${PROTOBUF_DIR}/src/google/protobuf/io/coded_stream.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/common.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/descriptor.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/descriptor.pb.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/descriptor_database.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/dynamic_message.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/extension_set.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/extension_set_heavy.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/generated_message_reflection.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/generated_message_util.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/gzip_stream.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/strtod.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/compiler/importer.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/message.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/message_lite.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/once.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/atomicops_internals_x86_msvc.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/compiler/parser.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/printer.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/reflection_ops.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/repeated_field.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/service.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/structurally_valid.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/strutil.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/substitute.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/text_format.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/tokenizer.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/unknown_field_set.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/wire_format.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/wire_format_lite.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream_impl.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream_impl_lite.cc"
-        "${PROTOBUF_DIR}/src/google/protobuf/stubs/stringprintf.cc"
-    )
-    add_library(libprotobuf STATIC ${PROTOBUF_SRCS})
-    source_sdk_target(libprotobuf)
-    target_include_directories(libprotobuf PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/protobuf"
-        "${PROTOBUF_DIR}/src"
-    )
-    target_compile_definitions(libprotobuf PRIVATE
-        $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE>
-    )
-    if(MSVC)
-        target_compile_options(libprotobuf PRIVATE /wd4018 /wd4244 /wd4267 /wd4146 /wd4715)
+    set(LIBPROTOBUF_PATH "${LIBPUBLIC_DIR}/libprotobuf.lib")
+    if(EXISTS "${LIBPROTOBUF_PATH}")
+        add_library(libprotobuf STATIC IMPORTED GLOBAL)
+        set_target_properties(libprotobuf PROPERTIES
+            IMPORTED_LOCATION "${LIBPROTOBUF_PATH}"
+            INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/protobuf;${PROTOBUF_DIR}/src"
+        )
+    else()
+        set(PROTOBUF_SRCS
+            "${PROTOBUF_DIR}/src/google/protobuf/io/coded_stream.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/common.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/descriptor.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/descriptor.pb.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/descriptor_database.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/dynamic_message.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/extension_set.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/extension_set_heavy.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/generated_message_reflection.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/generated_message_util.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/gzip_stream.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/strtod.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/compiler/importer.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/message.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/message_lite.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/once.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/atomicops_internals_x86_msvc.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/compiler/parser.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/printer.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/reflection_ops.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/repeated_field.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/service.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/structurally_valid.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/strutil.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/substitute.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/text_format.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/tokenizer.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/unknown_field_set.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/wire_format.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/wire_format_lite.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream_impl.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/io/zero_copy_stream_impl_lite.cc"
+            "${PROTOBUF_DIR}/src/google/protobuf/stubs/stringprintf.cc"
+        )
+        add_library(libprotobuf STATIC ${PROTOBUF_SRCS})
+        source_sdk_target(libprotobuf)
+        target_include_directories(libprotobuf PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/protobuf"
+            "${PROTOBUF_DIR}/src"
+        )
+        target_compile_definitions(libprotobuf PRIVATE
+            NDEBUG
+            $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE>
+        )
+        if(MSVC)
+            target_compile_options(libprotobuf PRIVATE /wd4018 /wd4244 /wd4267 /wd4146 /wd4715 /O2 /Ob2 /Oi /Ot /GF /Gy)
+            set_target_properties(libprotobuf PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+        endif()
+        set_target_properties(libprotobuf PROPERTIES
+            FOLDER "Thirdparty"
+            ARCHIVE_OUTPUT_DIRECTORY "${LIBPUBLIC_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${LIBPUBLIC_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${LIBPUBLIC_DIR}"
+        )
     endif()
-    set_target_properties(libprotobuf PROPERTIES
-        FOLDER "Thirdparty"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    )
 endif()
 
 if(BUILD_SHADERCOMPILE)
@@ -409,7 +449,7 @@ endif()
 
 # SDK developer tools
 if(BUILD_TOOLS)
-    add_subdirectory("${SRCDIR}/utils" "${CMAKE_BINARY_DIR}/utils")
+    add_subdirectory("${SRCDIR}/utils" "${CMAKE_BINARY_DIR}/utils" EXCLUDE_FROM_ALL)
 endif()
 
 # Shader DLL

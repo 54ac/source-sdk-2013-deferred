@@ -81,6 +81,8 @@ if(MSVC)
         /wd4355
         /wd4101
         /wd4828
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:Release>:/Ob2>
         $<$<CONFIG:Release>:/Oi>
         $<$<CONFIG:Release>:/Ot>
         $<$<CONFIG:Release>:/GF>

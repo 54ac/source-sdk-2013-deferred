@@ -1953,7 +1953,88 @@ void CDetailObjectSystem::UnserializeFastSprite( FastSpriteX4_t *pSpritex4, int 
 //-----------------------------------------------------------------------------
 void CDetailObjectSystem::RenderOpaqueDetailObjects( int nLeafCount, LeafIndex_t *pLeafList )
 {
-	// FIXME: Implement!
+	VPROF_BUDGET( "CDetailObjectSystem::RenderOpaqueDetailObjects", VPROF_BUDGETGROUP_DETAILPROP_RENDERING );
+	if ( nLeafCount == 0 || r_DrawDetailProps.GetInt() == 0 || !m_pSortInfo )
+		return;
+
+	const Vector &viewOrigin = CurrentViewOrigin();
+	const Vector &viewForward = CurrentViewForward();
+	const Vector &viewRight = CurrentViewRight();
+	const Vector &viewUp = CurrentViewUp();
+
+	RenderFastSprites( viewOrigin, viewForward, viewRight, viewUp, nLeafCount, pLeafList );
+
+	int nQuadCount = CountSpriteQuadsInLeafList( nLeafCount, pLeafList );
+	if ( nQuadCount == 0 )
+		return;
+
+	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->MatrixMode( MATERIAL_MODEL );
+	pRenderContext->PushMatrix();
+	pRenderContext->LoadIdentity();
+
+	IMaterial *pMaterial = m_DetailSpriteMaterial;
+	if ( ShouldDrawInWireFrameMode() || r_DrawDetailProps.GetInt() == 2 )
+	{
+		pMaterial = m_DetailWireframeMaterial;
+	}
+
+	CMeshBuilder meshBuilder;
+	IMesh *pMesh = pRenderContext->GetDynamicMesh( true, NULL, NULL, pMaterial );
+
+	int nMaxVerts, nMaxIndices;
+	pRenderContext->GetMaxToRender( pMesh, false, &nMaxVerts, &nMaxIndices );
+	int nMaxQuadsToDraw = nMaxIndices / 6;
+	if ( nMaxQuadsToDraw > nMaxVerts / 4 ) 
+	{
+		nMaxQuadsToDraw = nMaxVerts / 4;
+	}
+
+	if ( nMaxQuadsToDraw == 0 )
+	{
+		pRenderContext->PopMatrix();
+		return;
+	}
+
+	int nQuadsToDraw = MIN( nQuadCount, nMaxQuadsToDraw );
+	meshBuilder.Begin( pMesh, MATERIAL_QUADS, nQuadsToDraw );
+
+	int nQuadsDrawn = 0;
+	for ( int i = 0; i < nLeafCount; ++i )
+	{
+		int nLeaf = pLeafList[i];
+
+		int nFirstDetailObject, nDetailObjectCount;
+		ClientLeafSystem()->GetDetailObjectsInLeaf( nLeaf, nFirstDetailObject, nDetailObjectCount );
+
+		SortInfo_t *pSortInfo = m_pSortInfo;
+		int nCount = SortSpritesBackToFront( nLeaf, viewOrigin, viewForward, pSortInfo );
+
+		for ( int j = 0; j < nCount; ++j )
+		{
+			CDetailModel &model = m_DetailObjects[ pSortInfo[j].m_nIndex ];
+			int nQuadsInModel = model.QuadsToDraw();
+
+			if ( nQuadsDrawn + nQuadsInModel > nQuadsToDraw )
+			{
+				meshBuilder.End();
+				pMesh->Draw();
+
+				nQuadCount -= nQuadsDrawn;
+				nQuadsToDraw = MIN( nQuadCount, nMaxQuadsToDraw );
+				meshBuilder.Begin( pMesh, MATERIAL_QUADS, nQuadsToDraw );
+				nQuadsDrawn = 0;
+			}
+
+			model.DrawSprite( meshBuilder );
+			nQuadsDrawn += nQuadsInModel;
+		}
+	}
+
+	meshBuilder.End();
+	pMesh->Draw();
+
+	pRenderContext->PopMatrix();
 }
 
 

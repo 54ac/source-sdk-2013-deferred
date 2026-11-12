@@ -4,11 +4,11 @@
 #include "radiosity_propagate_ps30.inc"
 #include "radiosity_propagate_vs30.inc"
 
-BEGIN_VS_SHADER( RADIOSITY_PROPAGATE, "" )
+BEGIN_VS_SHADER( RADIOSITY_PROPAGATE, "Deferred Radiosity Propagation Pass" )
 	BEGIN_SHADER_PARAMS
 
-		SHADER_PARAM( NORMALMAP, SHADER_PARAM_TYPE_TEXTURE, "", "" )
-		SHADER_PARAM( BLUR, SHADER_PARAM_TYPE_BOOL, "", "" )
+		SHADER_PARAM( NORMALMAP, SHADER_PARAM_TYPE_TEXTURE, "", "Surface normal map for bounce distribution" )
+		SHADER_PARAM( BLUR, SHADER_PARAM_TYPE_BOOL, "", "Apply bilateral filtering blur pass" )
 
 	END_SHADER_PARAMS
 

@@ -11,6 +11,7 @@
 #include "clientleafsystem.h"
 #include "vprof.h"
 #include "c_rope.h"
+#include "detailobjectsystem.h"
 #include "rendertexture.h"
 #include "renderparm.h"
 #include "viewdebug.h"
@@ -73,6 +74,11 @@ extern void CalculateCSMDistances( const CViewSetup &view, float &flSplitDist, f
 
 extern void DrawCube( CMeshBuilder &meshBuilder, Vector vecPos, float flRadius, float *pfl2Texcoords );
 
+struct ClientWorldListInfo_t : public CRefCounted1<WorldListInfo_t>
+{
+	LeafIndex_t *m_pActualLeafIndex;
+};
+
 class CBaseWorldViewDeferred : public CRendering3dView
 {
 	DECLARE_CLASS( CBaseWorldViewDeferred, CRendering3dView );
@@ -92,6 +98,7 @@ protected:
 
 	virtual void	DrawWorldDeferred( float waterZAdjust );
 	virtual void	DrawOpaqueRenderablesDeferred(bool);
+	virtual void	DrawOpaqueDetailObjects();
 
 protected:
 

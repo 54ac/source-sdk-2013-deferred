@@ -6,13 +6,13 @@
 // DEFINE_FALLBACK_SHADER( WorldVertexTransition, DEFERRED_BRUSH )
 // DEFINE_FALLBACK_SHADER( LightmappedGeneric, DEFERRED_BRUSH )
 
-BEGIN_VS_SHADER( DEFERRED_BRUSH, "" )
+BEGIN_VS_SHADER( DEFERRED_BRUSH, "Deferred Brush Shader" )
 	BEGIN_SHADER_PARAMS
 
-		SHADER_PARAM( BUMPMAP, SHADER_PARAM_TYPE_TEXTURE, "", "" )
-		SHADER_PARAM( SSBUMP, SHADER_PARAM_TYPE_BOOL, "", "" )
+		SHADER_PARAM( BUMPMAP, SHADER_PARAM_TYPE_TEXTURE, "", "Normal/bump map texture" )
+		SHADER_PARAM( SSBUMP, SHADER_PARAM_TYPE_BOOL, "", "Self-shadowing bumpmap format (1 = ssbump, 0 = normal)" )
 
-		SHADER_PARAM( LITFACE, SHADER_PARAM_TYPE_BOOL, "0", "" )
+		SHADER_PARAM( LITFACE, SHADER_PARAM_TYPE_BOOL, "0", "Force per-face lighting evaluation" )
 
 		SHADER_PARAM( PHONG, SHADER_PARAM_TYPE_BOOL, "0", "enables phong specular" )
 		SHADER_PARAM( PHONGBOOST, SHADER_PARAM_TYPE_FLOAT, "1.0", "phong specular boost" )
@@ -23,14 +23,14 @@ BEGIN_VS_SHADER( DEFERRED_BRUSH, "" )
 		SHADER_PARAM( INVERTPHONGMASK, SHADER_PARAM_TYPE_BOOL, "0", "invert phong mask" )
 		SHADER_PARAM( PHONGALBEDOTINT, SHADER_PARAM_TYPE_BOOL, "0", "tint phong with albedo" )
 
-		SHADER_PARAM( PHONG_SCALE, SHADER_PARAM_TYPE_FLOAT, "", "" )
-		SHADER_PARAM( PHONG_EXP, SHADER_PARAM_TYPE_FLOAT, "", "" )
-		SHADER_PARAM( PHONG_EXP2, SHADER_PARAM_TYPE_FLOAT, "", "" )
-		SHADER_PARAM( PHONG_MAP, SHADER_PARAM_TYPE_TEXTURE, "", "" )
-		SHADER_PARAM( PHONG_FRESNEL, SHADER_PARAM_TYPE_BOOL, "", "" )
+		SHADER_PARAM( PHONG_SCALE, SHADER_PARAM_TYPE_FLOAT, "", "Phong specular scaling factor" )
+		SHADER_PARAM( PHONG_EXP, SHADER_PARAM_TYPE_FLOAT, "", "Phong specular primary exponent" )
+		SHADER_PARAM( PHONG_EXP2, SHADER_PARAM_TYPE_FLOAT, "", "Phong specular secondary exponent for blended surfaces" )
+		SHADER_PARAM( PHONG_MAP, SHADER_PARAM_TYPE_TEXTURE, "", "Phong specular exponent/mask texture" )
+		SHADER_PARAM( PHONG_FRESNEL, SHADER_PARAM_TYPE_BOOL, "", "Enable phong fresnel term" )
 
-		SHADER_PARAM( FRESNELRANGES, SHADER_PARAM_TYPE_VEC3, "", "" )
-		SHADER_PARAM( ALPHATESTREFERENCE, SHADER_PARAM_TYPE_FLOAT, "", "" )
+		SHADER_PARAM( FRESNELRANGES, SHADER_PARAM_TYPE_VEC3, "", "Fresnel reflection ranges [min mid max]" )
+		SHADER_PARAM( ALPHATESTREFERENCE, SHADER_PARAM_TYPE_FLOAT, "", "Alpha test reference value for cutout brushes" )
 
 		SHADER_PARAM( ENVMAP, SHADER_PARAM_TYPE_TEXTURE, "shadertest/shadertest_env", "envmap" )
 		SHADER_PARAM( ENVMAPTINT, SHADER_PARAM_TYPE_COLOR, "[1 1 1]", "envmap tint" )
@@ -45,13 +45,13 @@ BEGIN_VS_SHADER( DEFERRED_BRUSH, "" )
 		SHADER_PARAM( SELFILLUMFRESNEL, SHADER_PARAM_TYPE_BOOL, "0", "Self illum fresnel" )
 		SHADER_PARAM( SELFILLUMMASK, SHADER_PARAM_TYPE_TEXTURE, "shadertest/BaseTexture", "If we bind a texture here, it overrides base alpha (if any) for self illum" )
 
-		SHADER_PARAM( BASETEXTURE2, SHADER_PARAM_TYPE_TEXTURE, "", "" )
-		SHADER_PARAM( BUMPMAP2, SHADER_PARAM_TYPE_TEXTURE, "", "" )
-		SHADER_PARAM( ENVMAPMASK2, SHADER_PARAM_TYPE_TEXTURE, "shadertest/shadertest_envmask", "envmap mask" )
+		SHADER_PARAM( BASETEXTURE2, SHADER_PARAM_TYPE_TEXTURE, "", "Secondary base albedo texture for blend surfaces" )
+		SHADER_PARAM( BUMPMAP2, SHADER_PARAM_TYPE_TEXTURE, "", "Secondary normal/bump map texture for blend surfaces" )
+		SHADER_PARAM( ENVMAPMASK2, SHADER_PARAM_TYPE_TEXTURE, "shadertest/shadertest_envmask", "Secondary environment map specular mask" )
 		SHADER_PARAM( BLENDMODULATETEXTURE, SHADER_PARAM_TYPE_TEXTURE, "", "texture to use r/g channels for blend range for" )
 		SHADER_PARAM( BLENDMASKTRANSFORM, SHADER_PARAM_TYPE_MATRIX, "center .5 .5 scale 1 1 rotate 0 translate 0 0", "$blendmodulatetexture texcoord transform" )
 
-		SHADER_PARAM( ENVMAPPARALLAX, SHADER_PARAM_TYPE_MATRIX, "[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]", "" )
+		SHADER_PARAM( ENVMAPPARALLAX, SHADER_PARAM_TYPE_MATRIX, "[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]", "Parallax correction matrix for projected cubemaps" )
 		SHADER_PARAM( ENVMAPORIGIN, SHADER_PARAM_TYPE_VEC3, "[0 0 0]", "The world space position of the env_cubemap being corrected" )
 
 	END_SHADER_PARAMS

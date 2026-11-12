@@ -4,7 +4,7 @@
 #include "radiosity_gen_global_ps30.inc"
 #include "radiosity_gen_vs30.inc"
 
-BEGIN_VS_SHADER( RADIOSITY_GLOBAL, "" )
+BEGIN_VS_SHADER( RADIOSITY_GLOBAL, "Deferred Global Radiosity Injection Pass" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

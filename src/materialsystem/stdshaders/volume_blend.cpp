@@ -4,7 +4,7 @@
 #include "screenspace_vs30.inc"
 #include "volume_blend_ps30.inc"
 
-BEGIN_VS_SHADER( VOLUME_BLEND, "" )
+BEGIN_VS_SHADER( VOLUME_BLEND, "Deferred Volumetric Fog Blend Pass" )
 	BEGIN_SHADER_PARAMS
 
 		SHADER_PARAM( INTENSITY, SHADER_PARAM_TYPE_FLOAT, "1.0", "Intensity multiplier" )

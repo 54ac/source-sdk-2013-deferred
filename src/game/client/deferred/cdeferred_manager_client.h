@@ -57,8 +57,7 @@ public:
 
 	inline IMaterial *GetDeferredMaterial( DEF_MATERIALS mat ) const;
 
-	void LevelInitPreEntity();
-	void LevelShutdownPostEntity();
+	virtual void LevelInitPreEntity() OVERRIDE;
 
 private:
 

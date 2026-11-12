@@ -4,7 +4,7 @@
 #include "defconstruct_vs30.inc"
 #include "debug_lighting_ctrl_ps30.inc"
 
-BEGIN_VS_SHADER( DEBUG_LIGHTING_CTRL, "" )
+BEGIN_VS_SHADER( DEBUG_LIGHTING_CTRL, "Deferred Debug Lighting Controller Visualization" )
 	BEGIN_SHADER_PARAMS
 
 	END_SHADER_PARAMS

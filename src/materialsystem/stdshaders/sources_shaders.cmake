@@ -7,6 +7,7 @@ set(GAME_SHADER_SRCS
     ${SRCDIR}/materialsystem/stdshaders/deferred_brush.cpp
     ${SRCDIR}/materialsystem/stdshaders/deferred_decalModulate.cpp
     ${SRCDIR}/materialsystem/stdshaders/deferred_model.cpp
+    ${SRCDIR}/materialsystem/stdshaders/deferred_quad.cpp
     ${SRCDIR}/materialsystem/stdshaders/deferred_utility.cpp
     ${SRCDIR}/materialsystem/stdshaders/defpass_composite.cpp
     ${SRCDIR}/materialsystem/stdshaders/defpass_gbuffer.cpp

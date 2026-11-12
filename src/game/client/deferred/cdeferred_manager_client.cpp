@@ -90,28 +90,6 @@ bool CDeferredManagerClient::Init()
 		g_pCurrentViewRender = new CViewRender();
 		return true;
 	}
-	else
-	{
-#define VENDOR_NVIDIA 0x10DE
-#define VENDOR_INTEL 0x8086
-#define VENDOR_ATI 0x1002
-#define VENDOR_AMD 0x1022
-
-// #ifndef SHADOWMAPPING_USE_COLOR
-// 		MaterialAdapterInfo_t info;
-// 		materials->GetDisplayAdapterInfo( materials->GetCurrentAdapter(), info );
-
-// 		if ( info.m_VendorID == VENDOR_ATI ||
-// 			info.m_VendorID == VENDOR_AMD )
-// 		{
-// 			vgui::MessageBox *pATIWarning = new vgui::MessageBox("UNSUPPORTED HARDWARE", VarArgs( "AMD/ATI IS NOT YET SUPPORTED IN HARDWARE FILTERING MODE\n"
-// 				"(cdeferred_manager_client.cpp #%i).", __LINE__ ) );
-
-// 			pATIWarning->InvalidateLayout();
-// 			pATIWarning->DoModal();
-// 		}
-// #endif
-	}
 
 	view = g_pCurrentViewRender;
 
@@ -570,9 +548,4 @@ void CDeferredManagerClient::LevelInitPreEntity()
 	lumpLights.EnsureCount( numLights );
 	buffer.GetObjects( lumpLights.Base(), numLights );
 	Warning( "Global light: %d | lights: %d\n", bHasGlobalLight, numLights );
-}
-
-void CDeferredManagerClient::LevelShutdownPostEntity()
-{
-
 }
