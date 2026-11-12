@@ -28,10 +28,13 @@ extern ConVar r_deferred_radiosity_propagate_count;
 extern ConVar r_deferred_radiosity_propagate_far_count;
 extern ConVar r_deferred_radiosity_blur_count;
 extern ConVar r_deferred_radiosity_blur_far_count;
-extern ConVar r_deferred_radiosity_nodes;
+extern ConVar r_deferred_radiosity_debug;
 
 extern ConVar r_deferred_volumetric_intensity;
 extern ConVar r_deferred_volumetric_blur;
+
+extern ConVar r_deferred_gbuffer_debug;
+extern ConVar r_deferred_csm_debug;
 
 
 #define PROFILER_DECLARE CFastTimer __pft; __pft.Start()

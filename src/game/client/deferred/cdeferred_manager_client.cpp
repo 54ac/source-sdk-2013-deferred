@@ -311,6 +311,17 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 	m_pMat_Def[ DEF_MAT_LIGHT_RADIOSITY_BLEND ] = materials->FindMaterial( "deferred/radpass_blend", NULL );
 #endif // DEFCFG_ENABLE_RADIOSITY
 
+	m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] = new KeyValues( "DEBUG_LIGHTING_CTRL" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] != NULL )
+		m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ]->SaveToFile( filesystem, "materials/deferred/debug_gbuffer.vmt", "MOD" );
+
+	m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] = new KeyValues( "DEBUG_SHADOW" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] != NULL )
+		m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ]->SaveToFile( filesystem, "materials/deferred/debug_shadow.vmt", "MOD" );
+
+	m_pMat_Def[ DEF_MAT_DEBUG_GBUFFER ] = materials->FindMaterial( "deferred/debug_gbuffer", NULL );
+	m_pMat_Def[ DEF_MAT_DEBUG_SHADOW ]  = materials->FindMaterial( "deferred/debug_shadow", NULL );
+
 	/*
 
 	blur
@@ -336,6 +347,17 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 
 	m_pMat_Def[ DEF_MAT_BLUR_G6_X ] = materials->FindMaterial( "deferred/blurpass_vbuf_x", NULL );
 	m_pMat_Def[ DEF_MAT_BLUR_G6_Y ] = materials->FindMaterial( "deferred/blurpass_vbuf_y", NULL );
+
+	m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] = new KeyValues( "DEBUG_LIGHTING_CTRL" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] != NULL )
+		m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ]->SaveToFile( filesystem, "materials/deferred/debug_gbuffer.vmt", "MOD" );
+
+	m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] = new KeyValues( "DEBUG_SHADOW" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] != NULL )
+		m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ]->SaveToFile( filesystem, "materials/deferred/debug_shadow.vmt", "MOD" );
+
+	m_pMat_Def[ DEF_MAT_DEBUG_GBUFFER ] = materials->FindMaterial( "deferred/debug_gbuffer", NULL );
+	m_pMat_Def[ DEF_MAT_DEBUG_SHADOW ]  = materials->FindMaterial( "deferred/debug_shadow", NULL );
 
 #else // Create materials directly (caused performance bug)
 
@@ -498,6 +520,14 @@ void CDeferredManagerClient::InitializeDeferredMaterials()
 		m_pKV_Def[ DEF_MAT_BLUR_G6_Y ]->SetFloat( "$BLURSIZE", 1.0f );
 		m_pMat_Def[ DEF_MAT_BLUR_G6_Y ] = materials->CreateMaterial( "__blurpass_vbuf_y", m_pKV_Def[ DEF_MAT_BLUR_G6_Y ] );
 	}
+
+	m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] = new KeyValues( "DEBUG_LIGHTING_CTRL" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] != NULL )
+		m_pMat_Def[ DEF_MAT_DEBUG_GBUFFER ] = materials->CreateMaterial( "__debug_gbuffer", m_pKV_Def[ DEF_MAT_DEBUG_GBUFFER ] );
+
+	m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] = new KeyValues( "DEBUG_SHADOW" );
+	if ( m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] != NULL )
+		m_pMat_Def[ DEF_MAT_DEBUG_SHADOW ] = materials->CreateMaterial( "__debug_shadow", m_pKV_Def[ DEF_MAT_DEBUG_SHADOW ] );
 
 #endif // DEF_WRITE_VMT
 

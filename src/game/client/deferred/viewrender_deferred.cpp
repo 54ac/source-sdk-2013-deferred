@@ -924,8 +924,14 @@ void CDeferredViewRender::ViewDrawSceneDeferred( const CViewSetup &view, int nCl
 
 	ViewDrawComposite( view, bDrew3dSkybox, nSkyboxVisible, nClearFlags, viewID, bDrawViewModel );
 
+	if ( r_deferred_gbuffer_debug.GetBool() )
+		DrawLightPassFullscreen( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_DEBUG_GBUFFER ), view.width, view.height );
+
+	if ( r_deferred_csm_debug.GetBool() )
+		DrawLightPassFullscreen( GetDeferredManager()->GetDeferredMaterial( DEF_MAT_DEBUG_SHADOW ), view.width, view.height );
+
 #if DEFCFG_ENABLE_RADIOSITY
-	if ( r_deferred_radiosity_nodes.GetBool() )
+	if ( r_deferred_radiosity_debug.GetBool() )
 		DebugRadiosity( view );
 #endif
 

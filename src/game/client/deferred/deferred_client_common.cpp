@@ -26,10 +26,13 @@ ConVar r_deferred_radiosity_propagate_count( "r_deferred_radiosity_propagate_cou
 ConVar r_deferred_radiosity_propagate_far_count( "r_deferred_radiosity_propagate_far_count", "0" );
 ConVar r_deferred_radiosity_blur_count( "r_deferred_radiosity_blur_count", "4" ); // 2
 ConVar r_deferred_radiosity_blur_far_count( "r_deferred_radiosity_blur_far_count", "2" ); // 1
-ConVar r_deferred_radiosity_nodes( "r_deferred_radiosity_nodes", "0", 0, "Shows radiosity nodes in the world for debugging" );
+ConVar r_deferred_radiosity_debug( "r_deferred_radiosity_debug", "0", 0, "Shows radiosity nodes in the world for debugging" );
 
 ConVar r_deferred_volumetric_intensity( "r_deferred_volumetric_intensity", "0.75", FCVAR_ARCHIVE, "Intensity multiplier for volumetric light" );
 ConVar r_deferred_volumetric_blur( "r_deferred_volumetric_blur", "1.0", FCVAR_ARCHIVE, "Blur scale for volumetric lights" );
+
+ConVar r_deferred_gbuffer_debug( "r_deferred_gbuffer_debug", "0", 0, "G-buffer normals + linear depth overlay" );
+ConVar r_deferred_csm_debug( "r_deferred_csm_debug", "0", 0, "CSM cascade depth overlay" );
 
 void OnCookieTableChanged( void *object, INetworkStringTable *stringTable, int stringNumber, const char *newString, void const *newData )
 {
